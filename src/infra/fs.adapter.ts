@@ -29,7 +29,6 @@ export class FsAdapter implements FileSystemPort {
       // Crear directorio si no existe
       const dirname = path.dirname(filePath);
       await fs.promises.mkdir(dirname, { recursive: true });
-
       // Escribir el archivo
       await fs.promises.writeFile(filePath, content, "utf-8");
       return true;
@@ -45,17 +44,18 @@ export class FsAdapter implements FileSystemPort {
    * @returns Estructura de árbol de archivos
    */
   async getDirectoryTree(rootPath: string): Promise<FileTree> {
+    console.log(`Generando árbol para directorio: ${rootPath}`);
     const baseName = path.basename(rootPath);
-
     const tree: FileTree = {
       path: "",
       name: baseName,
       isDirectory: true,
       children: [],
     };
-
     await this.buildDirectoryTree(rootPath, tree, "");
-
+    console.log(
+      `Árbol generado. Nodos de primer nivel: ${tree.children?.length || 0}`
+    );
     return tree;
   }
 
@@ -73,10 +73,16 @@ export class FsAdapter implements FileSystemPort {
       });
 
       parentNode.children = [];
+      console.log(
+        `Procesando directorio: ${currentPath} (${entries.length} entradas)`
+      );
 
       for (const entry of entries) {
         const entryPath = path.join(currentPath, entry.name);
-        const entryRelativePath = path.join(relativePath, entry.name);
+        // Normalizar la ruta relativa para usar siempre forward slash
+        const entryRelativePath = path
+          .join(relativePath, entry.name)
+          .replace(/\\/g, "/");
 
         const node: FileTree = {
           path: entryRelativePath,
@@ -130,7 +136,10 @@ export class FsAdapter implements FileSystemPort {
 
       for (const entry of entries) {
         const entryPath = path.join(currentPath, entry.name);
-        const entryRelativePath = path.join(relativePath, entry.name);
+        // Normalizar la ruta relativa para usar siempre forward slash
+        const entryRelativePath = path
+          .join(relativePath, entry.name)
+          .replace(/\\/g, "/");
 
         if (entry.isDirectory()) {
           await this.collectFiles(entryPath, entryRelativePath, files);
@@ -138,7 +147,7 @@ export class FsAdapter implements FileSystemPort {
           const content = await this.readFile(entryPath);
           if (content !== null) {
             files.push({
-              path: entryRelativePath.replace(/\\/g, "/"), // Normalizar a formato Unix
+              path: entryRelativePath,
               content,
             });
           }

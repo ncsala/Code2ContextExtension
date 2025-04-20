@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import "./tailwind.css";
-import CustomTextarea from "./CustomTextarea";
 
 // Acceder al objeto vscode
 declare global {
@@ -33,11 +32,6 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [debugOutput, setDebugOutput] = useState<string>("");
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
-
-  // Estado para los patrones de ignorado
-  const [ignorePatterns, setIgnorePatterns] = useState<string>(
-    "node_modules\n.git\ndist\nbuild"
-  );
 
   // Estado para las opciones de compactación
   const [options, setOptions] = useState<CompactOptions>({
@@ -72,6 +66,7 @@ const App: React.FC = () => {
         setOptions((prev) => ({
           ...prev,
           rootPath: message.rootPath,
+          ...(message.options || {}),
         }));
       } else if (message.command === "debug") {
         setDebugOutput((prev) => prev + message.data + "\n");
@@ -80,6 +75,19 @@ const App: React.FC = () => {
         setDebugOutput(
           (prev) => prev + `Selected files: ${message.files.length}\n`
         );
+      } else if (message.command === "updateOptionsFromPanel") {
+        // Recibir actualizaciones de opciones desde el panel lateral
+        if (message.options) {
+          setOptions((prev) => ({
+            ...prev,
+            ...message.options,
+          }));
+        }
+      } else if (message.command === "setLoading") {
+        setLoading(message.loading);
+      } else if (message.command === "error") {
+        setError(message.message || "Unknown error");
+        setLoading(false);
       }
     };
 
@@ -93,25 +101,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  // Manejar cambios en los campos de texto
-  const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setOptions((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  // Manejar cambios en las opciones de checkbox
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    console.log(`Checkbox ${name} changed to: ${checked}`);
-    setOptions((prev) => ({
-      ...prev,
-      [name]: checked,
-    }));
-  };
-
   // Manejar cambios en el modo de selección
   const handleSelectionModeChange = (
     e: React.ChangeEvent<HTMLSelectElement>
@@ -121,25 +110,11 @@ const App: React.FC = () => {
       ...prev,
       selectionMode: value,
     }));
-  };
 
-  // Manejar cambios en los patrones de ignorado
-  const handleIgnorePatternsChange = (newValue: string) => {
-    setIgnorePatterns(newValue);
-    const patterns = newValue
-      .split("\n")
-      .map((p) => p.trim())
-      .filter(Boolean);
-    console.log("Updated patterns:", patterns);
-    setOptions((prev) => ({
-      ...prev,
-      customIgnorePatterns: patterns,
-    }));
-
-    // Enviar patrones actualizados a la extensión
+    // Notificar a la extensión sobre el cambio de modo
     vscode.postMessage({
-      command: "updateIgnorePatterns",
-      patterns: patterns,
+      command: "changeSelectionMode",
+      mode: value,
     });
   };
 
@@ -202,6 +177,13 @@ const App: React.FC = () => {
     });
   };
 
+  // Manejar el botón de mostrar opciones
+  const handleShowOptions = () => {
+    vscode.postMessage({
+      command: "showOptions",
+    });
+  };
+
   // Manejar el botón de limpiar debug
   const handleClearDebug = () => {
     setDebugOutput("");
@@ -243,7 +225,6 @@ const App: React.FC = () => {
               id="rootPath"
               name="rootPath"
               value={options.rootPath}
-              onChange={handleTextChange}
               placeholder="Select a directory..."
               readOnly
               className="input flex-1"
@@ -308,97 +289,26 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className="mb-4">
-          <label htmlFor="outputPath" className="block mb-1 font-medium">
-            Output File (optional):
-          </label>
-          <input
-            type="text"
-            id="outputPath"
-            name="outputPath"
-            value={options.outputPath}
-            onChange={handleTextChange}
-            placeholder="File path to save the result"
-            className="input"
-          />
-        </div>
+        <div className="flex items-center gap-2 mb-4">
+          <button
+            className="btn btn-large flex-1"
+            onClick={handleGenerate}
+            disabled={loading}
+          >
+            {loading ? "Generating..." : "Generate Context"}
+          </button>
 
-        {options.selectionMode === "directory" && (
-          <div className="mb-4">
-            <label htmlFor="ignorePatterns" className="block mb-1 font-medium">
-              Ignore Patterns (one per line):
-            </label>
-            <CustomTextarea
-              id="ignorePatterns"
-              value={ignorePatterns}
-              onChange={handleIgnorePatternsChange}
-              placeholder="Enter patterns like: *.log, node_modules, .git"
-              rows={4}
-              className="input textarea"
-            />
-          </div>
-        )}
-
-        <div className="mb-4">
-          {options.selectionMode === "directory" && (
-            <div className="flex items-center mb-2">
-              <input
-                type="checkbox"
-                id="includeGitIgnore"
-                name="includeGitIgnore"
-                checked={options.includeGitIgnore}
-                onChange={handleCheckboxChange}
-                className="mr-2 cursor-pointer"
-              />
-              <label htmlFor="includeGitIgnore" className="cursor-pointer">
-                Include .gitignore patterns
-              </label>
-            </div>
-          )}
-
-          <div className="flex items-center mb-2">
-            <input
-              type="checkbox"
-              id="includeTree"
-              name="includeTree"
-              checked={options.includeTree}
-              onChange={handleCheckboxChange}
-              className="mr-2 cursor-pointer"
-            />
-            <label htmlFor="includeTree" className="cursor-pointer">
-              Include directory tree structure
-            </label>
-          </div>
-
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="minifyContent"
-              name="minifyContent"
-              checked={options.minifyContent}
-              onChange={handleCheckboxChange}
-              className="mr-2 cursor-pointer"
-            />
-            <label htmlFor="minifyContent" className="cursor-pointer">
-              Minify content
-            </label>
-          </div>
+          <button className="btn flex-initial" onClick={handleShowOptions}>
+            Show Options
+          </button>
         </div>
 
         <div className="info-text">
           <p className="text-sm m-0">
-            <strong>Note:</strong> Binary files like images, documents, and Git
-            files are automatically excluded.
+            <strong>Note:</strong> Configure ignore patterns and other options
+            in the "Options" panel in the sidebar.
           </p>
         </div>
-
-        <button
-          className="btn btn-large"
-          onClick={handleGenerate}
-          disabled={loading}
-        >
-          {loading ? "Generating..." : "Generate Context"}
-        </button>
       </div>
 
       {error && (

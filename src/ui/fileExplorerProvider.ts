@@ -149,7 +149,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       this.propagateSelectionToChildren(item.resourceUri.fsPath, isSelected);
     }
 
-    this._onDidChangeTreeData.fire(undefined);
+    this._onDidChangeTreeData.fire();
     console.log(
       `Toggled selection for: ${itemPath} (${
         isSelected ? "selected" : "deselected"
@@ -306,21 +306,32 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       for (const entry of entries) {
         const filePath = path.join(dirPath, entry.name);
 
-        if (this.shouldIgnore(filePath)) {
-          continue;
+        // No ignorar archivos al propagar la selección de un directorio,
+        // eso da una experiencia más consistente
+
+        // Actualizar item en cache si existe, o crearlo si no existe
+        let item = this.itemsCache.get(filePath);
+
+        if (!item) {
+          // Si no está en cache, crear un nuevo item
+          item = new FileItem(
+            vscode.Uri.file(filePath),
+            entry.isDirectory()
+              ? vscode.TreeItemCollapsibleState.Collapsed
+              : vscode.TreeItemCollapsibleState.None,
+            selected,
+            entry.isDirectory()
+          );
+          this.itemsCache.set(filePath, item);
+        } else {
+          item.updateSelection(selected);
         }
 
-        // Actualizar item en cache si existe
-        const item = this.itemsCache.get(filePath);
-
-        if (item) {
-          item.updateSelection(selected);
-
-          if (selected) {
-            this.selectedItems.set(filePath, item);
-          } else {
-            this.selectedItems.delete(filePath);
-          }
+        // Actualizar la selección
+        if (selected) {
+          this.selectedItems.set(filePath, item);
+        } else {
+          this.selectedItems.delete(filePath);
         }
 
         // Recursivamente propagar a subdirectorios
@@ -330,6 +341,45 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       }
     } catch (error) {
       console.error(`Error propagating selection: ${dirPath}`, error);
+    }
+  }
+
+  // Método para seleccionar explícitamente un directorio y todos sus archivos
+  public async selectDirectory(directoryPath: string) {
+    try {
+      // Verificar que sea un directorio válido
+      const stats = await fs.promises.stat(directoryPath);
+      if (!stats.isDirectory()) {
+        console.error(`Path is not a directory: ${directoryPath}`);
+        return;
+      }
+
+      // Crear el item si no existe en cache
+      let item = this.itemsCache.get(directoryPath);
+      if (!item) {
+        item = new FileItem(
+          vscode.Uri.file(directoryPath),
+          vscode.TreeItemCollapsibleState.Collapsed,
+          true,
+          true
+        );
+        this.itemsCache.set(directoryPath, item);
+      } else {
+        item.updateSelection(true);
+      }
+
+      // Marcar como seleccionado
+      this.selectedItems.set(directoryPath, item);
+
+      // Propagar a todos los archivos y subdirectorios
+      await this.propagateSelectionToChildren(directoryPath, true);
+
+      // Actualizar la UI
+      this._onDidChangeTreeData.fire();
+
+      console.log(`Selected directory: ${directoryPath}`);
+    } catch (error) {
+      console.error(`Error selecting directory: ${directoryPath}`, error);
     }
   }
 }

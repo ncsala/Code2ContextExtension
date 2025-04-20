@@ -49,6 +49,26 @@
         "command": "code2context.generateFromSelection",
         "title": "Generate Context from Selected Files",
         "icon": "$(zap)"
+      },
+      {
+        "command": "code2context.generateFromOptions",
+        "title": "Generate Context from Current Options",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "code2context.selectDirectoryMode",
+        "title": "Switch to Directory Selection Mode",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "code2context.selectFilesMode",
+        "title": "Switch to Files Selection Mode",
+        "icon": "$(file)"
+      },
+      {
+        "command": "code2context.selectDirectory",
+        "title": "Select Directory and All Children",
+        "icon": "$(folder-active)"
       }
     ],
     "viewsContainers": {
@@ -68,7 +88,8 @@
         },
         {
           "id": "code2contextOptions",
-          "name": "Options"
+          "name": "Options",
+          "type": "webview"
         }
       ]
     },
@@ -94,6 +115,21 @@
           "command": "code2context.generateFromSelection",
           "when": "view == code2contextFiles",
           "group": "navigation"
+        },
+        {
+          "command": "code2context.selectDirectoryMode",
+          "when": "view == code2contextOptions",
+          "group": "navigation"
+        },
+        {
+          "command": "code2context.selectFilesMode",
+          "when": "view == code2contextOptions",
+          "group": "navigation"
+        },
+        {
+          "command": "code2context.generateFromOptions",
+          "when": "view == code2contextOptions",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -101,12 +137,18 @@
           "command": "code2context.toggleSelection",
           "when": "view == code2contextFiles",
           "group": "inline"
+        },
+        {
+          "command": "code2context.selectDirectory",
+          "when": "view == code2contextFiles && viewItem == directory",
+          "group": "1_modification"
         }
       ]
     }
   },
   "activationEvents": [
     "onView:code2contextFiles",
+    "onView:code2contextOptions",
     "onCommand:code2context.openPanel"
   ],
   "dependencies": {
