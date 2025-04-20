@@ -1,0 +1,61 @@
+# Dependencias
+node_modules
+/webview/node_modules
+
+# Archivos compilados
+out
+dist
+*.vsix
+/webview-dist
+/webview/dist
+
+# Archivos específicos de VSCode que podrían ser personales
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Archivos de configuración local
+.vscode-test
+.vscode-test.*
+*.vsix
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archivos de entorno
+.env
+.env.local
+.env.*.local
+
+# Archivos de caché
+.eslintcache
+.npm
+.cache
+tsconfig.tsbuildinfo
+
+# Archivos generados durante la ejecución
+combined.txt
+*.combined.txt
+
+# Directorios de prueba y cobertura
+coverage
+.nyc_output
+combine-ts-files.cjs
+
+# Archivos de mapeo
+*.map
+*.js.map
+
+# Archivos de configuración local que podrían variar entre desarrolladores
+settings.json.user

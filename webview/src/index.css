@@ -1,0 +1,198 @@
+:root {
+  --vscode-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --container-padding: 20px;
+  --input-padding-vertical: 6px;
+  --input-padding-horizontal: 8px;
+  --input-margin-vertical: 4px;
+  --input-margin-horizontal: 0;
+}
+
+body {
+  padding: 0;
+  margin: 0;
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  background-color: var(--vscode-editor-background);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+.container {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: var(--container-padding);
+}
+
+h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: var(--vscode-editor-foreground);
+}
+
+h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: var(--vscode-editor-foreground);
+}
+
+.options-container {
+  margin-bottom: 1.5rem;
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  padding: 1rem;
+  border-radius: 4px;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+input[type="text"],
+textarea {
+  width: 100%;
+  padding: var(--input-padding-vertical) var(--input-padding-horizontal);
+  margin: var(--input-margin-vertical) var(--input-margin-horizontal);
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 2px;
+  outline: none;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+input[type="text"]:focus,
+textarea:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.input-with-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-with-button input {
+  flex: 1;
+}
+
+button {
+  padding: var(--input-padding-vertical) var(--input-padding-horizontal);
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 2px;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  cursor: pointer;
+  outline: none;
+}
+
+button:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkbox-group {
+  margin-bottom: 1rem;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.checkbox-item input[type="checkbox"] {
+  margin-right: 0.5rem;
+}
+
+.checkbox-item label {
+  margin-bottom: 0;
+}
+
+.generate-button {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  font-weight: 500;
+  margin-top: 1rem;
+}
+
+.error-message {
+  background-color: rgba(255, 70, 70, 0.2);
+  color: #ff4646;
+  padding: 0.8rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.error-message p {
+  margin: 0;
+}
+
+.result-container {
+  background-color: var(--vscode-editor-inactiveSelectionBackground);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.result-header {
+  padding: 0.8rem;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.result-header h2 {
+  flex: 1;
+  margin: 0;
+}
+
+.copy-button {
+  padding: 4px 8px;
+  font-size: 0.9rem;
+}
+
+.copy-message {
+  position: absolute;
+  right: 4.5rem;
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.result-content {
+  padding: 0.8rem;
+  margin: 0;
+  max-height: 500px;
+  overflow: auto;
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
