@@ -3,6 +3,29 @@ import * as path from "path";
 import * as fs from "fs";
 import type { CompactProject } from "../core/use-cases/compactProject";
 
+// Interceptar console.log para enviar a webview
+const originalConsoleLog = console.log;
+let webviewPanel: vscode.WebviewPanel | undefined;
+
+console.log = function (...args) {
+  // Llamar al original primero
+  originalConsoleLog.apply(console, args);
+
+  // Si hay un panel activo, enviar el debug
+  if (webviewPanel) {
+    try {
+      webviewPanel.webview.postMessage({
+        command: "debug",
+        data: args
+          .map((arg) => (typeof arg === "object" ? JSON.stringify(arg) : arg))
+          .join(" "),
+      });
+    } catch (e) {
+      // Ignorar errores de envío
+    }
+  }
+};
+
 export function activate(
   context: vscode.ExtensionContext,
   useCase: CompactProject
@@ -35,6 +58,9 @@ export function activate(
         }
       );
 
+      // Guardar referencia global al panel
+      webviewPanel = panel;
+
       const html = fs.readFileSync(
         path.join(context.extensionPath, "webview-dist", "index.html"),
         "utf8"
@@ -57,8 +83,23 @@ export function activate(
       });
 
       panel.webview.onDidReceiveMessage(async (msg) => {
+        console.log(`Mensaje recibido: ${msg.command}`);
+
         if (msg.command === "compact") {
-          const result = await useCase.execute(msg.payload);
+          console.log("Opciones recibidas:", msg.payload);
+
+          // Asegurarse de que minifyContent es un booleano explícito
+          const payload = {
+            ...msg.payload,
+            minifyContent: msg.payload.minifyContent === true,
+          };
+
+          console.log("Opciones procesadas:", payload);
+
+          const result = await useCase.execute(payload);
+
+          console.log("Resultado obtenido, éxito:", result.ok);
+
           panel!.webview.postMessage({
             command: "update",
             content: result,
@@ -86,7 +127,13 @@ export function activate(
       });
 
       panel.onDidDispose(
-        () => (panel = undefined),
+        () => {
+          panel = undefined;
+          webviewPanel = undefined;
+
+          // Restaurar console.log
+          console.log = originalConsoleLog;
+        },
         null,
         context.subscriptions
       );
@@ -96,4 +143,7 @@ export function activate(
   context.subscriptions.push(cmd);
 }
 
-export function deactivate() {}
+export function deactivate() {
+  // Restaurar console.log
+  console.log = originalConsoleLog;
+}

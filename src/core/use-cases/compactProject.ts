@@ -2,6 +2,7 @@ import { CompactResult, FileEntry, FileTree } from "../entities/FileEntry";
 import { FileSystemPort } from "../ports/FileSystemPort";
 import { GitPort } from "../ports/GitPort";
 import * as path from "path";
+import ignore from "ignore";
 
 export interface CompactOptions {
   rootPath: string;
@@ -9,6 +10,7 @@ export interface CompactOptions {
   customIgnorePatterns?: string[];
   includeGitIgnore?: boolean;
   includeTree?: boolean;
+  minifyContent?: boolean;
 }
 
 export class CompactProject {
@@ -17,158 +19,152 @@ export class CompactProject {
     private readonly git: GitPort
   ) {}
 
-  /**
-   * Ejecuta el proceso de compactación de proyecto
-   * @param options Opciones de compactación
-   * @returns Resultado del proceso
-   */
   async execute(options: CompactOptions): Promise<CompactResult> {
     try {
-      // Verificar que el directorio raíz existe
-      const exists = await this.fs.exists(options.rootPath);
-      if (exists === false) {
+      if (!(await this.fs.exists(options.rootPath))) {
         return {
           ok: false,
           error: `El directorio ${options.rootPath} no existe`,
         };
       }
 
-      // Definir marcadores
-      const TREE_MARKER = "@Tree:";
-      const INDEX_MARKER = "@Index:";
-      const FILE_MARKER = "@F:";
+      const TREE = "@Tree:";
+      const INDEX = "@Index:";
+      const FILE = "@F:";
 
-      // Obtener patrones de ignore
-      let ignorePatterns: string[] = options.customIgnorePatterns || [];
+      // 1️⃣ Unir patrones (custom + .gitignore + default)
+      let ignorePatterns: string[] = [...(options.customIgnorePatterns || [])];
 
-      if (options.includeGitIgnore === true) {
-        const gitPatterns = await this.git.getIgnorePatterns(options.rootPath);
-        ignorePatterns = [...ignorePatterns, ...gitPatterns];
+      if (options.includeGitIgnore) {
+        ignorePatterns.push(
+          ...(await this.git.getIgnorePatterns(options.rootPath))
+        );
       }
 
-      // Añadir patrones por defecto
-      ignorePatterns.push("node_modules", ".git", "*.lock", "*.log");
+      const defaultPatterns = [
+        "node_modules/**",
+        ".git/**", // ← ahora ignora todo dentro de .git
+        "*.lock",
+        "*.log",
+        "*.exe",
+        "*.dll",
+        "*.so",
+        "*.dylib",
+        "*.zip",
+        "*.tar",
+        "*.gz",
+        "*.rar",
+        "*.7z",
+        "*.jpg",
+        "*.jpeg",
+        "*.png",
+        "*.gif",
+        "*.bmp",
+        "*.ico",
+        "*.svg",
+        "*.pdf",
+        "*.doc",
+        "*.docx",
+        "*.xls",
+        "*.xlsx",
+        "*.ppt",
+        "*.pptx",
+        "*.bin",
+        "*.dat",
+        "*.db",
+        "*.sqlite",
+        "*.sqlite3",
+        "*.class",
+        "*.jar",
+        "*.war",
+        "*.ear",
+        "*.mp3",
+        "*.mp4",
+        "*.avi",
+        "*.mov",
+        "*.mkv",
+        "*.ttf",
+        "*.otf",
+        "*.woff",
+        "*.woff2",
+        "*.pyc",
+        "*.pyo",
+        "*.pyd",
+      ];
 
-      // Obtener estructura de archivos
-      const tree = await this.fs.getDirectoryTree(options.rootPath);
+      ignorePatterns = [...ignorePatterns, ...defaultPatterns];
+      const ig = ignore().add(ignorePatterns);
 
-      // Obtener todos los archivos
-      const files = await this.fs.getFiles(options.rootPath);
-
-      // Filtrar archivos ignorados
-      const validFiles = await Promise.all(
-        files.map(async (file) => {
-          const isIgnored = await this.git.isIgnored(
-            options.rootPath,
-            file.path
-          );
-          return { ...file, isIgnored };
-        })
+      // 2️⃣ Recolectar archivos y filtrar
+      const files = (await this.fs.getFiles(options.rootPath)).filter(
+        (f) => !ig.ignores(f.path)
       );
 
-      const filteredFiles = validFiles.filter(
-        (file) => file.isIgnored === false
-      );
+      // 3️⃣ Índice y árbol (el árbol también filtra)
+      const indexContent = files.map((f, i) => `${i + 1}|${f.path}`).join("\n");
+      const treeContent = options.includeTree
+        ? this.treeToText(await this.fs.getDirectoryTree(options.rootPath), ig)
+        : "";
 
-      // Crear índice
-      const indexContent = filteredFiles
-        .map((file, idx) => `${idx + 1}|${file.path}`)
-        .join("\n");
+      const minify = !!options.minifyContent;
+      let combined =
+        `// Conventions used in this document:\n` +
+        `// ${TREE} project directory structure.\n` +
+        `// ${INDEX} table of contents with all the files included.\n` +
+        `// ${FILE} file index | path | ${
+          minify ? "minified" : "original"
+        } content.\n\n`;
 
-      // Crear estructura de árbol en formato texto
-      let treeContent = "";
-      if (options.includeTree === true) {
-        treeContent = this.generateTreeText(tree);
-      }
+      if (treeContent) combined += `${TREE}\n${treeContent}\n\n`;
+      combined += `${INDEX}\n${indexContent}\n\n`;
 
-      // Crear el contenido combinado
-      let combinedContent = `// Conventions used in this document:\n`;
-      combinedContent += `// ${TREE_MARKER} Represents the project directory structure.\n`;
-      combinedContent += `// ${INDEX_MARKER} Table of contents with all the files included.\n`;
-      combinedContent += `// ${FILE_MARKER} Indicates a file index, path, and minified content.\n\n`;
-
-      if (treeContent) {
-        combinedContent += `${TREE_MARKER}\n${treeContent}\n\n`;
-      }
-
-      combinedContent += `${INDEX_MARKER}\n${indexContent}\n\n`;
-
-      // Añadir contenido de archivos
-      filteredFiles.forEach((file, idx) => {
-        const minified = this.minifyContent(file.content);
-        combinedContent += `${FILE_MARKER}|${idx + 1}|${
-          file.path
-        }|${minified}\n`;
+      files.forEach((f, i) => {
+        const content = minify ? this.minify(f.content) : f.content;
+        combined += `${FILE}|${i + 1}|${f.path}|${content}\n`;
       });
 
-      // Guardar resultado si se especificó ruta de salida
-      if (options.outputPath) {
-        const success = await this.fs.writeFile(
-          options.outputPath,
-          combinedContent
-        );
-
-        if (success === false) {
-          return {
-            ok: false,
-            error: `No se pudo escribir en ${options.outputPath}`,
-          };
-        }
+      if (
+        options.outputPath &&
+        !(await this.fs.writeFile(options.outputPath, combined))
+      ) {
+        return {
+          ok: false,
+          error: `No se pudo escribir en ${options.outputPath}`,
+        };
       }
 
-      return {
-        ok: true,
-        content: combinedContent,
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "Error desconocido",
-      };
+      return { ok: true, content: combined };
+    } catch (err: any) {
+      console.error("Error en la compactación:", err);
+      return { ok: false, error: err?.message ?? "Error desconocido" };
     }
   }
 
-  /**
-   * Minifica el contenido de un archivo
-   * @param content Contenido del archivo
-   * @returns Contenido minificado
-   */
-  private minifyContent(content: string): string {
-    return content
+  // ───────────────── helpers ─────────────────
+  private minify(txt: string) {
+    return txt
       .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
+      .map((l) => l.trim())
+      .filter(Boolean)
       .join(" ")
       .replace(/\s+/g, " ");
   }
 
-  /**
-   * Convierte una estructura de árbol en texto
-   */
-  private generateTreeText(tree: FileTree, prefix: string = ""): string {
-    let result = "";
-
-    if (tree.isDirectory === false) {
-      return "";
-    }
-
-    if (tree.children === undefined || tree.children.length === 0) {
-      return "";
-    }
-
-    for (let i = 0; i < tree.children.length; i++) {
-      const child = tree.children[i];
-      const isLast = i === tree.children.length - 1;
-      const connector = isLast ? "`-- " : "|-- ";
-
-      result += `${prefix}${connector}${child.name}\n`;
-
-      if (child.isDirectory && child.children && child.children.length > 0) {
-        const newPrefix = prefix + (isLast ? "    " : "|   ");
-        result += this.generateTreeText(child, newPrefix);
-      }
-    }
-
-    return result;
+  private treeToText(
+    node: FileTree,
+    ig: ReturnType<typeof ignore>,
+    pfx = ""
+  ): string {
+    if (!node.isDirectory || !node.children?.length) return "";
+    return node.children
+      .filter((c) => !ig.ignores(c.path))
+      .map((c, i) => {
+        const last = i === node.children!.length - 1;
+        const connector = last ? "`-- " : "|-- ";
+        const nextPfx = pfx + (last ? "    " : "|   ");
+        const line = `${pfx}${connector}${c.name}\n`;
+        return c.isDirectory ? line + this.treeToText(c, ig, nextPfx) : line;
+      })
+      .join("");
   }
 }

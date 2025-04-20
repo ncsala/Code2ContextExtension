@@ -16,28 +16,31 @@ export class GitAdapter implements GitPort {
    */
   async isIgnored(rootPath: string, filePath: string): Promise<boolean> {
     try {
+      // Verificar con patrones comunes primero
+      if (this.isIgnoredByCommonPatterns(filePath)) {
+        console.log(`Ignorando por patrón común: ${filePath}`);
+        return true;
+      }
+
       // Verificar si es un repositorio Git
       if ((await this.isGitRepository(rootPath)) === false) {
-        // Si no es un repositorio Git, verificamos solo con los patrones comunes
-        return this.isIgnoredByCommonPatterns(filePath);
+        return false;
       }
 
       // Es un repositorio Git, usamos el comando git check-ignore
       const gitPath = await this.getGitExecutablePath();
       if (gitPath === null) {
         // Si no tenemos el ejecutable Git, fallback a patrones comunes
-        return this.isIgnoredByCommonPatterns(filePath);
+        return false;
       }
 
       // Construir ruta absoluta para verificar correctamente
       const absolutePath = path.join(rootPath, filePath);
-
       try {
         const { stdout } = await this.exec(
           `"${gitPath}" -C "${rootPath}" check-ignore "${absolutePath}"`,
           { cwd: rootPath }
         );
-
         // Si el comando devuelve algo, el archivo está ignorado
         return stdout.trim().length > 0;
       } catch (error) {
@@ -73,7 +76,11 @@ export class GitAdapter implements GitPort {
     for (const pattern of commonPatterns) {
       if (pattern.endsWith("/")) {
         // Patrón de directorio
-        if (filePath.startsWith(pattern) || filePath.includes(`/${pattern}`)) {
+        if (
+          filePath.startsWith(pattern) ||
+          filePath.includes(`/${pattern.slice(0, -1)}/`) ||
+          filePath.includes(`\\${pattern.slice(0, -1)}\\`)
+        ) {
           return true;
         }
       } else if (pattern.startsWith("*.")) {
@@ -84,10 +91,23 @@ export class GitAdapter implements GitPort {
         }
       } else {
         // Patrón exacto
-        if (filePath === pattern || filePath.endsWith(`/${pattern}`)) {
+        if (
+          filePath === pattern ||
+          filePath.endsWith(`/${pattern}`) ||
+          filePath.endsWith(`\\${pattern}`)
+        ) {
           return true;
         }
       }
+    }
+
+    // Verificar patrones específicos para archivos binarios
+    if (
+      filePath.includes("/.git/") ||
+      filePath.includes("\\.git\\") ||
+      /[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(filePath) // Caracteres binarios en la ruta
+    ) {
+      return true;
     }
 
     return false;
@@ -110,17 +130,14 @@ export class GitAdapter implements GitPort {
 
     for (const fileName of ignoreFiles) {
       const filePath = path.join(rootPath, fileName);
-
       try {
         if (await this.fileExists(filePath)) {
+          console.log(`Leyendo archivo de ignorado: ${fileName}`);
           const content = await fs.promises.readFile(filePath, "utf-8");
-
           // Procesar el contenido línea por línea
           const lines = content.split(/\r?\n/);
-
           for (const line of lines) {
             const trimmedLine = line.trim();
-
             // Ignorar líneas vacías y comentarios
             if (trimmedLine && !trimmedLine.startsWith("#")) {
               patterns.push(trimmedLine);
@@ -132,6 +149,7 @@ export class GitAdapter implements GitPort {
       }
     }
 
+    console.log(`Patrones de ignore encontrados: ${patterns.length}`);
     return patterns;
   }
 
@@ -142,7 +160,6 @@ export class GitAdapter implements GitPort {
    */
   async isGitRepository(rootPath: string): Promise<boolean> {
     const gitDir = path.join(rootPath, ".git");
-
     try {
       const stats = await fs.promises.stat(gitDir);
       return stats.isDirectory();
@@ -160,7 +177,6 @@ export class GitAdapter implements GitPort {
       // Intentar obtener la configuración desde VS Code
       const gitConfig = vscode.workspace.getConfiguration("git");
       const gitPath = gitConfig.get<string>("path");
-
       if (gitPath && gitPath.trim() !== "") {
         return gitPath;
       }
