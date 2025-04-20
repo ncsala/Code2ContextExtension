@@ -14,7 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Inicializar caso de uso
   const useCase = new CompactProject(fsPort, gitPort);
 
-  // Activar la UI
+  // Activar la UI y la funcionalidad de selección de archivos
   activateUI(context, useCase);
 
   console.log("Code2Context extension activated successfully!");
