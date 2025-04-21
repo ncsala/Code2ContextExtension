@@ -1,10 +1,13 @@
 import * as fs from "fs";
 import * as path from "path";
-import { GitPort } from "../core/ports/GitPort";
+import { GitPort } from "../../../core/ports/secondary/GitPort";
 import * as vscode from "vscode";
 import * as cp from "child_process";
 import { promisify } from "util";
 
+/**
+ * Adaptador para Git
+ */
 export class GitAdapter implements GitPort {
   private exec = promisify(cp.exec);
 
@@ -36,11 +39,13 @@ export class GitAdapter implements GitPort {
 
       // Construir ruta absoluta para verificar correctamente
       const absolutePath = path.join(rootPath, filePath);
+
       try {
         const { stdout } = await this.exec(
           `"${gitPath}" -C "${rootPath}" check-ignore "${absolutePath}"`,
           { cwd: rootPath }
         );
+
         // Si el comando devuelve algo, el archivo está ignorado
         return stdout.trim().length > 0;
       } catch (error) {
@@ -130,14 +135,19 @@ export class GitAdapter implements GitPort {
 
     for (const fileName of ignoreFiles) {
       const filePath = path.join(rootPath, fileName);
+
       try {
         if (await this.fileExists(filePath)) {
           console.log(`Leyendo archivo de ignorado: ${fileName}`);
+
           const content = await fs.promises.readFile(filePath, "utf-8");
+
           // Procesar el contenido línea por línea
           const lines = content.split(/\r?\n/);
+
           for (const line of lines) {
             const trimmedLine = line.trim();
+
             // Ignorar líneas vacías y comentarios
             if (trimmedLine && !trimmedLine.startsWith("#")) {
               patterns.push(trimmedLine);
@@ -160,6 +170,7 @@ export class GitAdapter implements GitPort {
    */
   async isGitRepository(rootPath: string): Promise<boolean> {
     const gitDir = path.join(rootPath, ".git");
+
     try {
       const stats = await fs.promises.stat(gitDir);
       return stats.isDirectory();
@@ -177,12 +188,14 @@ export class GitAdapter implements GitPort {
       // Intentar obtener la configuración desde VS Code
       const gitConfig = vscode.workspace.getConfiguration("git");
       const gitPath = gitConfig.get<string>("path");
+
       if (gitPath && gitPath.trim() !== "") {
         return gitPath;
       }
 
       // Intentar encontrar Git en el PATH del sistema
       const { stdout } = await this.exec("git --version");
+
       if (stdout.includes("git version")) {
         return "git";
       }

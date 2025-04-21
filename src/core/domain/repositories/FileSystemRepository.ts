@@ -1,6 +1,10 @@
-import { FileEntry, FileTree } from "../entities/FileEntry";
+import { FileEntry } from "../entities/FileEntry";
+import { FileTree } from "../entities/FileTree";
 
-export interface FileSystemPort {
+/**
+ * Repositorio para interactuar con el sistema de archivos
+ */
+export interface FileSystemRepository {
   /**
    * Lee el contenido de un archivo
    * @param path Ruta del archivo

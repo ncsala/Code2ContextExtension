@@ -1,30 +1,59 @@
 import * as vscode from "vscode";
-import { FsAdapter } from "./infra/fs.adapter";
-import { GitAdapter } from "./infra/git.adapter";
-import { CompactProject } from "./core/use-cases/compactProject";
-import { activate as activateUI } from "./ui/extension";
-import { OptionsViewProvider } from "./ui/optionsViewProvider";
+import { FsAdapter } from "./infra/adapters/fs/FsAdapter";
+import { GitAdapter } from "./infra/adapters/git/GitAdapter";
+import { CompactProject } from "./core/use-cases/compact/CompactProject";
+import { OptionsViewProvider } from "./ui/options/optionsViewProvider";
+import { FileExplorerProvider } from "./ui/providers/fileExplorer/FileExplorerProvider";
+import { WebviewProvider } from "./ui/WebviewProvider";
+import { registerFileCommands } from "./ui/commands/fileCommands";
+import { registerGenerateCommands } from "./ui/commands/generateCommands";
+import { ConsoleProgressReporter } from "./core/use-cases/shared/ProgressReporter";
+import { logger } from "./infra/logging/ConsoleLogger";
 
+/**
+ * Función de activación de la extensión
+ * @param context Contexto de la extensión
+ */
 export function activate(context: vscode.ExtensionContext) {
-  console.log("Activating Code2Context extension...");
+  logger.info("Activating Code2Context extension...");
 
-  // Inicializar adaptadores
-  const fsPort = new FsAdapter();
-  const gitPort = new GitAdapter();
-
-  // Inicializar caso de uso
-  const useCase = new CompactProject(fsPort, gitPort);
-
-  // Callback para cuando se cambian las opciones
-  const onOptionsChanged = (options: any) => {
-    console.log("Options changed:", options);
-    // Aquí puedes implementar lógica adicional si es necesario
+  // Opciones por defecto
+  const defaultOptions = {
+    rootPath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "",
+    outputPath: "combined.txt",
+    customIgnorePatterns: ["node_modules", ".git", "dist", "build"],
+    includeGitIgnore: true,
+    includeTree: true,
+    minifyContent: true,
+    selectionMode: "directory" as "directory" | "files",
   };
 
-  // Crear y registrar explícitamente el proveedor de opciones
+  // Estado actual de las opciones
+  let currentOptions = { ...defaultOptions };
+
+  // Inicializar adaptadores
+  const fsAdapter = new FsAdapter();
+  const gitAdapter = new GitAdapter();
+
+  // Inicializar reporter de progreso
+  const progressReporter = new ConsoleProgressReporter();
+
+  // Inicializar caso de uso
+  const compactUseCase = new CompactProject(
+    fsAdapter,
+    gitAdapter,
+    progressReporter
+  );
+
+  // Crear y registrar el proveedor de opciones
   const optionsViewProvider = new OptionsViewProvider(
     context.extensionUri,
-    onOptionsChanged
+    (options) => {
+      // Esta función se enviará a la UI y será utilizada allí
+      logger.info("Options changed from index.ts:", options);
+      // Actualizar opciones actuales
+      Object.assign(currentOptions, options);
+    }
   );
 
   // Registrar el proveedor de opciones en el contexto de la extensión
@@ -34,18 +63,130 @@ export function activate(context: vscode.ExtensionContext) {
       optionsViewProvider,
       {
         webviewOptions: {
-          retainContextWhenHidden: true, // Mantener el estado cuando está oculto
+          retainContextWhenHidden: true,
         },
       }
     )
   );
 
-  // Activar la UI y la funcionalidad de selección de archivos
-  activateUI(context, useCase, optionsViewProvider);
+  // Crear el provider para el explorador de archivos
+  const fileExplorerProvider = new FileExplorerProvider();
 
-  console.log("Code2Context extension activated successfully!");
+  // Asegurar que el explorador use el workspace actual
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (workspaceRoot) {
+    fileExplorerProvider.setRootPath(workspaceRoot);
+    currentOptions.rootPath = workspaceRoot;
+  }
+
+  // Registrar el TreeView en el panel de actividad
+  const treeView = vscode.window.createTreeView("code2contextFiles", {
+    treeDataProvider: fileExplorerProvider,
+    showCollapseAll: true,
+    canSelectMany: false,
+  });
+
+  // Manejar eventos de selección en el TreeView
+  treeView.onDidChangeSelection((e) => {
+    if (e.selection.length > 0) {
+      const item = e.selection[0];
+      // Alternar selección al hacer clic en un elemento
+      vscode.commands.executeCommand("code2context.toggleSelection", item);
+    }
+  });
+
+  // Función auxiliar para generar contexto
+  async function generateContext(options: any) {
+    try {
+      // Ejecutar la compactación
+      const result = await compactUseCase.execute(options);
+
+      if (result.ok === true) {
+        vscode.window.showInformationMessage(`Context generated successfully`);
+
+        // Abrir el resultado en un nuevo editor
+        const document = await vscode.workspace.openTextDocument({
+          content: result.content,
+          language: "plaintext",
+        });
+
+        await vscode.window.showTextDocument(document);
+      } else {
+        vscode.window.showErrorMessage(
+          `Error generating context: ${result.error}`
+        );
+      }
+    } catch (error) {
+      const errorMessage = `Error: ${
+        error instanceof Error ? error.message : String(error)
+      }`;
+
+      vscode.window.showErrorMessage(errorMessage);
+    }
+  }
+
+  // Crear el WebviewProvider
+  const webviewProvider = new WebviewProvider(
+    context,
+    fileExplorerProvider,
+    optionsViewProvider,
+    generateContext
+  );
+
+  // Comandos
+  registerFileCommands(
+    context,
+    fileExplorerProvider,
+    optionsViewProvider,
+    currentOptions
+  );
+
+  registerGenerateCommands(
+    context,
+    compactUseCase,
+    fileExplorerProvider,
+    optionsViewProvider,
+    currentOptions
+  );
+
+  // Comando para mostrar opciones
+  const showOptionsCommand = vscode.commands.registerCommand(
+    "code2context.showOptions",
+    () => {
+      vscode.commands.executeCommand(
+        "workbench.view.extension.code2context-explorer"
+      );
+      // Esperar un momento para que se muestre el panel de exploración
+      setTimeout(() => {
+        vscode.commands.executeCommand("code2contextOptions.focus");
+      }, 300);
+    }
+  );
+
+  // Comando principal para abrir el panel con el WebView
+  const openPanelCommand = vscode.commands.registerCommand(
+    "code2context.openPanel",
+    async () => {
+      await webviewProvider.openPanel();
+    }
+  );
+
+  // Registrar los comandos en el contexto
+  context.subscriptions.push(openPanelCommand);
+  context.subscriptions.push(showOptionsCommand);
+  context.subscriptions.push(treeView);
+
+  // Comando inicial para abrir automáticamente
+  setTimeout(() => {
+    vscode.commands.executeCommand("code2context.openPanel");
+  }, 500);
+
+  logger.info("Code2Context extension activated successfully!");
 }
 
+/**
+ * Función de desactivación de la extensión
+ */
 export function deactivate() {
-  console.log("Code2Context extension deactivated.");
+  logger.info("Code2Context extension deactivated.");
 }

@@ -1,53 +1,13 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import { FileItem } from "./FileItem";
+import { selectionService } from "../../services/selectionService";
+import { notificationService } from "../../services/notificationService";
 
-// Define los tipos de elementos en el árbol
-export class FileItem extends vscode.TreeItem {
-  constructor(
-    public readonly resourceUri: vscode.Uri,
-    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public selected: boolean = false,
-    public readonly isDirectory: boolean = false
-  ) {
-    super(resourceUri, collapsibleState);
-
-    // Configurar propiedades según el tipo (directorio o archivo)
-    this.contextValue = isDirectory ? "directory" : "file";
-
-    // Añadir estado de selección al label
-    this.label = `${selected ? "✓ " : " "}${path.basename(resourceUri.fsPath)}`;
-
-    // Configurar ícono según tipo y estado de selección
-    if (isDirectory) {
-      this.iconPath = new vscode.ThemeIcon(
-        selected ? "folder-active" : "folder"
-      );
-    } else {
-      this.iconPath = new vscode.ThemeIcon(selected ? "check" : "file");
-    }
-
-    // Tooltip para mostrar ruta completa
-    this.tooltip = resourceUri.fsPath;
-  }
-
-  // Actualizar estado de selección visual
-  public updateSelection(selected: boolean): void {
-    this.selected = selected;
-    this.label = `${selected ? "✓ " : " "}${path.basename(
-      this.resourceUri.fsPath
-    )}`;
-    if (this.isDirectory) {
-      this.iconPath = new vscode.ThemeIcon(
-        selected ? "folder-active" : "folder"
-      );
-    } else {
-      this.iconPath = new vscode.ThemeIcon(selected ? "check" : "file");
-    }
-  }
-}
-
-// Provider que administra los datos del árbol
+/**
+ * Proveedor para el explorador de archivos en el TreeView
+ */
 export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<
     FileItem | undefined | null | void
@@ -70,12 +30,16 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   constructor() {
     // Inicializar con la carpeta raíz actual si hay un workspace abierto
     this.rootPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
     if (this.rootPath) {
       this.initialized = true;
     }
   }
 
-  // Método para establecer un nuevo directorio raíz
+  /**
+   * Establece un nuevo directorio raíz
+   * @param path Ruta del nuevo directorio raíz
+   */
   public setRootPath(path: string | undefined) {
     if (path && fs.existsSync(path)) {
       this.rootPath = path;
@@ -89,7 +53,10 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     }
   }
 
-  // Método para configurar patrones de ignorado
+  /**
+   * Configura patrones de ignorado
+   * @param patterns Lista de patrones a usar
+   */
   public setIgnorePatterns(patterns: string[]) {
     this.ignorePatterns = patterns;
     this.itemsCache.clear();
@@ -97,7 +64,10 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     console.log(`Ignore patterns updated: ${patterns.join(", ")}`);
   }
 
-  // Obtener la lista de archivos seleccionados
+  /**
+   * Obtiene la lista de archivos seleccionados
+   * @returns Lista de archivos seleccionados
+   */
   public getSelectedFiles(): string[] {
     const files = Array.from(this.selectedItems.values())
       .filter((item) => !item.isDirectory)
@@ -111,27 +81,42 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     return files;
   }
 
-  // Limpiar selección
+  /**
+   * Limpia la selección
+   */
   public clearSelection() {
     this.selectedItems.clear();
     this.itemsCache.forEach((item) => {
       item.updateSelection(false);
     });
     this._onDidChangeTreeData.fire();
+
+    // Actualizar servicio de selección
+    selectionService.clearSelection();
+
     console.log("Selection cleared");
   }
 
-  // Seleccionar todo
+  /**
+   * Selecciona todos los archivos
+   */
   public selectAll() {
     this.itemsCache.forEach((item, key) => {
       item.updateSelection(true);
       this.selectedItems.set(key, item);
     });
     this._onDidChangeTreeData.fire();
+
+    // Actualizar servicio de selección
+    selectionService.setSelectedFiles(this.getSelectedFiles());
+
     console.log("All files selected");
   }
 
-  // Toggle selección de un item
+  /**
+   * Alterna la selección de un ítem
+   * @param item Ítem a alternar
+   */
   public toggleSelection(item: FileItem) {
     const itemPath = item.resourceUri.fsPath;
     const isSelected = !item.selected;
@@ -150,6 +135,10 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     }
 
     this._onDidChangeTreeData.fire();
+
+    // Actualizar servicio de selección
+    selectionService.setSelectedFiles(this.getSelectedFiles());
+
     console.log(
       `Toggled selection for: ${itemPath} (${
         isSelected ? "selected" : "deselected"
@@ -157,7 +146,11 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     );
   }
 
-  // Verificar si un archivo debe ser ignorado
+  /**
+   * Verifica si un archivo debe ser ignorado
+   * @param filePath Ruta del archivo
+   * @returns true si debe ser ignorado, false en caso contrario
+   */
   private shouldIgnore(filePath: string): boolean {
     const relativePath = filePath
       .replace(this.rootPath || "", "")
@@ -199,12 +192,20 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     return binaryExtensions.includes(ext);
   }
 
-  // Implementación requerida: obtener elemento raíz
+  /**
+   * Implementación requerida: obtiene el elemento del árbol
+   * @param element Elemento a obtener
+   * @returns El elemento del árbol
+   */
   getTreeItem(element: FileItem): vscode.TreeItem {
     return element;
   }
 
-  // Implementación requerida: obtener hijos de un elemento
+  /**
+   * Implementación requerida: obtiene los hijos de un elemento
+   * @param element Elemento padre
+   * @returns Lista de hijos
+   */
   async getChildren(element?: FileItem): Promise<FileItem[]> {
     if (!this.rootPath || !this.initialized) {
       console.log("No root path set or not initialized");
@@ -244,7 +245,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
         const uri = vscode.Uri.file(filePath);
         const isSelected = this.selectedItems.has(filePath);
-
         let treeItem: FileItem;
 
         if (entry.isDirectory()) {
@@ -289,7 +289,11 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     }
   }
 
-  // Propagar selección a hijos de un directorio
+  /**
+   * Propaga la selección a los hijos de un directorio
+   * @param dirPath Ruta del directorio
+   * @param selected Estado de selección a propagar
+   */
   private async propagateSelectionToChildren(
     dirPath: string,
     selected: boolean
@@ -344,11 +348,15 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     }
   }
 
-  // Método para seleccionar explícitamente un directorio y todos sus archivos
+  /**
+   * Selecciona explícitamente un directorio y todos sus archivos
+   * @param directoryPath Ruta del directorio
+   */
   public async selectDirectory(directoryPath: string) {
     try {
       // Verificar que sea un directorio válido
       const stats = await fs.promises.stat(directoryPath);
+
       if (!stats.isDirectory()) {
         console.error(`Path is not a directory: ${directoryPath}`);
         return;
@@ -356,6 +364,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
       // Crear el item si no existe en cache
       let item = this.itemsCache.get(directoryPath);
+
       if (!item) {
         item = new FileItem(
           vscode.Uri.file(directoryPath),
@@ -377,7 +386,16 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       // Actualizar la UI
       this._onDidChangeTreeData.fire();
 
+      // Actualizar servicio de selección
+      selectionService.setSelectedFiles(this.getSelectedFiles());
+
       console.log(`Selected directory: ${directoryPath}`);
+
+      // Notificar con la cantidad de archivos seleccionados
+      const fileCount = this.getSelectedFiles().length;
+      notificationService.showInformation(
+        `Selected ${fileCount} files from directory`
+      );
     } catch (error) {
       console.error(`Error selecting directory: ${directoryPath}`, error);
     }

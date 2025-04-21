@@ -1,4 +1,7 @@
-export interface GitPort {
+/**
+ * Repositorio para interactuar con Git
+ */
+export interface GitRepository {
   /**
    * Verifica si una ruta está siendo ignorada por Git
    * @param rootPath Ruta raíz del proyecto
