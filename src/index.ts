@@ -25,7 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
     includeGitIgnore: true,
     includeTree: true,
     minifyContent: true,
-    selectionMode: "directory" as "directory" | "files",
+    selectionMode: "files" as "directory" | "files",
   };
 
   // Estado actual de las opciones

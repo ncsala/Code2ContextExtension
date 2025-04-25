@@ -56,16 +56,6 @@
         "icon": "$(zap)"
       },
       {
-        "command": "code2context.selectDirectoryMode",
-        "title": "Switch to Directory Selection Mode",
-        "icon": "$(folder)"
-      },
-      {
-        "command": "code2context.selectFilesMode",
-        "title": "Switch to Files Selection Mode",
-        "icon": "$(file)"
-      },
-      {
         "command": "code2context.selectDirectory",
         "title": "Select Directory and All Children",
         "icon": "$(folder-active)"
@@ -114,16 +104,6 @@
         {
           "command": "code2context.generateFromSelection",
           "when": "view == code2contextFiles",
-          "group": "navigation"
-        },
-        {
-          "command": "code2context.selectDirectoryMode",
-          "when": "view == code2contextOptions",
-          "group": "navigation"
-        },
-        {
-          "command": "code2context.selectFilesMode",
-          "when": "view == code2contextOptions",
           "group": "navigation"
         },
         {

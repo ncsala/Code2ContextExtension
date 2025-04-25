@@ -10,7 +10,7 @@ import { OptionsViewProvider } from "../options/optionsViewProvider";
 export function registerFileCommands(
   context: vscode.ExtensionContext,
   fileExplorerProvider: FileExplorerProvider,
-  optionsViewProvider: OptionsViewProvider,
+  _optionsViewProvider: OptionsViewProvider,
   currentOptions: any
 ) {
   // Comando para seleccionar/deseleccionar un archivo
@@ -41,46 +41,6 @@ export function registerFileCommands(
     }
   );
 
-  // Comando para cambiar el modo de selección a directorio
-  const selectDirectoryModeCommand = vscode.commands.registerCommand(
-    "code2context.selectDirectoryMode",
-    () => {
-      currentOptions.selectionMode = "directory";
-      notificationService.showInformation(
-        "Selection mode changed to: Directory"
-      );
-
-      // Actualizar opciones en panel lateral
-      optionsViewProvider.updateOptions(currentOptions);
-
-      // Actualizar webview si está abierto
-      updateWebviewIfAvailable({
-        command: "updateSelectionMode",
-        mode: "directory",
-      });
-    }
-  );
-
-  // Comando para cambiar el modo de selección a archivos específicos
-  const selectFilesModeCommand = vscode.commands.registerCommand(
-    "code2context.selectFilesMode",
-    () => {
-      currentOptions.selectionMode = "files";
-      notificationService.showInformation(
-        "Selection mode changed to: Specific Files"
-      );
-
-      // Actualizar opciones en panel lateral
-      optionsViewProvider.updateOptions(currentOptions);
-
-      // Actualizar webview si está abierto
-      updateWebviewIfAvailable({
-        command: "updateSelectionMode",
-        mode: "files",
-      });
-    }
-  );
-
   // Comando para seleccionar un directorio completo
   const selectDirectoryCommand = vscode.commands.registerCommand(
     "code2context.selectDirectory",
@@ -107,27 +67,15 @@ export function registerFileCommands(
       };
 
       const selectedFolders = await vscode.window.showOpenDialog(options);
-
       if (selectedFolders && selectedFolders.length > 0) {
         await fileExplorerProvider.selectDirectory(selectedFolders[0].fsPath);
       }
     }
   );
 
-  /**
-   * Función auxiliar para actualizar webview si está disponible
-   * (implementada posteriormente en WebviewProvider)
-   */
-  function updateWebviewIfAvailable(_message: any) {
-    // Esta función se implementará en el módulo de webview
-    // El parámetro está marcado con _ para indicar que no se usa aquí
-  }
-
   // Registrar comandos
   context.subscriptions.push(toggleSelectionCommand);
   context.subscriptions.push(selectAllCommand);
   context.subscriptions.push(deselectAllCommand);
-  context.subscriptions.push(selectDirectoryModeCommand);
-  context.subscriptions.push(selectFilesModeCommand);
   context.subscriptions.push(selectDirectoryCommand);
 }
