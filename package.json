@@ -6,7 +6,7 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "publisher": "yourname",
+  "publisher": "Nicolas Caceres Sala",
   "license": "MIT",
   "categories": [
     "Other"
