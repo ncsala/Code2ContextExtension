@@ -6,6 +6,7 @@ import { CompactUseCase } from "../core/ports/primary/CompactUseCase";
 import { registerFileCommands } from "./commands/fileCommands";
 import { registerGenerateCommands } from "./commands/generateCommands";
 import { logger } from "../infra/logging/ConsoleLogger";
+import { AppOptions } from "../core/domain/entities/AppOptions";
 
 /**
  * Activa la interfaz de usuario de la extensión
@@ -19,18 +20,18 @@ export function activate(
   logger.info("Activating Code2Context UI...");
 
   // Opciones por defecto
-  const defaultOptions = {
+  const defaultOptions: AppOptions = {
     rootPath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "",
     outputPath: "combined.txt",
     customIgnorePatterns: ["node_modules", ".git", "dist", "build"],
     includeGitIgnore: true,
     includeTree: true,
     minifyContent: true,
-    selectionMode: "directory" as "directory" | "files",
+    selectionMode: "directory",
   };
 
   // Estado actual de las opciones
-  let currentOptions = { ...defaultOptions };
+  let currentOptions: AppOptions = { ...defaultOptions };
 
   // Crear y registrar el proveedor de opciones
   const optionsViewProvider = new OptionsViewProvider(
@@ -83,9 +84,7 @@ export function activate(
   });
 
   // Función auxiliar para generar contexto
-  async function generateContext(options: any) {
-    let webviewProvider: WebviewProvider | undefined;
-
+  async function generateContext(options: AppOptions) {
     try {
       setLoading(true);
 

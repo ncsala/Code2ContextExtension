@@ -31,7 +31,7 @@ export interface ProgressReporter {
    * @param message Mensaje de error
    * @param error Objeto de error opcional
    */
-  error(message: string, error?: any): void;
+  error(message: string, error?: unknown): void;
 }
 
 /**
@@ -54,7 +54,7 @@ export class ConsoleProgressReporter implements ProgressReporter {
     console.warn(message);
   }
 
-  error(message: string, error?: any): void {
+  error(message: string, error?: unknown): void {
     console.error(message, error || "");
   }
 }

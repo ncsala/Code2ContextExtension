@@ -65,9 +65,7 @@ const GeneratorPanel: React.FC<GeneratorPanelProps> = ({
             onChange={onSelectionModeChange}
             className={styles.select}
           >
-            <option value="directory">
-              Entire Directory (filtered by ignore patterns)
-            </option>
+            <option value="directory">Entire Directory</option>
             <option value="files">Specific Files</option>
           </select>
 

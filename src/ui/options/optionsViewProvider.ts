@@ -19,7 +19,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   private _selectionMode: "directory" | "files" = "directory";
   private _specificFiles: string[] = [];
 
-  private _onOptionsChangedEmitter = new vscode.EventEmitter<
+  private readonly _onOptionsChangedEmitter = new vscode.EventEmitter<
     Partial<AppOptions>
   >();
   public readonly onOptionsChanged = this._onOptionsChangedEmitter.event;
@@ -86,21 +86,30 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   public updateOptions(options: Partial<AppOptions>) {
     if (this._view) {
       // Actualizar las propiedades internas
-      if (options.rootPath !== undefined) this._rootPath = options.rootPath;
-      if (options.outputPath !== undefined)
+      if (options.rootPath !== undefined) {
+        this._rootPath = options.rootPath;
+      }
+      if (options.outputPath !== undefined) {
         this._outputPath = options.outputPath;
-      if (options.customIgnorePatterns !== undefined)
+      }
+      if (options.customIgnorePatterns !== undefined) {
         this._ignorePatterns = options.customIgnorePatterns;
-      if (options.includeGitIgnore !== undefined)
+      }
+      if (options.includeGitIgnore !== undefined) {
         this._includeGitIgnore = options.includeGitIgnore;
-      if (options.includeTree !== undefined)
+      }
+      if (options.includeTree !== undefined) {
         this._includeTree = options.includeTree;
-      if (options.minifyContent !== undefined)
+      }
+      if (options.minifyContent !== undefined) {
         this._minifyContent = options.minifyContent;
-      if (options.selectionMode !== undefined)
+      }
+      if (options.selectionMode !== undefined) {
         this._selectionMode = options.selectionMode;
-      if (options.specificFiles !== undefined)
+      }
+      if (options.specificFiles !== undefined) {
         this._specificFiles = options.specificFiles;
+      }
 
       // Enviar actualización al webview del panel de opciones
       this._view.webview.postMessage({

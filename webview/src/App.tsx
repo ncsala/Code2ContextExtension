@@ -2,31 +2,19 @@ import React, { useState, useEffect } from "react";
 import styles from "./App.module.css";
 import GeneratorPanel from "./components/GeneratorPanel/GeneratorPanel";
 import DebugPanel from "./components/DebugPanel/DebugPanel";
+import { CompactOptions, VSCodeMessage } from "./types/messages";
+import {
+  initVSCodeAPI,
+  sendGetSelectedFiles,
+  sendSelectDirectory,
+  sendShowOptions,
+  sendOpenNativeFileExplorer,
+  sendChangeSelectionMode,
+  sendCompact,
+} from "./utils/messageUtils";
 
-// Obtener la API de VS Code
-declare global {
-  interface Window {
-    acquireVsCodeApi: () => {
-      postMessage: (message: any) => void;
-      getState: () => any;
-      setState: (state: any) => void;
-    };
-  }
-}
-
-// VSCode API singleton
-const vscode = window.acquireVsCodeApi();
-
-// Tipos principales
-interface CompactOptions {
-  rootPath: string;
-  outputPath: string;
-  customIgnorePatterns: string[];
-  includeGitIgnore: boolean;
-  includeTree: boolean;
-  minifyContent: boolean;
-  selectionMode: "directory" | "files";
-}
+// Inicializar la API de VSCode
+initVSCodeAPI(window.acquireVsCodeApi());
 
 const App: React.FC = () => {
   // Estado para las opciones
@@ -46,9 +34,9 @@ const App: React.FC = () => {
   const [debugOutput, setDebugOutput] = useState<string>("");
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
 
-  // Manejar mensajes recibidos desde la extensión
+  // Manejar mensajes recibidos desde la extensi?n
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = (event: MessageEvent<VSCodeMessage>) => {
       const message = event.data;
       console.log("Message received:", message);
 
@@ -61,19 +49,31 @@ const App: React.FC = () => {
             setError(message.content?.error || "Unknown error occurred");
           }
           break;
+
         case "directorySelected":
           setOptions((prev) => ({
             ...prev,
             rootPath: message.path,
           }));
           break;
+
         case "initialize":
-          setOptions((prev) => ({
-            ...prev,
-            rootPath: message.rootPath,
-            ...(message.options || {}),
-          }));
+          // Arreglado: Combina el rootPath con las opciones, dando prioridad a las opciones
+          setOptions((prev) => {
+            const initialOptions = {
+              ...prev,
+              ...(message.options || {}),
+            };
+
+            // Si rootPath no est? definido en options o est? vac?o, usa el rootPath del mensaje
+            if (!initialOptions.rootPath) {
+              initialOptions.rootPath = message.rootPath;
+            }
+
+            return initialOptions;
+          });
           break;
+
         case "updateOptions":
           console.log("Received updated options:", message.options);
           setOptions((prev) => ({
@@ -88,18 +88,22 @@ const App: React.FC = () => {
               "\n"
           );
           break;
+
         case "debug":
           setDebugOutput((prev) => prev + message.data + "\n");
           break;
+
         case "selectedFiles":
           setSelectedFiles(message.files || []);
           setDebugOutput(
             (prev) => prev + `Selected files: ${message.files?.length || 0}\n`
           );
           break;
+
         case "setLoading":
           setLoading(message.loading);
           break;
+
         case "error":
           setError(message.message || "Unknown error");
           setLoading(false);
@@ -110,12 +114,12 @@ const App: React.FC = () => {
     window.addEventListener("message", handleMessage);
 
     // Solicitar archivos seleccionados al cargar
-    vscode.postMessage({ command: "getSelectedFiles" });
+    sendGetSelectedFiles();
 
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  // Manejar el cambio de modo de selección
+  // Manejar el cambio de modo de selecci?n
   const handleSelectionModeChange = (
     e: React.ChangeEvent<HTMLSelectElement>
   ) => {
@@ -125,43 +129,31 @@ const App: React.FC = () => {
       selectionMode: value,
     }));
 
-    // Notificar a la extensión sobre el cambio de modo
-    vscode.postMessage({
-      command: "changeSelectionMode",
-      mode: value,
-    });
+    // Notificar a la extensi?n sobre el cambio de modo
+    sendChangeSelectionMode(value);
   };
 
-  // Manejar el botón de seleccionar directorio
+  // Manejar el bot?n de seleccionar directorio
   const handleSelectDirectory = () => {
-    vscode.postMessage({
-      command: "selectDirectory",
-      currentPath: options.rootPath,
-    });
+    sendSelectDirectory(options.rootPath);
   };
 
-  // Manejar el botón de mostrar opciones
+  // Manejar el bot?n de mostrar opciones
   const handleShowOptions = () => {
-    vscode.postMessage({
-      command: "showOptions",
-    });
+    sendShowOptions();
   };
 
-  // Manejar el botón de abrir el explorador de archivos
+  // Manejar el bot?n de abrir el explorador de archivos
   const handleOpenFileExplorer = () => {
-    vscode.postMessage({
-      command: "openNativeFileExplorer",
-    });
+    sendOpenNativeFileExplorer();
   };
 
-  // Manejar el botón de refrescar la selección
+  // Manejar el bot?n de refrescar la selecci?n
   const handleRefreshSelection = () => {
-    vscode.postMessage({
-      command: "getSelectedFiles",
-    });
+    sendGetSelectedFiles();
   };
 
-  // Manejar el botón de generar contexto
+  // Manejar el bot?n de generar contexto
   const handleGenerate = () => {
     if (options.rootPath === "") {
       setError("You must select a root directory");
@@ -180,15 +172,12 @@ const App: React.FC = () => {
     setError(null);
     setDebugOutput("");
 
-    vscode.postMessage({
-      command: "compact",
-      payload: {
-        ...options,
-      },
+    sendCompact({
+      ...options,
     });
   };
 
-  // Manejar el botón de limpiar debug
+  // Manejar el bot?n de limpiar debug
   const handleClearDebug = () => {
     setDebugOutput("");
   };

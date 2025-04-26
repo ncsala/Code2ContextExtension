@@ -3,6 +3,7 @@ import { CompactUseCase } from "../../core/ports/primary/CompactUseCase";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import { notificationService } from "../services/notificationService";
+import { AppOptions } from "../../core/domain/entities/AppOptions";
 
 /**
  * Registra los comandos relacionados con la generación de contexto
@@ -12,7 +13,7 @@ export function registerGenerateCommands(
   useCase: CompactUseCase,
   fileExplorerProvider: FileExplorerProvider,
   optionsViewProvider: OptionsViewProvider,
-  currentOptions: any
+  currentOptions: Partial<AppOptions>
 ) {
   // Comando para generar contexto directamente desde las opciones nativas
   const generateFromOptionsCommand = vscode.commands.registerCommand(
@@ -87,7 +88,7 @@ export function registerGenerateCommands(
   /**
    * Función auxiliar para generar contexto
    */
-  async function generateContext(options: any) {
+  async function generateContext(options: AppOptions) {
     let webviewPanel: vscode.WebviewPanel | undefined;
 
     try {

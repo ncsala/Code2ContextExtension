@@ -10,14 +10,14 @@ import ignore from "ignore";
  * Proveedor para el explorador de archivos en el TreeView
  */
 export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
-  private _onDidChangeTreeData: vscode.EventEmitter<
+  private readonly _onDidChangeTreeData: vscode.EventEmitter<
     FileItem | undefined | null | void
   > = new vscode.EventEmitter<FileItem | undefined | null | void>();
   readonly onDidChangeTreeData: vscode.Event<
     FileItem | undefined | null | void
   > = this._onDidChangeTreeData.event;
 
-  private selectedItems: Map<string, FileItem> = new Map();
+  private readonly selectedItems: Map<string, FileItem> = new Map();
   private rootPath: string | undefined;
   private ignorePatterns: string[] = [".git", "node_modules", "dist", "build"];
 
@@ -25,7 +25,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   private ignoreHandler: ReturnType<typeof ignore> | null = null;
 
   // Cache para mantener referencia a los elementos
-  private itemsCache: Map<string, FileItem> = new Map();
+  private readonly itemsCache: Map<string, FileItem> = new Map();
 
   // Flag para rastrear si se ha inicializado correctamente
   private initialized: boolean = false;
@@ -274,7 +274,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       for (const entry of entries) {
         const filePath = path.join(dirPath, entry.name);
 
-        // QUITAR ESTA VERIFICACIÓN PARA MOSTRAR TODOS LOS ARCHIVOS
+        //  TODO QUITAR ESTA VERIFICACIÓN PARA MOSTRAR TODOS LOS ARCHIVOS
         // if (this.shouldIgnore(filePath)) {
         //   continue;
         // }

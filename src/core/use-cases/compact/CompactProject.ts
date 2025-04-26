@@ -140,12 +140,24 @@ export class CompactProject implements CompactUseCase {
         ok: true,
         content: combined,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.progressReporter.error("Error en la compactación:", err);
       this.progressReporter.endOperation("Total execution time");
+
+      let errorMessage = "Error desconocido";
+
+      // Verificar si el error tiene una propiedad 'message'
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === "object" && err !== null && "message" in err) {
+        errorMessage = String((err as { message: unknown }).message);
+      } else if (typeof err === "string") {
+        errorMessage = err;
+      }
+
       return {
         ok: false,
-        error: err?.message ?? "Error desconocido",
+        error: errorMessage,
       };
     }
   }

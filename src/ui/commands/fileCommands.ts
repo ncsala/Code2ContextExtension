@@ -3,6 +3,7 @@ import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProv
 import { FileItem } from "../providers/fileExplorer/FileItem";
 import { notificationService } from "../services/notificationService";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
+import { AppOptions } from "../../core/domain/entities/AppOptions";
 
 /**
  * Registra los comandos relacionados con la selección de archivos
@@ -11,7 +12,7 @@ export function registerFileCommands(
   context: vscode.ExtensionContext,
   fileExplorerProvider: FileExplorerProvider,
   _optionsViewProvider: OptionsViewProvider,
-  currentOptions: any
+  currentOptions: Partial<AppOptions>
 ) {
   // Comando para seleccionar/deseleccionar un archivo
   const toggleSelectionCommand = vscode.commands.registerCommand(
@@ -46,7 +47,7 @@ export function registerFileCommands(
     "code2context.selectDirectory",
     async (directoryItem?: FileItem) => {
       // Si se proporciona el item desde el menú contextual
-      if (directoryItem && directoryItem.isDirectory) {
+      if (directoryItem?.isDirectory) {
         await fileExplorerProvider.selectDirectory(
           directoryItem.resourceUri.fsPath
         );

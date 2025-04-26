@@ -4,18 +4,27 @@ import * as fs from "fs";
 import { FileExplorerProvider } from "./providers/fileExplorer/FileExplorerProvider";
 import { OptionsViewProvider } from "./options/optionsViewProvider";
 import { logger } from "../infra/logging/ConsoleLogger";
+import { AppOptions } from "../core/domain/entities/AppOptions";
+import {
+  VSCodeToWebviewMessage,
+  WebviewToVSCodeMessageType,
+  CompactMessage,
+  SelectDirectoryMessage,
+  UpdateIgnorePatternsMessage,
+  ChangeSelectionModeMessage,
+} from "./types/webviewMessages";
 
 /** * Proveedor para la gestión del webview principal */
 export class WebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
-  private originalConsoleLog: any;
+  private originalConsoleLog: (...args: unknown[]) => void;
   private extensionPath: string;
 
   constructor(
     extensionContext: vscode.ExtensionContext,
     private fileExplorerProvider: FileExplorerProvider,
     private optionsViewProvider: OptionsViewProvider,
-    private generateContextCallback: (options: any) => Promise<void>
+    private generateContextCallback: (options: AppOptions) => Promise<void>
   ) {
     this.extensionPath = extensionContext.extensionPath;
 
@@ -39,7 +48,7 @@ export class WebviewProvider {
 
   /** * Crea un interceptor para los logs de consola */
   private createLogInterceptor() {
-    return (...args: any[]) => {
+    return (...args: unknown[]) => {
       // Llamar al original primero
       this.originalConsoleLog.apply(console, args);
 
@@ -50,7 +59,7 @@ export class WebviewProvider {
             command: "debug",
             data: args
               .map((arg) =>
-                typeof arg === "object" ? JSON.stringify(arg) : arg
+                typeof arg === "object" ? JSON.stringify(arg) : String(arg)
               )
               .join(" "),
           });
@@ -131,7 +140,7 @@ export class WebviewProvider {
   }
 
   /** * Envía un mensaje al webview * @param message Mensaje a enviar */
-  public postMessage(message: any) {
+  public postMessage(message: VSCodeToWebviewMessage) {
     if (this.panel) {
       this.panel.webview.postMessage(message);
     }
@@ -142,40 +151,42 @@ export class WebviewProvider {
     panel: vscode.WebviewPanel,
     workspaceRoot: string
   ) {
-    panel.webview.onDidReceiveMessage(async (msg) => {
-      logger.info(`Message received: ${msg.command}`);
-      switch (msg.command) {
-        case "compact":
-          await this.handleCompactMessage(msg);
-          break;
-        case "selectDirectory":
-          await this.handleSelectDirectoryMessage(msg, workspaceRoot);
-          break;
-        case "updateIgnorePatterns":
-          this.handleUpdateIgnorePatternsMessage(msg);
-          break;
-        case "getSelectedFiles":
-          this.handleGetSelectedFilesMessage();
-          break;
-        case "openNativeFileExplorer":
-          this.handleOpenNativeFileExplorerMessage();
-          break;
-        case "showOptions":
-          this.handleShowOptionsMessage();
-          break;
-        case "changeSelectionMode":
-          this.handleChangeSelectionModeMessage(msg);
-          break;
+    panel.webview.onDidReceiveMessage(
+      async (msg: WebviewToVSCodeMessageType) => {
+        logger.info(`Message received: ${msg.command}`);
+        switch (msg.command) {
+          case "compact":
+            await this.handleCompactMessage(msg);
+            break;
+          case "selectDirectory":
+            await this.handleSelectDirectoryMessage(msg, workspaceRoot);
+            break;
+          case "updateIgnorePatterns":
+            this.handleUpdateIgnorePatternsMessage(msg);
+            break;
+          case "getSelectedFiles":
+            this.handleGetSelectedFilesMessage();
+            break;
+          case "openNativeFileExplorer":
+            this.handleOpenNativeFileExplorerMessage();
+            break;
+          case "showOptions":
+            this.handleShowOptionsMessage();
+            break;
+          case "changeSelectionMode":
+            this.handleChangeSelectionModeMessage(msg);
+            break;
+        }
       }
-    });
+    );
   }
 
   /** * Maneja el mensaje de compactación */
-  private async handleCompactMessage(msg: any) {
+  private async handleCompactMessage(msg: CompactMessage) {
     logger.info("Options received:", msg.payload);
 
     // Asegurarse de que las propiedades booleanas se manejen correctamente
-    const payload = {
+    const payload: AppOptions = {
       ...msg.payload,
       minifyContent: msg.payload.minifyContent === true,
       includeTree: msg.payload.includeTree === true,
@@ -197,7 +208,10 @@ export class WebviewProvider {
   }
 
   /** * Maneja el mensaje de selección de directorio */
-  private async handleSelectDirectoryMessage(msg: any, workspaceRoot: string) {
+  private async handleSelectDirectoryMessage(
+    msg: SelectDirectoryMessage,
+    workspaceRoot: string
+  ) {
     const options: vscode.OpenDialogOptions = {
       canSelectFiles: false,
       canSelectFolders: true,
@@ -227,7 +241,7 @@ export class WebviewProvider {
   }
 
   /** * Maneja el mensaje de actualización de patrones de ignorado */
-  private handleUpdateIgnorePatternsMessage(msg: any) {
+  private handleUpdateIgnorePatternsMessage(msg: UpdateIgnorePatternsMessage) {
     const options = this.optionsViewProvider.getOptions();
     options.customIgnorePatterns = msg.patterns || options.customIgnorePatterns;
 
@@ -259,7 +273,7 @@ export class WebviewProvider {
   }
 
   /** * Maneja el mensaje de cambiar modo de selección */
-  private handleChangeSelectionModeMessage(msg: any) {
+  private handleChangeSelectionModeMessage(msg: ChangeSelectionModeMessage) {
     if (msg.mode) {
       const options = this.optionsViewProvider.getOptions();
       options.selectionMode = msg.mode;

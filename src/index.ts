@@ -9,6 +9,7 @@ import { registerFileCommands } from "./ui/commands/fileCommands";
 import { registerGenerateCommands } from "./ui/commands/generateCommands";
 import { ConsoleProgressReporter } from "./core/use-cases/shared/ProgressReporter";
 import { logger } from "./infra/logging/ConsoleLogger";
+import { AppOptions } from "./core/domain/entities/AppOptions";
 
 /**
  * Función de activación de la extensión
@@ -18,18 +19,18 @@ export function activate(context: vscode.ExtensionContext) {
   logger.info("Activating Code2Context extension...");
 
   // Opciones por defecto
-  const defaultOptions = {
+  const defaultOptions: AppOptions = {
     rootPath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "",
     outputPath: "combined.txt",
     customIgnorePatterns: ["node_modules", ".git", "dist", "build"],
     includeGitIgnore: true,
     includeTree: true,
     minifyContent: true,
-    selectionMode: "files" as "directory" | "files",
+    selectionMode: "files",
   };
 
   // Estado actual de las opciones
-  let currentOptions = { ...defaultOptions };
+  let currentOptions: AppOptions = { ...defaultOptions };
 
   // Inicializar adaptadores
   const fsAdapter = new FsAdapter();
@@ -72,14 +73,12 @@ export function activate(context: vscode.ExtensionContext) {
   optionsViewProvider.onOptionsChanged((updatedOptions) => {
     // Actualizar opciones actuales
     Object.assign(currentOptions, updatedOptions);
-
     // Sincronizar patrones de ignorado con el explorador de archivos
     if (updatedOptions.customIgnorePatterns) {
       fileExplorerProvider.setIgnorePatterns(
         updatedOptions.customIgnorePatterns
       );
     }
-
     logger.info("Options synchronized across components");
   });
 
@@ -87,10 +86,8 @@ export function activate(context: vscode.ExtensionContext) {
   optionsViewProvider.onOptionsChanged((options) => {
     // Esta función se ejecuta cuando cambian las opciones en el panel de opciones
     logger.info("Options changed, updating ignore patterns...");
-
     // Actualizar opciones actuales
     Object.assign(currentOptions, options);
-
     // Sincronizar patrones de ignorado con el explorador de archivos
     if (options.customIgnorePatterns) {
       fileExplorerProvider.setIgnorePatterns(options.customIgnorePatterns);
@@ -124,20 +121,17 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   // Función auxiliar para generar contexto
-  async function generateContext(options: any) {
+  async function generateContext(options: AppOptions) {
     try {
       // Ejecutar la compactación
       const result = await compactUseCase.execute(options);
-
       if (result.ok === true) {
         vscode.window.showInformationMessage(`Context generated successfully`);
-
         // Abrir el resultado en un nuevo editor
         const document = await vscode.workspace.openTextDocument({
           content: result.content,
           language: "plaintext",
         });
-
         await vscode.window.showTextDocument(document);
       } else {
         vscode.window.showErrorMessage(
@@ -148,7 +142,6 @@ export function activate(context: vscode.ExtensionContext) {
       const errorMessage = `Error: ${
         error instanceof Error ? error.message : String(error)
       }`;
-
       vscode.window.showErrorMessage(errorMessage);
     }
   }
@@ -168,7 +161,6 @@ export function activate(context: vscode.ExtensionContext) {
     optionsViewProvider,
     currentOptions
   );
-
   registerGenerateCommands(
     context,
     compactUseCase,
