@@ -83,15 +83,24 @@ export function activate(
     }
   });
 
+  // Crear el WebviewProvider primero para poder usarlo en generateContext
+  const webviewProvider = new WebviewProvider(
+    context,
+    fileExplorerProvider,
+    optionsViewProvider,
+    null // Inicialmente pasamos null, lo actualizaremos después
+  );
+
   // Función auxiliar para generar contexto
   async function generateContext(options: AppOptions) {
     try {
-      setLoading(true);
+      // Usar directamente el WebviewProvider para mostrar/ocultar la carga
+      webviewProvider.setLoading(true);
 
       // Ejecutar la compactación
       const result = await compactUseCase.execute(options);
 
-      setLoading(false);
+      webviewProvider.setLoading(false);
 
       if (result.ok === true) {
         vscode.window.showInformationMessage(`Context generated successfully`);
@@ -109,7 +118,7 @@ export function activate(
         );
       }
     } catch (error) {
-      setLoading(false);
+      webviewProvider.setLoading(false);
 
       const errorMessage = `Error: ${
         error instanceof Error ? error.message : String(error)
@@ -119,20 +128,8 @@ export function activate(
     }
   }
 
-  // Función para gestionar indicador de carga
-  function setLoading(_isLoading: boolean) {
-    // Esta implementación está vacía porque la funcionalidad
-    // real está en el WebviewProvider
-    // La implementación completa estará disponible cuando se integre WebviewProvider
-  }
-
-  // Crear el WebviewProvider
-  const webviewProvider = new WebviewProvider(
-    context,
-    fileExplorerProvider,
-    optionsViewProvider,
-    generateContext
-  );
+  // Ahora que tenemos la función generateContext definida, la asignamos al WebviewProvider
+  webviewProvider.updateGenerateCallback(generateContext);
 
   // Comando principal para abrir el panel con el WebView
   const openPanelCommand = vscode.commands.registerCommand(
@@ -168,7 +165,8 @@ export function activate(
     compactUseCase,
     fileExplorerProvider,
     optionsViewProvider,
-    currentOptions
+    currentOptions,
+    webviewProvider
   );
 
   // Registrar comandos adicionales

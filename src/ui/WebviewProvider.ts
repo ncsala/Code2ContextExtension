@@ -17,16 +17,20 @@ import {
 /** * Proveedor para la gestión del webview principal */
 export class WebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
-  private originalConsoleLog: (...args: unknown[]) => void;
-  private extensionPath: string;
+  private readonly originalConsoleLog: (...args: unknown[]) => void;
+  private readonly extensionPath: string;
+  private generateContextCallback:
+    | ((options: AppOptions) => Promise<void>)
+    | null;
 
   constructor(
     extensionContext: vscode.ExtensionContext,
-    private fileExplorerProvider: FileExplorerProvider,
-    private optionsViewProvider: OptionsViewProvider,
-    private generateContextCallback: (options: AppOptions) => Promise<void>
+    private readonly fileExplorerProvider: FileExplorerProvider,
+    private readonly optionsViewProvider: OptionsViewProvider,
+    generateContextCallback: ((options: AppOptions) => Promise<void>) | null
   ) {
     this.extensionPath = extensionContext.extensionPath;
+    this.generateContextCallback = generateContextCallback;
 
     // Guardar el console.log original para restaurarlo después
     this.originalConsoleLog = console.log;
@@ -44,6 +48,26 @@ export class WebviewProvider {
         });
       }
     });
+  }
+
+  /**
+   * Actualiza el callback de generación después de la inicialización
+   * @param callback La función callback para generar contexto
+   */
+  public updateGenerateCallback(
+    callback: (options: AppOptions) => Promise<void>
+  ): void {
+    this.generateContextCallback = callback;
+  }
+
+  /** * Establece el estado de carga */
+  public setLoading(isLoading: boolean): void {
+    if (this.panel) {
+      this.postMessage({
+        command: "setLoading",
+        loading: isLoading,
+      });
+    }
   }
 
   /** * Crea un interceptor para los logs de consola */
@@ -203,8 +227,16 @@ export class WebviewProvider {
       payload.specificFiles = this.fileExplorerProvider.getSelectedFiles();
     }
 
-    // Ejecutar la compactación
-    await this.generateContextCallback(payload);
+    // Ejecutar la compactación si tenemos un callback
+    if (this.generateContextCallback) {
+      await this.generateContextCallback(payload);
+    } else {
+      logger.error("Generate context callback is not defined");
+      this.postMessage({
+        command: "error",
+        message: "Internal error: Generate context callback is not defined",
+      });
+    }
   }
 
   /** * Maneja el mensaje de selección de directorio */
@@ -281,17 +313,7 @@ export class WebviewProvider {
     }
   }
 
-  /** * Establece el estado de carga */
-  public setLoading(isLoading: boolean) {
-    this.postMessage({
-      command: "setLoading",
-      loading: isLoading,
-    });
-  }
-
-  /**
-   * Obtiene HTML de respaldo cuando no se encuentra el archivo HTML principal
-   */
+  /** * Obtiene HTML de respaldo cuando no se encuentra el archivo HTML principal */
   private getFallbackHtml(): string {
     return `
       <html>
