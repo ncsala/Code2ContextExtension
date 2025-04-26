@@ -14,7 +14,6 @@ interface GeneratorPanelProps {
   onGenerate: () => void;
   onShowOptions: () => void;
   onOpenFileExplorer?: () => void;
-  onRefreshSelection?: () => void;
 }
 
 const GeneratorPanel: React.FC<GeneratorPanelProps> = ({
@@ -27,7 +26,6 @@ const GeneratorPanel: React.FC<GeneratorPanelProps> = ({
   onGenerate,
   onShowOptions,
   onOpenFileExplorer,
-  onRefreshSelection,
 }) => {
   return (
     <div className={styles.panel}>
@@ -69,17 +67,11 @@ const GeneratorPanel: React.FC<GeneratorPanelProps> = ({
             <option value="files">Specific Files</option>
           </select>
 
-          {/* Botones adicionales para el modo "files" */}
+          {/* Botón adicional para el modo "files" */}
           {options.selectionMode === "files" && (
             <div className={styles.fileSelectionActions}>
               <button onClick={onOpenFileExplorer} className={styles.button}>
                 Select Files
-              </button>
-              <button
-                onClick={onRefreshSelection}
-                className={`${styles.button} ${styles.refreshButton}`}
-              >
-                Refresh
               </button>
             </div>
           )}
@@ -119,7 +111,6 @@ const GeneratorPanel: React.FC<GeneratorPanelProps> = ({
         >
           {loading ? "Generating..." : "Generate Context"}
         </button>
-
         <button onClick={onShowOptions} className={styles.button}>
           Show Options
         </button>

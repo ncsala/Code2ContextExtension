@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import { notificationService } from "./notificationService";
 
 /**
@@ -18,14 +17,42 @@ export interface SelectionChangeListener {
 export class SelectionService {
   private readonly listeners: SelectionChangeListener[] = [];
   private selectedFiles: string[] = [];
+  private webviewProvider: SelectionChangeListener | null = null;
 
   /**
    * Establece la lista de archivos seleccionados
    * @param files Lista de archivos seleccionados
    */
   setSelectedFiles(files: string[]): void {
-    this.selectedFiles = [...files];
-    this.notifyListeners();
+    // Solo notificar si realmente hay cambios en la selección
+    if (this.hasSelectionChanged(files)) {
+      this.selectedFiles = [...files];
+      this.notifyListeners();
+    }
+  }
+
+  /**
+   * Verifica si la nueva selección es diferente de la actual
+   */
+  private hasSelectionChanged(newFiles: string[]): boolean {
+    if (this.selectedFiles.length !== newFiles.length) {
+      return true;
+    }
+
+    // Verificar si hay diferencias en los archivos
+    return (
+      newFiles.some((file) => !this.selectedFiles.includes(file)) ||
+      this.selectedFiles.some((file) => !newFiles.includes(file))
+    );
+  }
+
+  /**
+   * Registra el WebviewProvider como listener especial para actualizaciones
+   * @param provider El WebviewProvider
+   */
+  registerWebviewProvider(provider: SelectionChangeListener): void {
+    this.webviewProvider = provider;
+    console.log("WebviewProvider registered for selection updates");
   }
 
   /**
@@ -58,7 +85,6 @@ export class SelectionService {
    */
   toggleFileSelection(file: string): boolean {
     const index = this.selectedFiles.indexOf(file);
-
     if (index === -1) {
       this.selectedFiles.push(file);
       this.notifyListeners();
@@ -121,8 +147,17 @@ export class SelectionService {
    * Notifica a todos los listeners sobre el cambio
    */
   private notifyListeners(): void {
+    // Primero notificar al WebviewProvider directamente si está registrado
+    if (this.webviewProvider) {
+      this.webviewProvider.onSelectionChanged([...this.selectedFiles]);
+    }
+
+    // Luego a los demás listeners
     for (const listener of this.listeners) {
-      listener.onSelectionChanged([...this.selectedFiles]);
+      if (listener !== this.webviewProvider) {
+        // Evitar duplicar notificaciones
+        listener.onSelectionChanged([...this.selectedFiles]);
+      }
     }
   }
 }

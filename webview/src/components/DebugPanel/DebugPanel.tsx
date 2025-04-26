@@ -3,15 +3,10 @@ import styles from "./DebugPanel.module.css";
 
 interface DebugPanelProps {
   debugOutput: string;
-  selectedFiles: string[];
   onClear: () => void;
 }
 
-const DebugPanel: React.FC<DebugPanelProps> = ({
-  debugOutput,
-  selectedFiles,
-  onClear,
-}) => {
+const DebugPanel: React.FC<DebugPanelProps> = ({ debugOutput, onClear }) => {
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
@@ -20,9 +15,13 @@ const DebugPanel: React.FC<DebugPanelProps> = ({
           Clear
         </button>
       </div>
-
       <pre className={styles.content}>
-        {debugOutput || `Selected files: ${selectedFiles.length}`}
+        {debugOutput || (
+          <div className={styles.emptyState}>
+            No debug information available. Select files or change options to
+            see updates here.
+          </div>
+        )}
       </pre>
     </div>
   );

@@ -2,6 +2,7 @@
   background-color: var(--vscode-editor-background);
   border-radius: 4px;
   overflow: hidden;
+  margin-top: 20px;
 }
 
 .header {
@@ -35,11 +36,34 @@
 .content {
   padding: 12px;
   margin: 0;
-  max-height: 200px;
+  max-height: 300px;
   overflow: auto;
   font-family: "Consolas", "Courier New", monospace;
   font-size: 0.9rem;
   white-space: pre-wrap;
   background-color: var(--vscode-editor-background);
   color: var(--vscode-foreground);
+}
+
+.fileInfo {
+  margin-bottom: 10px;
+  padding: 5px;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+.optionsInfo {
+  margin-top: 10px;
+}
+
+.infoLabel {
+  font-weight: bold;
+  color: var(--vscode-editorInfo-foreground, #3794ff);
+}
+
+.emptyState {
+  padding: 20px;
+  text-align: center;
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
 }

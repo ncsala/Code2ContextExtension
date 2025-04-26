@@ -6,6 +6,10 @@ import { OptionsViewProvider } from "./options/optionsViewProvider";
 import { logger } from "../infra/logging/ConsoleLogger";
 import { AppOptions } from "../core/domain/entities/AppOptions";
 import {
+  selectionService,
+  SelectionChangeListener,
+} from "./services/selectionService";
+import {
   VSCodeToWebviewMessage,
   WebviewToVSCodeMessageType,
   CompactMessage,
@@ -15,22 +19,21 @@ import {
 } from "./types/webviewMessages";
 
 /** * Proveedor para la gestión del webview principal */
-export class WebviewProvider {
+export class WebviewProvider implements SelectionChangeListener {
   private panel: vscode.WebviewPanel | undefined;
-  private readonly originalConsoleLog: (...args: unknown[]) => void;
-  private readonly extensionPath: string;
-  private generateContextCallback:
-    | ((options: AppOptions) => Promise<void>)
-    | null;
+  private originalConsoleLog: (...args: unknown[]) => void;
+  private extensionPath: string;
+  private generateContextCallback: (options: AppOptions) => Promise<void>;
 
   constructor(
     extensionContext: vscode.ExtensionContext,
-    private readonly fileExplorerProvider: FileExplorerProvider,
-    private readonly optionsViewProvider: OptionsViewProvider,
+    private fileExplorerProvider: FileExplorerProvider,
+    private optionsViewProvider: OptionsViewProvider,
     generateContextCallback: ((options: AppOptions) => Promise<void>) | null
   ) {
     this.extensionPath = extensionContext.extensionPath;
-    this.generateContextCallback = generateContextCallback;
+    this.generateContextCallback =
+      generateContextCallback || this.defaultGenerateCallback;
 
     // Guardar el console.log original para restaurarlo después
     this.originalConsoleLog = console.log;
@@ -48,6 +51,19 @@ export class WebviewProvider {
         });
       }
     });
+
+    // Registrarse para actualizaciones de selección
+    selectionService.registerWebviewProvider(this);
+  }
+
+  /**
+   * Callback de generación por defecto (usado si no se proporciona uno)
+   */
+  private async defaultGenerateCallback(_options: AppOptions): Promise<void> {
+    logger.error(
+      "No generation callback defined. Please set one with updateGenerateCallback()"
+    );
+    vscode.window.showErrorMessage("Error: No generation callback defined");
   }
 
   /**
@@ -58,14 +74,19 @@ export class WebviewProvider {
     callback: (options: AppOptions) => Promise<void>
   ): void {
     this.generateContextCallback = callback;
+    logger.info("Generate context callback updated");
   }
 
-  /** * Establece el estado de carga */
-  public setLoading(isLoading: boolean): void {
+  /**
+   * Implementación de SelectionChangeListener
+   * Recibe notificaciones cuando cambia la selección de archivos
+   */
+  onSelectionChanged(selectedFiles: string[]): void {
     if (this.panel) {
-      this.postMessage({
-        command: "setLoading",
-        loading: isLoading,
+      logger.info(`Selection changed: ${selectedFiles.length} files selected`);
+      this.panel.webview.postMessage({
+        command: "selectedFiles",
+        files: selectedFiles,
       });
     }
   }
@@ -152,6 +173,15 @@ export class WebviewProvider {
       options: this.optionsViewProvider.getOptions(),
     });
 
+    // Enviar la selección actual al inicializar
+    const currentSelection = selectionService.getSelectedFiles();
+    if (currentSelection.length > 0) {
+      panel.webview.postMessage({
+        command: "selectedFiles",
+        files: currentSelection,
+      });
+    }
+
     // Configurar el manejo de mensajes
     this.setupMessageHandling(panel, root);
 
@@ -180,13 +210,18 @@ export class WebviewProvider {
         logger.info(`Message received: ${msg.command}`);
         switch (msg.command) {
           case "compact":
-            await this.handleCompactMessage(msg);
+            await this.handleCompactMessage(msg as CompactMessage);
             break;
           case "selectDirectory":
-            await this.handleSelectDirectoryMessage(msg, workspaceRoot);
+            await this.handleSelectDirectoryMessage(
+              msg as SelectDirectoryMessage,
+              workspaceRoot
+            );
             break;
           case "updateIgnorePatterns":
-            this.handleUpdateIgnorePatternsMessage(msg);
+            this.handleUpdateIgnorePatternsMessage(
+              msg as UpdateIgnorePatternsMessage
+            );
             break;
           case "getSelectedFiles":
             this.handleGetSelectedFilesMessage();
@@ -198,7 +233,9 @@ export class WebviewProvider {
             this.handleShowOptionsMessage();
             break;
           case "changeSelectionMode":
-            this.handleChangeSelectionModeMessage(msg);
+            this.handleChangeSelectionModeMessage(
+              msg as ChangeSelectionModeMessage
+            );
             break;
         }
       }
@@ -224,19 +261,11 @@ export class WebviewProvider {
 
     // Si estamos en modo de selección de archivos, obtener los archivos del TreeView
     if (payload.selectionMode === "files") {
-      payload.specificFiles = this.fileExplorerProvider.getSelectedFiles();
+      payload.specificFiles = selectionService.getSelectedFiles();
     }
 
-    // Ejecutar la compactación si tenemos un callback
-    if (this.generateContextCallback) {
-      await this.generateContextCallback(payload);
-    } else {
-      logger.error("Generate context callback is not defined");
-      this.postMessage({
-        command: "error",
-        message: "Internal error: Generate context callback is not defined",
-      });
-    }
+    // Ejecutar la compactación
+    await this.generateContextCallback(payload);
   }
 
   /** * Maneja el mensaje de selección de directorio */
@@ -286,9 +315,11 @@ export class WebviewProvider {
 
   /** * Maneja el mensaje de obtener archivos seleccionados */
   private handleGetSelectedFilesMessage() {
+    // Usar el servicio de selección en lugar de preguntar al FileExplorerProvider
+    const files = selectionService.getSelectedFiles();
     this.postMessage({
       command: "selectedFiles",
-      files: this.fileExplorerProvider.getSelectedFiles(),
+      files: files,
     });
   }
 
@@ -313,7 +344,17 @@ export class WebviewProvider {
     }
   }
 
-  /** * Obtiene HTML de respaldo cuando no se encuentra el archivo HTML principal */
+  /** * Establece el estado de carga */
+  public setLoading(isLoading: boolean) {
+    this.postMessage({
+      command: "setLoading",
+      loading: isLoading,
+    });
+  }
+
+  /**
+   * Obtiene HTML de respaldo cuando no se encuentra el archivo HTML principal
+   */
   private getFallbackHtml(): string {
     return `
       <html>

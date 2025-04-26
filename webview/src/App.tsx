@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import styles from "./App.module.css";
 import GeneratorPanel from "./components/GeneratorPanel/GeneratorPanel";
 import DebugPanel from "./components/DebugPanel/DebugPanel";
@@ -13,7 +13,7 @@ import {
   sendCompact,
 } from "./utils/messageUtils";
 
-// Inicializar la API de VSCode
+// Inicializar la API de VSCode (solo una vez)
 initVSCodeAPI(window.acquireVsCodeApi());
 
 const App: React.FC = () => {
@@ -34,7 +34,30 @@ const App: React.FC = () => {
   const [debugOutput, setDebugOutput] = useState<string>("");
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
 
-  // Manejar mensajes recibidos desde la extensi?n
+  // Función para actualizar la salida de depuración con información actual
+  // Memoizada con useCallback para evitar recreaciones innecesarias
+  const updateDebugInfo = useCallback(() => {
+    const fileInfo = `Selected files: ${selectedFiles.length}`;
+
+    // Versión simplificada: mostrar solo la información esencial para mejor rendimiento
+    const optionsInfo = `
+Root Path: ${options.rootPath}
+Output Path: ${options.outputPath}
+Selection Mode: ${options.selectionMode}
+Include Tree: ${options.includeTree ? "Yes" : "No"}
+Minify Content: ${options.minifyContent ? "Yes" : "No"}
+Include GitIgnore: ${options.includeGitIgnore ? "Yes" : "No"}
+`;
+
+    setDebugOutput(`${fileInfo}\n\n${optionsInfo}`);
+  }, [selectedFiles.length, options]);
+
+  // Actualizar información de depuración cuando cambien opciones o archivos seleccionados
+  useEffect(() => {
+    updateDebugInfo();
+  }, [options, selectedFiles, updateDebugInfo]);
+
+  // Manejar mensajes recibidos desde la extensión
   useEffect(() => {
     const handleMessage = (event: MessageEvent<VSCodeMessage>) => {
       const message = event.data;
@@ -65,13 +88,15 @@ const App: React.FC = () => {
               ...(message.options || {}),
             };
 
-            // Si rootPath no est? definido en options o est? vac?o, usa el rootPath del mensaje
+            // Si rootPath no está definido en options o está vacío, usa el rootPath del mensaje
             if (!initialOptions.rootPath) {
               initialOptions.rootPath = message.rootPath;
             }
 
             return initialOptions;
           });
+          // Solicitar archivos seleccionados después de inicializar
+          sendGetSelectedFiles();
           break;
 
         case "updateOptions":
@@ -80,24 +105,17 @@ const App: React.FC = () => {
             ...prev,
             ...(message.options || {}),
           }));
-          setDebugOutput(
-            (prev) =>
-              prev +
-              "Options updated: " +
-              JSON.stringify(message.options, null, 2) +
-              "\n"
-          );
           break;
 
         case "debug":
-          setDebugOutput((prev) => prev + message.data + "\n");
+          // Para mensajes de depuración, reemplazar el contenido actual
+          setDebugOutput(message.data);
           break;
 
         case "selectedFiles":
+          // Actualizar lista de archivos seleccionados inmediatamente
           setSelectedFiles(message.files || []);
-          setDebugOutput(
-            (prev) => prev + `Selected files: ${message.files?.length || 0}\n`
-          );
+          // Esto activará el useEffect debido a la dependencia en selectedFiles
           break;
 
         case "setLoading":
@@ -117,9 +135,9 @@ const App: React.FC = () => {
     sendGetSelectedFiles();
 
     return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  }, []); // Sin dependencias para evitar reacciones en cadena
 
-  // Manejar el cambio de modo de selecci?n
+  // Manejar el cambio de modo de selección
   const handleSelectionModeChange = (
     e: React.ChangeEvent<HTMLSelectElement>
   ) => {
@@ -129,31 +147,29 @@ const App: React.FC = () => {
       selectionMode: value,
     }));
 
-    // Notificar a la extensi?n sobre el cambio de modo
+    // Notificar a la extensión sobre el cambio de modo
     sendChangeSelectionMode(value);
+
+    // Solicitar archivos seleccionados al cambiar el modo
+    sendGetSelectedFiles();
   };
 
-  // Manejar el bot?n de seleccionar directorio
+  // Manejar el botón de seleccionar directorio
   const handleSelectDirectory = () => {
     sendSelectDirectory(options.rootPath);
   };
 
-  // Manejar el bot?n de mostrar opciones
+  // Manejar el botón de mostrar opciones
   const handleShowOptions = () => {
     sendShowOptions();
   };
 
-  // Manejar el bot?n de abrir el explorador de archivos
+  // Manejar el botón de abrir el explorador de archivos
   const handleOpenFileExplorer = () => {
     sendOpenNativeFileExplorer();
   };
 
-  // Manejar el bot?n de refrescar la selecci?n
-  const handleRefreshSelection = () => {
-    sendGetSelectedFiles();
-  };
-
-  // Manejar el bot?n de generar contexto
+  // Manejar el botón de generar contexto
   const handleGenerate = () => {
     if (options.rootPath === "") {
       setError("You must select a root directory");
@@ -170,14 +186,15 @@ const App: React.FC = () => {
 
     setLoading(true);
     setError(null);
-    setDebugOutput("");
+    // Limpiar el panel de depuración antes de iniciar la operación
+    setDebugOutput("Generating context...");
 
     sendCompact({
       ...options,
     });
   };
 
-  // Manejar el bot?n de limpiar debug
+  // Manejar el botón de limpiar debug
   const handleClearDebug = () => {
     setDebugOutput("");
   };
@@ -194,13 +211,8 @@ const App: React.FC = () => {
         onGenerate={handleGenerate}
         onShowOptions={handleShowOptions}
         onOpenFileExplorer={handleOpenFileExplorer}
-        onRefreshSelection={handleRefreshSelection}
       />
-      <DebugPanel
-        debugOutput={debugOutput}
-        selectedFiles={selectedFiles}
-        onClear={handleClearDebug}
-      />
+      <DebugPanel debugOutput={debugOutput} onClear={handleClearDebug} />
     </div>
   );
 };
