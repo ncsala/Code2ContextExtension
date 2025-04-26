@@ -50,6 +50,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
+      console.log("Message received:", message);
 
       switch (message.command) {
         case "update":
@@ -60,14 +61,12 @@ const App: React.FC = () => {
             setError(message.content?.error || "Unknown error occurred");
           }
           break;
-
         case "directorySelected":
           setOptions((prev) => ({
             ...prev,
             rootPath: message.path,
           }));
           break;
-
         case "initialize":
           setOptions((prev) => ({
             ...prev,
@@ -75,22 +74,32 @@ const App: React.FC = () => {
             ...(message.options || {}),
           }));
           break;
-
+        case "updateOptions":
+          console.log("Received updated options:", message.options);
+          setOptions((prev) => ({
+            ...prev,
+            ...(message.options || {}),
+          }));
+          setDebugOutput(
+            (prev) =>
+              prev +
+              "Options updated: " +
+              JSON.stringify(message.options, null, 2) +
+              "\n"
+          );
+          break;
         case "debug":
           setDebugOutput((prev) => prev + message.data + "\n");
           break;
-
         case "selectedFiles":
           setSelectedFiles(message.files || []);
           setDebugOutput(
             (prev) => prev + `Selected files: ${message.files?.length || 0}\n`
           );
           break;
-
         case "setLoading":
           setLoading(message.loading);
           break;
-
         case "error":
           setError(message.message || "Unknown error");
           setLoading(false);
@@ -111,7 +120,6 @@ const App: React.FC = () => {
     e: React.ChangeEvent<HTMLSelectElement>
   ) => {
     const value = e.target.value as "directory" | "files";
-
     setOptions((prev) => ({
       ...prev,
       selectionMode: value,
@@ -199,7 +207,6 @@ const App: React.FC = () => {
         onOpenFileExplorer={handleOpenFileExplorer}
         onRefreshSelection={handleRefreshSelection}
       />
-
       <DebugPanel
         debugOutput={debugOutput}
         selectedFiles={selectedFiles}

@@ -5,9 +5,7 @@ import { FileExplorerProvider } from "./providers/fileExplorer/FileExplorerProvi
 import { OptionsViewProvider } from "./options/optionsViewProvider";
 import { logger } from "../infra/logging/ConsoleLogger";
 
-/**
- * Proveedor para la gestión del webview principal
- */
+/** * Proveedor para la gestión del webview principal */
 export class WebviewProvider {
   private panel: vscode.WebviewPanel | undefined;
   private originalConsoleLog: any;
@@ -26,11 +24,20 @@ export class WebviewProvider {
 
     // Sobrescribir console.log para enviar mensajes al webview
     console.log = this.createLogInterceptor();
+
+    // Suscribirse a los cambios de opciones
+    this.optionsViewProvider.onOptionsChanged((updatedOptions) => {
+      if (this.panel) {
+        logger.info("Options changed, updating webview:", updatedOptions);
+        this.panel.webview.postMessage({
+          command: "updateOptions",
+          options: updatedOptions,
+        });
+      }
+    });
   }
 
-  /**
-   * Crea un interceptor para los logs de consola
-   */
+  /** * Crea un interceptor para los logs de consola */
   private createLogInterceptor() {
     return (...args: any[]) => {
       // Llamar al original primero
@@ -54,12 +61,9 @@ export class WebviewProvider {
     };
   }
 
-  /**
-   * Abre o muestra el panel de webview
-   */
+  /** * Abre o muestra el panel de webview */
   public async openPanel() {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
     if (root === undefined) {
       vscode.window.showErrorMessage("Open a workspace");
       return;
@@ -126,51 +130,39 @@ export class WebviewProvider {
     }, null);
   }
 
-  /**
-   * Envía un mensaje al webview
-   * @param message Mensaje a enviar
-   */
+  /** * Envía un mensaje al webview * @param message Mensaje a enviar */
   public postMessage(message: any) {
     if (this.panel) {
       this.panel.webview.postMessage(message);
     }
   }
 
-  /**
-   * Configura el manejo de mensajes desde el webview
-   */
+  /** * Configura el manejo de mensajes desde el webview */
   private setupMessageHandling(
     panel: vscode.WebviewPanel,
     workspaceRoot: string
   ) {
     panel.webview.onDidReceiveMessage(async (msg) => {
       logger.info(`Message received: ${msg.command}`);
-
       switch (msg.command) {
         case "compact":
           await this.handleCompactMessage(msg);
           break;
-
         case "selectDirectory":
           await this.handleSelectDirectoryMessage(msg, workspaceRoot);
           break;
-
         case "updateIgnorePatterns":
           this.handleUpdateIgnorePatternsMessage(msg);
           break;
-
         case "getSelectedFiles":
           this.handleGetSelectedFilesMessage();
           break;
-
         case "openNativeFileExplorer":
           this.handleOpenNativeFileExplorerMessage();
           break;
-
         case "showOptions":
           this.handleShowOptionsMessage();
           break;
-
         case "changeSelectionMode":
           this.handleChangeSelectionModeMessage(msg);
           break;
@@ -178,16 +170,16 @@ export class WebviewProvider {
     });
   }
 
-  /**
-   * Maneja el mensaje de compactación
-   */
+  /** * Maneja el mensaje de compactación */
   private async handleCompactMessage(msg: any) {
     logger.info("Options received:", msg.payload);
 
-    // Asegurarse de que minifyContent es un booleano explícito
+    // Asegurarse de que las propiedades booleanas se manejen correctamente
     const payload = {
       ...msg.payload,
       minifyContent: msg.payload.minifyContent === true,
+      includeTree: msg.payload.includeTree === true,
+      includeGitIgnore: msg.payload.includeGitIgnore === true,
     };
 
     logger.info("Processed options:", payload);
@@ -204,9 +196,7 @@ export class WebviewProvider {
     await this.generateContextCallback(payload);
   }
 
-  /**
-   * Maneja el mensaje de selección de directorio
-   */
+  /** * Maneja el mensaje de selección de directorio */
   private async handleSelectDirectoryMessage(msg: any, workspaceRoot: string) {
     const options: vscode.OpenDialogOptions = {
       canSelectFiles: false,
@@ -219,7 +209,6 @@ export class WebviewProvider {
     };
 
     const selectedFolders = await vscode.window.showOpenDialog(options);
-
     if (selectedFolders && selectedFolders.length > 0) {
       // Actualizar directorio raíz en el explorador
       this.fileExplorerProvider.setRootPath(selectedFolders[0].fsPath);
@@ -237,9 +226,7 @@ export class WebviewProvider {
     }
   }
 
-  /**
-   * Maneja el mensaje de actualización de patrones de ignorado
-   */
+  /** * Maneja el mensaje de actualización de patrones de ignorado */
   private handleUpdateIgnorePatternsMessage(msg: any) {
     const options = this.optionsViewProvider.getOptions();
     options.customIgnorePatterns = msg.patterns || options.customIgnorePatterns;
@@ -251,9 +238,7 @@ export class WebviewProvider {
     this.optionsViewProvider.updateOptions(options);
   }
 
-  /**
-   * Maneja el mensaje de obtener archivos seleccionados
-   */
+  /** * Maneja el mensaje de obtener archivos seleccionados */
   private handleGetSelectedFilesMessage() {
     this.postMessage({
       command: "selectedFiles",
@@ -261,25 +246,19 @@ export class WebviewProvider {
     });
   }
 
-  /**
-   * Maneja el mensaje de abrir explorador de archivos nativo
-   */
+  /** * Maneja el mensaje de abrir explorador de archivos nativo */
   private handleOpenNativeFileExplorerMessage() {
     vscode.commands.executeCommand(
       "workbench.view.extension.code2context-explorer"
     );
   }
 
-  /**
-   * Maneja el mensaje de mostrar opciones
-   */
+  /** * Maneja el mensaje de mostrar opciones */
   private handleShowOptionsMessage() {
     vscode.commands.executeCommand("code2context.showOptions");
   }
 
-  /**
-   * Maneja el mensaje de cambiar modo de selección
-   */
+  /** * Maneja el mensaje de cambiar modo de selección */
   private handleChangeSelectionModeMessage(msg: any) {
     if (msg.mode) {
       const options = this.optionsViewProvider.getOptions();
@@ -288,9 +267,7 @@ export class WebviewProvider {
     }
   }
 
-  /**
-   * Establece el estado de carga
-   */
+  /** * Establece el estado de carga */
   public setLoading(isLoading: boolean) {
     this.postMessage({
       command: "setLoading",
