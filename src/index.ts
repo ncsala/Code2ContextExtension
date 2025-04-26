@@ -69,6 +69,34 @@ export function activate(context: vscode.ExtensionContext) {
     )
   );
 
+  optionsViewProvider.onOptionsChanged((updatedOptions) => {
+    // Actualizar opciones actuales
+    Object.assign(currentOptions, updatedOptions);
+
+    // Sincronizar patrones de ignorado con el explorador de archivos
+    if (updatedOptions.customIgnorePatterns) {
+      fileExplorerProvider.setIgnorePatterns(
+        updatedOptions.customIgnorePatterns
+      );
+    }
+
+    logger.info("Options synchronized across components");
+  });
+
+  // Añadir este listener para sincronizar los patrones de ignorado entre componentes
+  optionsViewProvider.onOptionsChanged((options) => {
+    // Esta función se ejecuta cuando cambian las opciones en el panel de opciones
+    logger.info("Options changed, updating ignore patterns...");
+
+    // Actualizar opciones actuales
+    Object.assign(currentOptions, options);
+
+    // Sincronizar patrones de ignorado con el explorador de archivos
+    if (options.customIgnorePatterns) {
+      fileExplorerProvider.setIgnorePatterns(options.customIgnorePatterns);
+    }
+  });
+
   // Crear el provider para el explorador de archivos
   const fileExplorerProvider = new FileExplorerProvider();
 

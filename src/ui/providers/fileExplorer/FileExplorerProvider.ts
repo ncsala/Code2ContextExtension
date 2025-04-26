@@ -4,6 +4,7 @@ import * as fs from "fs";
 import { FileItem } from "./FileItem";
 import { selectionService } from "../../services/selectionService";
 import { notificationService } from "../../services/notificationService";
+import ignore from "ignore";
 
 /**
  * Proveedor para el explorador de archivos en el TreeView
@@ -12,7 +13,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<
     FileItem | undefined | null | void
   > = new vscode.EventEmitter<FileItem | undefined | null | void>();
-
   readonly onDidChangeTreeData: vscode.Event<
     FileItem | undefined | null | void
   > = this._onDidChangeTreeData.event;
@@ -20,6 +20,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   private selectedItems: Map<string, FileItem> = new Map();
   private rootPath: string | undefined;
   private ignorePatterns: string[] = [".git", "node_modules", "dist", "build"];
+
+  // Manejador de ignore para uso en varios métodos
+  private ignoreHandler: ReturnType<typeof ignore> | null = null;
 
   // Cache para mantener referencia a los elementos
   private itemsCache: Map<string, FileItem> = new Map();
@@ -30,10 +33,75 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   constructor() {
     // Inicializar con la carpeta raíz actual si hay un workspace abierto
     this.rootPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
     if (this.rootPath) {
       this.initialized = true;
+      this.initializeIgnoreHandler();
     }
+  }
+
+  /**
+   * Inicializa el manejador de ignore con los patrones actuales
+   */
+  private initializeIgnoreHandler() {
+    this.ignoreHandler = ignore();
+
+    // Primero patrones predeterminados (menor prioridad)
+    this.ignoreHandler.add(this.getDefaultBinaryPatterns());
+
+    // Luego patrones personalizados (mayor prioridad)
+    this.ignoreHandler.add(this.ignorePatterns);
+  }
+
+  /**
+   * Obtiene patrones predeterminados para archivos binarios
+   */
+  private getDefaultBinaryPatterns(): string[] {
+    return [
+      "*.exe",
+      "*.dll",
+      "*.so",
+      "*.dylib",
+      "*.zip",
+      "*.tar",
+      "*.gz",
+      "*.rar",
+      "*.7z",
+      "*.jpg",
+      "*.jpeg",
+      "*.png",
+      "*.gif",
+      "*.bmp",
+      "*.ico",
+      "*.svg",
+      "*.pdf",
+      "*.doc",
+      "*.docx",
+      "*.xls",
+      "*.xlsx",
+      "*.ppt",
+      "*.pptx",
+      "*.bin",
+      "*.dat",
+      "*.db",
+      "*.sqlite",
+      "*.sqlite3",
+      "*.class",
+      "*.jar",
+      "*.war",
+      "*.ear",
+      "*.mp3",
+      "*.mp4",
+      "*.avi",
+      "*.mov",
+      "*.mkv",
+      "*.ttf",
+      "*.otf",
+      "*.woff",
+      "*.woff2",
+      "*.pyc",
+      "*.pyo",
+      "*.pyd",
+    ];
   }
 
   /**
@@ -46,6 +114,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       this.itemsCache.clear();
       this.selectedItems.clear();
       this.initialized = true;
+      this.initializeIgnoreHandler();
       this._onDidChangeTreeData.fire();
       console.log(`Root path set to: ${path}`);
     } else {
@@ -59,6 +128,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
    */
   public setIgnorePatterns(patterns: string[]) {
     this.ignorePatterns = patterns;
+    this.initializeIgnoreHandler();
     this.itemsCache.clear();
     this._onDidChangeTreeData.fire();
     console.log(`Ignore patterns updated: ${patterns.join(", ")}`);
@@ -76,7 +146,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
           .relative(this.rootPath || "", item.resourceUri.fsPath)
           .replace(/\\/g, "/")
       );
-
     console.log(`Selected files: ${files.length}`);
     return files;
   }
@@ -93,7 +162,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     // Actualizar servicio de selección
     selectionService.clearSelection();
-
     console.log("Selection cleared");
   }
 
@@ -109,7 +177,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     // Actualizar servicio de selección
     selectionService.setSelectedFiles(this.getSelectedFiles());
-
     console.log("All files selected");
   }
 
@@ -120,7 +187,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
   public toggleSelection(item: FileItem) {
     const itemPath = item.resourceUri.fsPath;
     const isSelected = !item.selected;
-
     item.updateSelection(isSelected);
 
     if (isSelected) {
@@ -138,7 +204,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     // Actualizar servicio de selección
     selectionService.setSelectedFiles(this.getSelectedFiles());
-
     console.log(
       `Toggled selection for: ${itemPath} (${
         isSelected ? "selected" : "deselected"
@@ -152,44 +217,17 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
    * @returns true si debe ser ignorado, false en caso contrario
    */
   private shouldIgnore(filePath: string): boolean {
-    const relativePath = filePath
-      .replace(this.rootPath || "", "")
-      .replace(/^[/\\]/, "");
-
-    // Verificar patrones de ignorado básicos
-    for (const pattern of this.ignorePatterns) {
-      if (
-        relativePath.includes(pattern) ||
-        relativePath.endsWith(pattern) ||
-        (pattern.startsWith("*.") &&
-          relativePath.endsWith(pattern.substring(1)))
-      ) {
-        return true;
-      }
+    if (!this.ignoreHandler || !this.rootPath) {
+      return false;
     }
 
-    // Verificar si es un archivo binario
-    const binaryExtensions = [
-      ".exe",
-      ".dll",
-      ".so",
-      ".dylib",
-      ".zip",
-      ".tar",
-      ".gz",
-      ".jpg",
-      ".jpeg",
-      ".png",
-      ".gif",
-      ".bmp",
-      ".ico",
-      ".pdf",
-      ".mp3",
-      ".mp4",
-    ];
+    // Convertir a ruta relativa y normalizar separadores
+    const relativePath = path
+      .relative(this.rootPath, filePath)
+      .replace(/\\/g, "/");
 
-    const ext = path.extname(filePath).toLowerCase();
-    return binaryExtensions.includes(ext);
+    // Usar el manejador de ignore para verificar
+    return this.ignoreHandler.ignores(relativePath);
   }
 
   /**
@@ -221,7 +259,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
     // Si no hay elemento, mostrar la raíz
     const dirPath = element ? element.resourceUri.fsPath : this.rootPath;
-
     if (!fs.existsSync(dirPath)) {
       console.error(`Directory does not exist: ${dirPath}`);
       return [];
@@ -232,16 +269,15 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
         withFileTypes: true,
       });
 
-      // Crear un FileItem para cada entrada, filtrar los ignorados
+      // Crear un FileItem para cada entrada, SIN filtrar por ignorado
       const result: FileItem[] = [];
-
       for (const entry of entries) {
         const filePath = path.join(dirPath, entry.name);
 
-        // Verificar si debe ser ignorado
-        if (this.shouldIgnore(filePath)) {
-          continue;
-        }
+        // QUITAR ESTA VERIFICACIÓN PARA MOSTRAR TODOS LOS ARCHIVOS
+        // if (this.shouldIgnore(filePath)) {
+        //   continue;
+        // }
 
         const uri = vscode.Uri.file(filePath);
         const isSelected = this.selectedItems.has(filePath);
@@ -310,12 +346,14 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       for (const entry of entries) {
         const filePath = path.join(dirPath, entry.name);
 
-        // No ignorar archivos al propagar la selección de un directorio,
-        // eso da una experiencia más consistente
+        // Si estamos seleccionando (no deseleccionando) y el archivo está ignorado, saltarlo
+        if (selected && this.shouldIgnore(filePath)) {
+          console.log(`Ignorando archivo en selección recursiva: ${filePath}`);
+          continue;
+        }
 
         // Actualizar item en cache si existe, o crearlo si no existe
         let item = this.itemsCache.get(filePath);
-
         if (!item) {
           // Si no está en cache, crear un nuevo item
           item = new FileItem(
@@ -356,7 +394,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     try {
       // Verificar que sea un directorio válido
       const stats = await fs.promises.stat(directoryPath);
-
       if (!stats.isDirectory()) {
         console.error(`Path is not a directory: ${directoryPath}`);
         return;
@@ -364,7 +401,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
       // Crear el item si no existe en cache
       let item = this.itemsCache.get(directoryPath);
-
       if (!item) {
         item = new FileItem(
           vscode.Uri.file(directoryPath),
@@ -388,7 +424,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
       // Actualizar servicio de selección
       selectionService.setSelectedFiles(this.getSelectedFiles());
-
       console.log(`Selected directory: ${directoryPath}`);
 
       // Notificar con la cantidad de archivos seleccionados

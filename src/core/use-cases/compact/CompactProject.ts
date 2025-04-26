@@ -36,7 +36,6 @@ export class CompactProject implements CompactUseCase {
 
   async execute(options: CompactOptions): Promise<CompactResult> {
     this.progressReporter.startOperation("Total execution time");
-
     try {
       if (!(await this.fs.exists(options.rootPath))) {
         return {
@@ -50,7 +49,9 @@ export class CompactProject implements CompactUseCase {
       const FILE = "@F:";
 
       let files: FileEntry[] = [];
-      let ignorePatterns: string[] = [];
+
+      // Obtener patrones de ignorado una sola vez para usar en ambos modos
+      const ignorePatterns = await this.getIgnorePatterns(options);
 
       this.progressReporter.startOperation("Prepare files");
 
@@ -62,10 +63,11 @@ export class CompactProject implements CompactUseCase {
       ) {
         files = await this.getSpecificFiles(
           options.rootPath,
-          options.specificFiles
+          options.specificFiles,
+          ignorePatterns
         );
       } else {
-        files = await this.getFilteredFiles(options);
+        files = await this.getFilteredFiles(options, ignorePatterns);
       }
 
       this.progressReporter.endOperation("Prepare files");
@@ -82,22 +84,26 @@ export class CompactProject implements CompactUseCase {
       // Generar índice y estructura de árbol
       const indexContent = this.generateIndex(files);
       let treeContent = "";
-
       if (options.includeTree === true) {
         treeContent = await this.generateTree(options, files);
       }
 
       this.progressReporter.endOperation("Generate index and tree");
-
       this.progressReporter.startOperation("Process file contents");
 
       // Verificar si se debe minificar el contenido
       const shouldMinify = options.minifyContent === true;
 
       // Generar el contenido final combinado
-      let combined = this.generateHeader(TREE, INDEX, FILE, shouldMinify);
+      let combined = this.generateHeader(
+        TREE,
+        INDEX,
+        FILE,
+        shouldMinify,
+        options.includeTree === true && treeContent.trim() !== ""
+      );
 
-      if (treeContent) {
+      if (options.includeTree === true && treeContent) {
         combined += `${TREE}\n${treeContent}\n\n`;
       }
 
@@ -137,7 +143,6 @@ export class CompactProject implements CompactUseCase {
     } catch (err: any) {
       this.progressReporter.error("Error en la compactación:", err);
       this.progressReporter.endOperation("Total execution time");
-
       return {
         ok: false,
         error: err?.message ?? "Error desconocido",
@@ -146,20 +151,37 @@ export class CompactProject implements CompactUseCase {
   }
 
   /**
-   * Obtiene archivos específicos seleccionados
+   * Obtiene archivos específicos seleccionados aplicando también los patrones de ignorado
    */
   private async getSpecificFiles(
     rootPath: string,
-    specificFiles: string[]
+    specificFiles: string[],
+    ignorePatterns: string[]
   ): Promise<FileEntry[]> {
     this.progressReporter.log(
       `Modo de selección de archivos específicos. ${specificFiles.length} archivos seleccionados.`
     );
 
-    const filePromises = specificFiles.map(async (filePath) => {
+    // Crear un manejador de patrones de ignorado
+    const ig = ignore().add(ignorePatterns);
+
+    // Filtrar los archivos seleccionados según los patrones de ignorado
+    const filteredSpecificFiles = specificFiles.filter((filePath) => {
+      const normalizedPath = filePath.replace(/\\/g, "/");
+      return !ig.ignores(normalizedPath);
+    });
+
+    if (filteredSpecificFiles.length < specificFiles.length) {
+      this.progressReporter.log(
+        `Se omitieron ${
+          specificFiles.length - filteredSpecificFiles.length
+        } archivos debido a patrones de ignorado.`
+      );
+    }
+
+    const filePromises = filteredSpecificFiles.map(async (filePath) => {
       const fullPath = path.join(rootPath, filePath);
       const content = await this.fs.readFile(fullPath);
-
       if (content !== null) {
         return {
           path: filePath.replace(/\\/g, "/"),
@@ -175,34 +197,39 @@ export class CompactProject implements CompactUseCase {
     );
 
     this.progressReporter.log(
-      `Archivos cargados por selección específica: ${files.length}`
+      `Archivos cargados por selección específica después de filtrados: ${files.length}`
     );
-
     return files;
+  }
+
+  /**
+   * Obtiene todos los patrones de ignorado aplicables
+   */
+  private async getIgnorePatterns(options: CompactOptions): Promise<string[]> {
+    // Obtener patrones de ignorado desde git si está habilitado
+    const gitIgnorePatterns = options.includeGitIgnore
+      ? await this.git.getIgnorePatterns(options.rootPath)
+      : [];
+
+    // Combinar patrones con el orden correcto (los últimos tienen mayor prioridad)
+    return [
+      ...this.fileFilter.getDefaultIgnorePatterns(),
+      ...gitIgnorePatterns,
+      ...(options.customIgnorePatterns || []),
+    ];
   }
 
   /**
    * Obtiene archivos filtrados por patrones de ignorado
    */
   private async getFilteredFiles(
-    options: CompactOptions
+    options: CompactOptions,
+    ignorePatterns: string[]
   ): Promise<FileEntry[]> {
     this.progressReporter.log("Modo de selección por directorio con filtros");
 
-    // Obtener patrones de ignorado y todos los archivos
-    const [gitIgnorePatterns, allFiles] = await Promise.all([
-      options.includeGitIgnore
-        ? this.git.getIgnorePatterns(options.rootPath)
-        : Promise.resolve([]),
-      this.fs.getFiles(options.rootPath),
-    ]);
-
-    // Combinar patrones de ignorado
-    const ignorePatterns = [
-      ...(options.customIgnorePatterns || []),
-      ...gitIgnorePatterns,
-      ...this.fileFilter.getDefaultIgnorePatterns(),
-    ];
+    // Obtener todos los archivos
+    const allFiles = await this.fs.getFiles(options.rootPath);
 
     // Filtrar archivos
     return this.fileFilter.filterFiles(allFiles, ignorePatterns);
@@ -220,7 +247,7 @@ export class CompactProject implements CompactUseCase {
    */
   private async generateTree(
     options: CompactOptions,
-    _files: FileEntry[] // Prefijo con underscore para indicar que no se usa
+    _files: FileEntry[]
   ): Promise<string> {
     this.progressReporter.log("Generando estructura del árbol...");
 
@@ -238,9 +265,12 @@ export class CompactProject implements CompactUseCase {
       );
     } else {
       this.progressReporter.log(
-        "Usando árbol completo para modo de directorio"
+        "Usando árbol filtrado para modo de directorio"
       );
-      const ig = ignore().add(options.customIgnorePatterns || []);
+
+      // MODIFICACIÓN: Usar exactamente los mismos patrones que para filtrar archivos
+      const ignorePatterns = await this.getIgnorePatterns(options);
+      const ig = ignore().add(ignorePatterns);
       treeContent = this.treeGenerator.treeToText(tree, ig);
     }
 
@@ -261,16 +291,22 @@ export class CompactProject implements CompactUseCase {
     TREE: string,
     INDEX: string,
     FILE: string,
-    shouldMinify: boolean
+    shouldMinify: boolean,
+    includeTree: boolean
   ): string {
-    return (
-      `// Conventions used in this document:\n` +
-      `// ${TREE} project directory structure.\n` +
+    let header = `// Conventions used in this document:\n`;
+
+    if (includeTree) {
+      header += `// ${TREE} project directory structure.\n`;
+    }
+
+    header +=
       `// ${INDEX} table of contents with all the files included.\n` +
       `// ${FILE} file index | path | ${
         shouldMinify ? "minified" : "original"
-      } content.\n\n`
-    );
+      } content.\n\n`;
+
+    return header;
   }
 
   /**

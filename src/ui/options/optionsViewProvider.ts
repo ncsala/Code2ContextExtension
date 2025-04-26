@@ -19,6 +19,10 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   private _minifyContent: boolean = true;
   private _selectionMode: "directory" | "files" = "directory";
   private _specificFiles: string[] = [];
+  private _onOptionsChangedEmitter = new vscode.EventEmitter<
+    Partial<AppOptions>
+  >();
+  public readonly onOptionsChanged = this._onOptionsChangedEmitter.event;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -55,7 +59,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
           this._outputPath = message.outputPath || this._outputPath;
 
           // Notificar los cambios al manejador principal
-          this._onOptionsChanged({
+          this._onOptionsChangedEmitter.fire({
             rootPath: this._rootPath,
             outputPath: this._outputPath,
             customIgnorePatterns: this._ignorePatterns,
