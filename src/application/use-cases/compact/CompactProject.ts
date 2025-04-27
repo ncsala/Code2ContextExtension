@@ -33,7 +33,7 @@ export class CompactProject implements CompactUseCase {
     private readonly git: GitPort,
     progressReporter?: ProgressReporter
   ) {
-    this.treeGenerator = new TreeGenerator();
+    this.treeGenerator = new TreeGenerator(200);
     this.contentMinifier = new ContentMinifier();
     this.fileFilter = new FileFilter();
     this.progressReporter = progressReporter || new ConsoleProgressReporter();
@@ -254,38 +254,40 @@ export class CompactProject implements CompactUseCase {
   }
 
   /**
-   * Genera la estructura de árbol
+   * Genera la estructura de árbol (ASCII), recortando directorios
+   * demasiado grandes y aplicando los patrones de ignore.
    */
   private async generateTree(
     options: CompactOptions,
     _files: FileEntry[]
   ): Promise<string> {
-    this.progressReporter.log("Generando estructura del árbol...");
-
-    // — mismo conjunto de patrones que usamos para los archivos —
+    this.progressReporter.log("Generando estructura del árbol…");
     const ignorePatterns = await this.getIgnorePatterns(options);
     const ig = ignore().add(ignorePatterns);
 
     let treeContent = "";
-
     if (options.selectionMode === "files" && options.specificFiles) {
-      // Árbol recortado solo para los archivos elegidos
-      const tree = await this.fs.getDirectoryTree(options.rootPath, ig);
-      treeContent = this.treeGenerator.generateFilteredTreeText(
-        tree,
+      // poda recursiva: sólo visita subárboles necesarios
+      treeContent = await this.treeGenerator.generatePrunedTreeText(
+        options.rootPath,
+        ig,
         options.specificFiles
       );
     } else {
-      // Árbol completo pero ya sin node_modules, .git, etc.
-      treeContent = this.treeGenerator.treeToText(
-        await this.fs.getDirectoryTree(options.rootPath, ig),
-        ig
+      // en 'directory' modo, paso *todos* los paths
+      const all = (await this.fs.getFiles(options.rootPath, ig)).map(
+        (f) => f.path
+      );
+      treeContent = await this.treeGenerator.generatePrunedTreeText(
+        options.rootPath,
+        ig,
+        all
       );
     }
 
     if (!treeContent.trim()) {
       this.progressReporter.warn(
-        "Advertencia: no se pudo gen erar árbol (quizá todo está ignorado)"
+        "Advertencia: no se pudo generar árbol (quizá todo está ignorado)."
       );
     }
     return treeContent;
