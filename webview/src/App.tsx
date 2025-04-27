@@ -67,7 +67,6 @@ Include GitIgnore: ${options.includeGitIgnore ? "Yes" : "No"}
   useEffect(() => {
     const handleMessage = (event: MessageEvent<VSCodeMessage>) => {
       const message = event.data;
-      console.log("Message received:", message);
 
       switch (message.command) {
         case "update":
@@ -106,7 +105,6 @@ Include GitIgnore: ${options.includeGitIgnore ? "Yes" : "No"}
           break;
 
         case "updateOptions":
-          console.log("Received updated options:", message.options);
           setOptions((prev) => ({
             ...prev,
             ...(message.options || {}),
