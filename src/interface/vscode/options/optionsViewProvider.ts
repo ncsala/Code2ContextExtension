@@ -53,33 +53,31 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
 
     // Manejar mensajes desde el webview
     webviewView.webview.onDidReceiveMessage((message) => {
-      switch (message.command) {
-        case "optionsChanged":
-          logger.info("Options changed from view:", message);
-          this._ignorePatterns = message.ignorePatterns || this._ignorePatterns;
-          this._includeGitIgnore =
-            message.includeGitIgnore ?? this._includeGitIgnore;
-          this._includeTree = message.includeTree ?? this._includeTree;
-          this._minifyContent = message.minifyContent ?? this._minifyContent;
-          this._outputPath = message.outputPath || this._outputPath;
+      if (message.command === "optionsChanged") {
+        logger.info("Options changed from view:", message);
+        this._ignorePatterns = message.ignorePatterns || this._ignorePatterns;
+        this._includeGitIgnore =
+          message.includeGitIgnore ?? this._includeGitIgnore;
+        this._includeTree = message.includeTree ?? this._includeTree;
+        this._minifyContent = message.minifyContent ?? this._minifyContent;
+        this._outputPath = message.outputPath || this._outputPath;
 
-          // Notificar los cambios al manejador principal
-          const updatedOptions = {
-            rootPath: this._rootPath,
-            outputPath: this._outputPath,
-            customIgnorePatterns: this._ignorePatterns,
-            includeGitIgnore: this._includeGitIgnore,
-            includeTree: this._includeTree,
-            minifyContent: this._minifyContent,
-            selectionMode: this._selectionMode,
-            specificFiles: this._specificFiles,
-          };
+        // Notificar los cambios al manejador principal
+        const updatedOptions = {
+          rootPath: this._rootPath,
+          outputPath: this._outputPath,
+          customIgnorePatterns: this._ignorePatterns,
+          includeGitIgnore: this._includeGitIgnore,
+          includeTree: this._includeTree,
+          minifyContent: this._minifyContent,
+          selectionMode: this._selectionMode,
+          specificFiles: this._specificFiles,
+        };
 
-          this._onOptionsChangedEmitter.fire(updatedOptions);
-          this._onOptionsChanged(updatedOptions);
+        this._onOptionsChangedEmitter.fire(updatedOptions);
+        this._onOptionsChanged(updatedOptions);
 
-          logger.info("Options emitted after change:", updatedOptions);
-          break;
+        logger.info("Options emitted after change:", updatedOptions);
       }
     });
   }
