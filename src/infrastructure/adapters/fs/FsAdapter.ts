@@ -5,6 +5,8 @@ import { FileTree } from "../../../domain/model/FileTree";
 import { FileSystemPort } from "../../../domain/ports/secondary/FileSystemPort";
 import { toPosix } from "../../../shared/utils/pathUtils";
 
+const DEBUG = false;
+
 /**
  * Adaptador para el sistema de archivos
  */
@@ -16,7 +18,7 @@ export class FsAdapter implements FileSystemPort {
    */
   async readFile(filePath: string): Promise<string | null> {
     try {
-      return fs.promises.readFile(filePath, "utf-8");
+      return await fs.promises.readFile(filePath, "utf-8");
     } catch (error) {
       console.error(`Error reading file ${filePath}:`, error);
       return null;
@@ -69,9 +71,8 @@ export class FsAdapter implements FileSystemPort {
     return tree;
   }
 
-  /**
-   * Construye recursivamente el árbol de directorios
-   */
+  /** Construye recursivamente el árbol de directorios **/
+  /** Construye recursivamente el árbol de directorios **/
   private async buildDirectoryTree(
     currentPath: string,
     parentNode: FileTree,
@@ -81,40 +82,43 @@ export class FsAdapter implements FileSystemPort {
       const entries = await fs.promises.readdir(currentPath, {
         withFileTypes: true,
       });
-
       parentNode.children = [];
 
-      console.log(
-        `Procesando directorio: ${currentPath} (${entries.length} entradas)`
-      );
-
-      for (const entry of entries) {
-        const entryPath = path.join(currentPath, entry.name);
-
-        // Normalizar la ruta relativa para usar siempre forward slash
-        const entryRelativePath = toPosix(path.join(relativePath, entry.name));
-
-        const node: FileTree = {
-          path: entryRelativePath,
-          name: entry.name,
-          isDirectory: entry.isDirectory(),
-        };
-
-        if (entry.isDirectory()) {
-          node.children = [];
-          await this.buildDirectoryTree(entryPath, node, entryRelativePath);
-        }
-
-        parentNode.children.push(node);
+      if (DEBUG) {
+        console.log(
+          `Procesando directorio: ${currentPath} (${entries.length} entradas)`
+        );
       }
 
-      // Ordenar: primero directorios, luego archivos (alfabéticamente)
-      parentNode.children.sort((a, b) => {
+      await Promise.all(
+        entries.map(async (entry) => {
+          const entryPath = path.join(currentPath, entry.name);
+          const entryRel = toPosix(path.join(relativePath, entry.name));
+
+          const node: FileTree = {
+            path: entryRel,
+            name: entry.name,
+            isDirectory: entry.isDirectory(),
+          };
+
+          if (entry.isDirectory()) {
+            node.children = [];
+            await this.buildDirectoryTree(entryPath, node, entryRel);
+          }
+
+          parentNode.children!.push(node);
+        })
+      );
+
+      // 🎯 Aquí extraemos el ternario en una función nombrada
+      const compareFileTrees = (a: FileTree, b: FileTree): number => {
         if (a.isDirectory === b.isDirectory) {
           return a.name.localeCompare(b.name);
         }
         return a.isDirectory ? -1 : 1;
-      });
+      };
+
+      parentNode.children.sort(compareFileTrees);
     } catch (error) {
       console.error(`Error building directory tree for ${currentPath}:`, error);
     }
@@ -144,24 +148,19 @@ export class FsAdapter implements FileSystemPort {
         withFileTypes: true,
       });
 
-      for (const entry of entries) {
-        const entryPath = path.join(currentPath, entry.name);
+      await Promise.all(
+        entries.map(async (entry) => {
+          const entryPath = path.join(currentPath, entry.name);
+          const entryRel = toPosix(path.join(relativePath, entry.name));
 
-        // Normalizar la ruta relativa para usar siempre forward slash
-        const entryRelativePath = toPosix(path.join(relativePath, entry.name));
-
-        if (entry.isDirectory()) {
-          await this.collectFiles(entryPath, entryRelativePath, files);
-        } else {
-          const content = await this.readFile(entryPath);
-          if (content !== null) {
-            files.push({
-              path: entryRelativePath,
-              content,
-            });
+          if (entry.isDirectory()) {
+            await this.collectFiles(entryPath, entryRel, files);
+          } else {
+            const content = await fs.promises.readFile(entryPath, "utf-8");
+            files.push({ path: entryRel, content });
           }
-        }
-      }
+        })
+      );
     } catch (error) {
       console.error(`Error collecting files from ${currentPath}:`, error);
     }

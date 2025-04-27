@@ -14,6 +14,7 @@ import { FileFilter } from "../../services/filter/FileFilter";
 import * as path from "path";
 import ignore from "ignore";
 import { toPosix } from "../../../shared/utils/pathUtils";
+import { ContentFormatter } from "../../services/content/ContentFormatter";
 
 /**
  * Implementación del caso de uso de compactación
@@ -23,6 +24,7 @@ export class CompactProject implements CompactUseCase {
   private readonly contentMinifier: ContentMinifier;
   private readonly fileFilter: FileFilter;
   private readonly progressReporter: ProgressReporter;
+  private readonly contentFormatter: ContentFormatter;
 
   constructor(
     private readonly fs: FileSystemPort,
@@ -33,6 +35,7 @@ export class CompactProject implements CompactUseCase {
     this.contentMinifier = new ContentMinifier();
     this.fileFilter = new FileFilter();
     this.progressReporter = progressReporter || new ConsoleProgressReporter();
+    this.contentFormatter = new ContentFormatter();
   }
 
   async execute(options: CompactOptions): Promise<CompactResult> {
@@ -96,7 +99,7 @@ export class CompactProject implements CompactUseCase {
       const shouldMinify = options.minifyContent === true;
 
       // Generar el contenido final combinado
-      let combined = this.generateHeader(
+      let combined = this.contentFormatter.generateHeader(
         TREE,
         INDEX,
         FILE,
@@ -290,31 +293,6 @@ export class CompactProject implements CompactUseCase {
     }
 
     return treeContent;
-  }
-
-  /**
-   * Genera el encabezado del archivo combinado
-   */
-  private generateHeader(
-    TREE: string,
-    INDEX: string,
-    FILE: string,
-    shouldMinify: boolean,
-    includeTree: boolean
-  ): string {
-    let header = `// Conventions used in this document:\n`;
-
-    if (includeTree) {
-      header += `// ${TREE} project directory structure.\n`;
-    }
-
-    header +=
-      `// ${INDEX} table of contents with all the files included.\n` +
-      `// ${FILE} file index | path | ${
-        shouldMinify ? "minified" : "original"
-      } content.\n\n`;
-
-    return header;
   }
 
   /**
