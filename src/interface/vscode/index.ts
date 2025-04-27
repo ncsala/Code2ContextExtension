@@ -22,7 +22,13 @@ export function activate(context: vscode.ExtensionContext) {
   const defaultOptions: CompactOptions = {
     rootPath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "",
     outputPath: "combined.txt",
-    customIgnorePatterns: ["node_modules", ".git", "dist", "build"],
+    customIgnorePatterns: [
+      "node_modules",
+      ".git",
+      "dist",
+      "build",
+      "package-lock.json",
+    ],
     includeGitIgnore: true,
     includeTree: true,
     minifyContent: true,
@@ -70,16 +76,29 @@ export function activate(context: vscode.ExtensionContext) {
     )
   );
 
-  optionsViewProvider.onOptionsChanged((updatedOptions) => {
+  // optionsViewProvider.onOptionsChanged((updatedOptions) => {
+  //   // Actualizar opciones actuales
+  //   Object.assign(currentOptions, updatedOptions);
+  //   // Sincronizar patrones de ignorado con el explorador de archivos
+  //   if (updatedOptions.customIgnorePatterns) {
+  //     fileExplorerProvider.setIgnorePatterns(
+  //       updatedOptions.customIgnorePatterns
+  //     );
+  //   }
+  //   logger.info("Options synchronized across components");
+  // });
+
+  // TODO cual es el correcto?
+  // Añadir este listener para sincronizar los patrones de ignorado entre componentes
+  optionsViewProvider.onOptionsChanged((options) => {
+    // Esta función se ejecuta cuando cambian las opciones en el panel de opciones
+    logger.info("Options changed, updating ignore patterns...");
     // Actualizar opciones actuales
-    Object.assign(currentOptions, updatedOptions);
+    Object.assign(currentOptions, options);
     // Sincronizar patrones de ignorado con el explorador de archivos
-    if (updatedOptions.customIgnorePatterns) {
-      fileExplorerProvider.setIgnorePatterns(
-        updatedOptions.customIgnorePatterns
-      );
+    if (options.customIgnorePatterns) {
+      fileExplorerProvider.setIgnorePatterns(options.customIgnorePatterns);
     }
-    logger.info("Options synchronized across components");
   });
 
   // Crear el provider para el explorador de archivos

@@ -79,6 +79,7 @@ export class GitAdapter implements GitPort {
       "*.lock",
       "*.swp",
       ".env",
+      "package-lock.json",
     ];
 
     // Verificar si el archivo coincide con alguno de los patrones

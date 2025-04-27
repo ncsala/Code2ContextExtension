@@ -1,6 +1,7 @@
 // Patrones comunes de archivos binarios y de sistema
 export const defaultIgnorePatterns = [
   "node_modules/**",
+  "/out",
   ".git/**",
   "*.lock",
   "*.log",

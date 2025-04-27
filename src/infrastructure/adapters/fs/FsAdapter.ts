@@ -6,6 +6,7 @@ import { FileSystemPort } from "../../../domain/ports/secondary/FileSystemPort";
 import { toPosix } from "../../../shared/utils/pathUtils";
 import { compareFileTrees } from "../../../shared/utils/sortUtils";
 import pLimit from "p-limit";
+import ignore from "ignore";
 
 const DEBUG = false;
 const concurrencyLimit = pLimit(32);
@@ -22,8 +23,8 @@ export class FsAdapter implements FileSystemPort {
   async readFile(filePath: string): Promise<string | null> {
     try {
       return await fs.promises.readFile(filePath, "utf-8");
-    } catch (error) {
-      console.error(`Error reading file ${filePath}:`, error);
+    } catch (err) {
+      console.error(`Error reading ${filePath}`, err);
       return null;
     }
   }
@@ -36,15 +37,11 @@ export class FsAdapter implements FileSystemPort {
    */
   async writeFile(filePath: string, content: string): Promise<boolean> {
     try {
-      // Crear directorio si no existe
-      const dirname = path.dirname(filePath);
-      await fs.promises.mkdir(dirname, { recursive: true });
-
-      // Escribir el archivo
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
       await fs.promises.writeFile(filePath, content, "utf-8");
       return true;
-    } catch (error) {
-      console.error(`Error writing file ${filePath}:`, error);
+    } catch (err) {
+      console.error(`Error writing ${filePath}`, err);
       return false;
     }
   }
@@ -54,68 +51,59 @@ export class FsAdapter implements FileSystemPort {
    * @param rootPath Ruta de la carpeta raíz
    * @returns Estructura de árbol de archivos
    */
-  async getDirectoryTree(rootPath: string): Promise<FileTree> {
-    console.log(`Generando árbol para directorio: ${rootPath}`);
-
-    const baseName = path.basename(rootPath);
+  async getDirectoryTree(
+    rootPath: string,
+    ig?: ReturnType<typeof ignore>
+  ): Promise<FileTree> {
     const tree: FileTree = {
       path: "",
-      name: baseName,
+      name: path.basename(rootPath),
       isDirectory: true,
-      children: [],
     };
-
-    await this.buildDirectoryTree(rootPath, tree, "");
-
-    console.log(
-      `Árbol generado. Nodos de primer nivel: ${tree.children?.length || 0}`
-    );
-
+    await this.buildDirectoryTree(rootPath, tree, "", ig);
     return tree;
   }
 
   /** Construye recursivamente el árbol de directorios **/
-  /** Construye recursivamente el árbol de directorios **/
   private async buildDirectoryTree(
     currentPath: string,
-    parentNode: FileTree,
-    relativePath: string
+    parent: FileTree,
+    relPath: string,
+    ig?: ReturnType<typeof ignore>
   ): Promise<void> {
-    try {
-      const entries = await fs.promises.readdir(currentPath, {
-        withFileTypes: true,
-      });
-      parentNode.children = [];
+    const entries = await fs.promises.readdir(currentPath, {
+      withFileTypes: true,
+    });
+    parent.children = [];
 
-      if (DEBUG) {
-        console.log(
-          `Procesando directorio: ${currentPath} (${entries.length} entradas)`
-        );
-      }
+    await Promise.all(
+      entries.map((entry) =>
+        concurrencyLimit(async () => {
+          const childRel = toPosix(path.join(relPath, entry.name));
+          const relPosix = toPosix(path.join(relPath, entry.name));
+          const testPath = entry.isDirectory() ? `${relPosix}/` : relPosix;
+          if (ig?.ignores(testPath)) return;
 
-      await Promise.all(
-        entries.map((entry) =>
-          concurrencyLimit(async () => {
-            const entryPath = path.join(currentPath, entry.name);
-            const entryRel = toPosix(path.join(relativePath, entry.name));
-            const node: FileTree = {
-              path: entryRel,
-              name: entry.name,
-              isDirectory: entry.isDirectory(),
-            };
-            if (entry.isDirectory()) {
-              node.children = [];
-              await this.buildDirectoryTree(entryPath, node, entryRel);
-            }
-            parentNode.children!.push(node);
-          })
-        )
-      );
+          const node: FileTree = {
+            path: childRel,
+            name: entry.name,
+            isDirectory: entry.isDirectory(),
+          };
+          parent.children!.push(node);
 
-      parentNode.children.sort(compareFileTrees);
-    } catch (error) {
-      console.error(`Error building directory tree for ${currentPath}:`, error);
-    }
+          if (entry.isDirectory()) {
+            await this.buildDirectoryTree(
+              path.join(currentPath, entry.name),
+              node,
+              childRel,
+              ig
+            );
+          }
+        })
+      )
+    );
+
+    parent.children.sort(compareFileTrees);
   }
 
   /**
@@ -123,10 +111,13 @@ export class FsAdapter implements FileSystemPort {
    * @param rootPath Ruta del directorio raíz
    * @returns Lista de entradas de archivo
    */
-  async getFiles(rootPath: string): Promise<FileEntry[]> {
-    const files: FileEntry[] = [];
-    await this.collectFiles(rootPath, "", files);
-    return files;
+  async getFiles(
+    rootPath: string,
+    ig?: ReturnType<typeof ignore>
+  ): Promise<FileEntry[]> {
+    const list: FileEntry[] = [];
+    await this.collectFiles(rootPath, "", list, ig);
+    return list;
   }
 
   /**
@@ -134,31 +125,32 @@ export class FsAdapter implements FileSystemPort {
    */
   private async collectFiles(
     currentPath: string,
-    relativePath: string,
-    files: FileEntry[]
+    relPath: string,
+    out: FileEntry[],
+    ig?: ReturnType<typeof ignore>
   ): Promise<void> {
-    try {
-      const entries = await fs.promises.readdir(currentPath, {
-        withFileTypes: true,
-      });
+    const entries = await fs.promises.readdir(currentPath, {
+      withFileTypes: true,
+    });
 
-      await Promise.all(
-        entries.map((entry) =>
-          concurrencyLimit(async () => {
-            const entryPath = path.join(currentPath, entry.name);
-            const entryRel = toPosix(path.join(relativePath, entry.name));
-            if (entry.isDirectory()) {
-              await this.collectFiles(entryPath, entryRel, files);
-            } else {
-              const content = await fs.promises.readFile(entryPath, "utf-8");
-              files.push({ path: entryRel, content });
-            }
-          })
-        )
-      );
-    } catch (error) {
-      console.error(`Error collecting files from ${currentPath}:`, error);
-    }
+    await Promise.all(
+      entries.map((entry) =>
+        concurrencyLimit(async () => {
+          const childRel = toPosix(path.join(relPath, entry.name));
+          const ignorePath = entry.isDirectory() ? `${childRel}/` : childRel;
+          if (ig?.ignores(ignorePath)) return; // 🛑 filtro temprano
+
+          const full = path.join(currentPath, entry.name);
+
+          if (entry.isDirectory()) {
+            await this.collectFiles(full, childRel, out, ig);
+          } else {
+            const content = await fs.promises.readFile(full, "utf-8");
+            out.push({ path: childRel, content });
+          }
+        })
+      )
+    );
   }
 
   /**
@@ -166,11 +158,11 @@ export class FsAdapter implements FileSystemPort {
    * @param path Ruta a verificar
    * @returns true si existe, false en caso contrario
    */
-  async exists(path: string): Promise<boolean> {
+  async exists(p: string): Promise<boolean> {
     try {
-      await fs.promises.access(path);
+      await fs.promises.access(p);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

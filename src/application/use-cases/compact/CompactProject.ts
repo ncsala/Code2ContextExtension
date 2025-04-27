@@ -118,7 +118,12 @@ export class CompactProject implements CompactUseCase {
         const content = shouldMinify
           ? this.contentMinifier.minify(f.content)
           : f.content;
-        return this.formatter.formatFileEntry(i + 1, f.path, content, FILE_MARKER);
+        return this.formatter.formatFileEntry(
+          i + 1,
+          f.path,
+          content,
+          FILE_MARKER
+        );
       });
       combined += processed.join("\n");
 
@@ -244,11 +249,8 @@ export class CompactProject implements CompactUseCase {
   ): Promise<FileEntry[]> {
     this.progressReporter.log("Modo de selección por directorio con filtros");
 
-    // Obtener todos los archivos
-    const allFiles = await this.fs.getFiles(options.rootPath);
-
-    // Filtrar archivos
-    return this.fileFilter.filterFiles(allFiles, ignorePatterns);
+    const ig = ignore().add(ignorePatterns);
+    return this.fs.getFiles(options.rootPath, ig);
   }
 
   /**
@@ -260,36 +262,32 @@ export class CompactProject implements CompactUseCase {
   ): Promise<string> {
     this.progressReporter.log("Generando estructura del árbol...");
 
-    // Obtener el árbol completo
-    const tree = await this.fs.getDirectoryTree(options.rootPath);
+    // — mismo conjunto de patrones que usamos para los archivos —
+    const ignorePatterns = await this.getIgnorePatterns(options);
+    const ig = ignore().add(ignorePatterns);
+
     let treeContent = "";
 
     if (options.selectionMode === "files" && options.specificFiles) {
-      this.progressReporter.log(
-        "Usando árbol filtrado para modo de archivos específicos"
-      );
+      // Árbol recortado solo para los archivos elegidos
+      const tree = await this.fs.getDirectoryTree(options.rootPath, ig);
       treeContent = this.treeGenerator.generateFilteredTreeText(
         tree,
         options.specificFiles
       );
     } else {
-      this.progressReporter.log(
-        "Usando árbol filtrado para modo de directorio"
+      // Árbol completo pero ya sin node_modules, .git, etc.
+      treeContent = this.treeGenerator.treeToText(
+        await this.fs.getDirectoryTree(options.rootPath, ig),
+        ig
       );
-
-      // MODIFICACIÓN: Usar exactamente los mismos patrones que para filtrar archivos
-      const ignorePatterns = await this.getIgnorePatterns(options);
-      const ig = ignore().add(ignorePatterns);
-      treeContent = this.treeGenerator.treeToText(tree, ig);
     }
 
-    // Verificar si realmente generamos contenido para el árbol
-    if (!treeContent || treeContent.trim() === "") {
+    if (!treeContent.trim()) {
       this.progressReporter.warn(
-        "Advertencia: No se pudo generar el árbol, posible problema con la estructura"
+        "Advertencia: no se pudo gen erar árbol (quizá todo está ignorado)"
       );
     }
-
     return treeContent;
   }
 }

@@ -19,7 +19,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
   private readonly selectedItems: Map<string, FileItem> = new Map();
   private rootPath: string | undefined;
-  private ignorePatterns: string[] = [".git", "node_modules", "dist", "build"];
+  private ignorePatterns: string[] = [".git", "node_modules", "dist", "build", "package-lock.json"];
 
   // Manejador de ignore para uso en varios métodos
   private ignoreHandler: ReturnType<typeof ignore> | null = null;

@@ -21,7 +21,13 @@ const App: React.FC = () => {
   const [options, setOptions] = useState<CompactOptions>({
     rootPath: "",
     outputPath: "combined.txt",
-    customIgnorePatterns: ["node_modules", ".git", "dist", "build"],
+    customIgnorePatterns: [
+      "node_modules",
+      ".git",
+      "dist",
+      "build",
+      "package-lock.json",
+    ],
     includeGitIgnore: true,
     includeTree: true,
     minifyContent: true,

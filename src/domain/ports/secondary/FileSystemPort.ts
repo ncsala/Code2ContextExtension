@@ -1,3 +1,4 @@
+import ignore from "ignore";
 import { FileEntry } from "../../model/FileEntry";
 import { FileTree } from "../../model/FileTree";
 
@@ -25,14 +26,20 @@ export interface FileSystemPort {
    * @param rootPath Ruta de la carpeta raíz
    * @returns Estructura de árbol de archivos
    */
-  getDirectoryTree(rootPath: string): Promise<FileTree>;
+  getDirectoryTree(
+    rootPath: string,
+    ig?: ReturnType<typeof ignore>
+  ): Promise<FileTree>;
 
   /**
    * Obtiene una lista de archivos dentro de un directorio
    * @param rootPath Ruta del directorio raíz
    * @returns Lista de entradas de archivo
    */
-  getFiles(rootPath: string): Promise<FileEntry[]>;
+  getFiles(
+    rootPath: string,
+    ig?: ReturnType<typeof ignore>
+  ): Promise<FileEntry[]>;
 
   /**
    * Verifica si una ruta existe
