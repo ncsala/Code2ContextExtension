@@ -13,4 +13,7 @@ export interface FileTree {
 
   /** Subdirectorios o archivos hijos */
   children?: FileTree[];
+
+  /** Indica si el directorio fue truncado por exceder el límite */
+  isTruncated?: boolean;
 }

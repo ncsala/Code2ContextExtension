@@ -166,4 +166,9 @@ export class FsAdapter implements FileSystemPort {
       return false;
     }
   }
+
+  async stat(filePath: string): Promise<{ size: number }> {
+    const { size } = await fs.promises.stat(filePath);
+    return { size };
+  }
 }

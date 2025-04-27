@@ -47,4 +47,6 @@ export interface FileSystemPort {
    * @returns true si existe, false en caso contrario
    */
   exists(path: string): Promise<boolean>;
+
+  stat(path: string): Promise<{ size: number }>;
 }

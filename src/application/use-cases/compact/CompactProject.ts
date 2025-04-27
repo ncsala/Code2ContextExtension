@@ -13,8 +13,8 @@ import { ContentMinifier } from "../../services/content/ContentMinifier";
 import { FileFilter } from "../../services/filter/FileFilter";
 import * as path from "path";
 import ignore from "ignore";
-import { toPosix } from "../../../shared/utils/pathUtils";
 import { ContentFormatter } from "../../services/content/ContentFormatter";
+import pLimit from "p-limit";
 const { TREE_MARKER, INDEX_MARKER, FILE_MARKER } = ContentFormatter;
 
 /**
@@ -33,16 +33,21 @@ export class CompactProject implements CompactUseCase {
     private readonly git: GitPort,
     progressReporter?: ProgressReporter
   ) {
-    this.treeGenerator = new TreeGenerator(200);
+    this.treeGenerator = new TreeGenerator(50);
     this.contentMinifier = new ContentMinifier();
     this.fileFilter = new FileFilter();
     this.progressReporter = progressReporter || new ConsoleProgressReporter();
     this.contentFormatter = new ContentFormatter();
   }
 
-  async execute(options: CompactOptions): Promise<CompactResult> {
+  async execute(
+    options: CompactOptions & { truncateTree?: boolean }
+  ): Promise<CompactResult> {
+    const readLimit = pLimit(32); // límite de IO concurrente
     this.progressReporter.startOperation("Total execution time");
+
     try {
+      /* ───────────────────────── 1. validar raíz ───────────────────────── */
       if (!(await this.fs.exists(options.rootPath))) {
         return {
           ok: false,
@@ -50,97 +55,148 @@ export class CompactProject implements CompactUseCase {
         };
       }
 
-      let files: FileEntry[] = [];
-
-      // Obtener patrones de ignorado una sola vez para usar en ambos modos
+      /* ──────────────────────── 2. paths seleccionados ─────────────────── */
       const ignorePatterns = await this.getIgnorePatterns(options);
+      let selectedPaths: string[];
 
-      this.progressReporter.startOperation("Prepare files");
-
-      // Obtener archivos según el modo de selección
-      if (
-        options.selectionMode === "files" &&
-        options.specificFiles &&
-        options.specificFiles.length > 0
-      ) {
-        files = await this.getSpecificFiles(
-          options.rootPath,
-          options.specificFiles,
-          ignorePatterns
-        );
+      if (options.selectionMode === "files" && options.specificFiles?.length) {
+        selectedPaths = options.specificFiles;
       } else {
-        files = await this.getFilteredFiles(options, ignorePatterns);
+        const ig = ignore().add(ignorePatterns);
+        selectedPaths = (await this.fs.getFiles(options.rootPath, ig)).map(
+          (f) => f.path
+        );
       }
 
-      this.progressReporter.endOperation("Prepare files");
-
-      if (files.length === 0) {
+      if (!selectedPaths.length) {
         return {
           ok: false,
           error: "No hay archivos para procesar con los criterios actuales",
         };
       }
 
+      /* ─────────────────── 3. índice + árbol (podríamos truncar) ───────── */
       this.progressReporter.startOperation("Generate index and tree");
 
-      // Generar índice y estructura de árbol
-      const indexContent = this.formatter.generateIndex(
-        files.map((f) => f.path)
-      );
-      let treeContent = "";
-      if (options.includeTree === true) {
-        treeContent = await this.generateTree(options, files);
+      let treeText = "";
+      let truncatedPaths = new Set<string>();
+
+      if (options.includeTree) {
+        const ig = ignore().add(ignorePatterns);
+        // llamamos a la nueva API que devuelve también las rutas truncadas
+        const { treeText: txt, truncatedPaths: tp } =
+          await this.treeGenerator.generatePrunedTreeText(
+            options.rootPath,
+            ig,
+            selectedPaths
+          );
+
+        treeText = txt;
+        truncatedPaths = tp;
+
+        if (tp.size > 0) {
+          this.progressReporter.log(
+            `Se truncaron ${tp.size} directorios por exceder el límite`
+          );
+        }
       }
 
       this.progressReporter.endOperation("Generate index and tree");
-      this.progressReporter.startOperation("Process file contents");
 
-      // Verificar si se debe minificar el contenido
-      const shouldMinify = options.minifyContent === true;
+      /* ───────────── 4. quitar lo que quedó dentro de carpetas truncadas ─ */
+      let finalPaths = selectedPaths;
 
-      // Generar el contenido final combinado
-      let combined = this.contentFormatter.generateHeader(
-        TREE_MARKER,
-        INDEX_MARKER,
-        FILE_MARKER,
-        shouldMinify,
-        options.includeTree === true && treeContent.trim() !== ""
-      );
-
-      if (options.includeTree === true && treeContent) {
-        combined += `${TREE_MARKER}\n${treeContent}\n\n`;
+      if (options.includeTree && truncatedPaths.size > 0) {
+        const before = selectedPaths.length;
+        finalPaths = selectedPaths.filter(
+          (p) => !this.treeGenerator.isInsideTruncatedDir(p, truncatedPaths)
+        );
+        const omitted = before - finalPaths.length;
+        this.progressReporter.log(
+          `Omitiendo ${omitted} archivos en carpetas truncadas`
+        );
       }
 
-      combined += `${INDEX_MARKER}\n${indexContent}\n\n`;
+      // El índice ahora solo incluye archivos no truncados
+      const indexContent = this.formatter.generateIndex(finalPaths);
 
-      // Procesar cada archivo
-      const processed = files.map((f, i) => {
-        const content = shouldMinify
+      // Verificar tamaño total para evitar problemas de memoria
+      const roughSize = await Promise.all(
+        finalPaths.map(async (p) => {
+          const { size } = await this.fs.stat(path.join(options.rootPath, p));
+          return size;
+        })
+      ).then((sizes: number[]) => sizes.reduce((sum, s) => sum + s, 0));
+
+      if (roughSize > 50 * 1024 * 1024) {
+        // 50 MiB de umbral
+        return {
+          ok: false,
+          error: `La selección es de ${(roughSize / 1024 / 1024).toFixed(
+            1
+          )} MB - demasiado grande.`,
+        };
+      }
+
+      /* ────────────────────────── 5. leer archivos ─────────────────────── */
+      this.progressReporter.startOperation("Read files");
+      const entries = await Promise.all(
+        finalPaths.map((relPath) =>
+          readLimit(async () => {
+            const full = path.join(options.rootPath, relPath);
+            const content = await this.fs.readFile(full);
+            return content ? { path: relPath, content } : null;
+          })
+        )
+      );
+      const files = entries.filter((e): e is FileEntry => e !== null);
+      this.progressReporter.endOperation("Read files");
+
+      /* ─────────────────────── 6. construir combinado ─────────────────── */
+      this.progressReporter.startOperation("Process file contents");
+      const shouldMinify = options.minifyContent === true;
+
+      /* ➊ NUEVO – usamos un array para evitar += */
+      const parts: string[] = [];
+
+      // encabezado
+      parts.push(
+        this.contentFormatter.generateHeader(
+          TREE_MARKER,
+          INDEX_MARKER,
+          FILE_MARKER,
+          shouldMinify,
+          !!treeText.trim()
+        )
+      );
+
+      // árbol + índice
+      if (treeText) {
+        parts.push(`${TREE_MARKER}\n${treeText}\n\n`);
+      }
+      parts.push(`${INDEX_MARKER}\n${indexContent}\n\n`);
+
+      // archivos (solo los que NO están en dir. truncadas)
+      let idx = 1;
+      for (const f of files) {
+        const txt = shouldMinify
           ? this.contentMinifier.minify(f.content)
           : f.content;
-        return this.formatter.formatFileEntry(
-          i + 1,
-          f.path,
-          content,
-          FILE_MARKER
+        parts.push(
+          this.formatter.formatFileEntry(idx++, f.path, txt, FILE_MARKER),
+          "\n"
         );
-      });
-      combined += processed.join("\n");
+      }
 
+      const combined = parts.join("");
       this.progressReporter.endOperation("Process file contents");
 
-      // Escribir el resultado si se especificó una ruta de salida
+      /* ────────────────────────── 7. guardar opcional ──────────────────── */
       if (options.outputPath) {
         this.progressReporter.startOperation("Write output");
-
-        const writeResult = await this.fs.writeFile(
-          options.outputPath,
-          combined
-        );
-
+        const ok = await this.fs.writeFile(options.outputPath, combined);
         this.progressReporter.endOperation("Write output");
-
-        if (writeResult === false) {
+        if (ok === false) {
           return {
             ok: false,
             error: `No se pudo escribir en ${options.outputPath}`,
@@ -149,78 +205,13 @@ export class CompactProject implements CompactUseCase {
       }
 
       this.progressReporter.endOperation("Total execution time");
-
-      return {
-        ok: true,
-        content: combined,
-      };
-    } catch (err: unknown) {
+      return { ok: true, content: combined };
+    } catch (err) {
       this.progressReporter.error("Error en la compactación:", err);
       this.progressReporter.endOperation("Total execution time");
-
-      let errorMessage = "Error desconocido";
-
-      // Verificar si el error tiene una propiedad 'message'
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === "object" && err !== null && "message" in err) {
-        errorMessage = String((err as { message: unknown }).message);
-      } else if (typeof err === "string") {
-        errorMessage = err;
-      }
-
-      return {
-        ok: false,
-        error: errorMessage,
-      };
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, error: msg };
     }
-  }
-
-  /**
-   * Obtiene archivos específicos seleccionados aplicando también los patrones de ignorado
-   */
-  private async getSpecificFiles(
-    rootPath: string,
-    specificFiles: string[],
-    ignorePatterns: string[]
-  ): Promise<FileEntry[]> {
-    this.progressReporter.log(
-      `Modo de selección de archivos específicos. ${specificFiles.length} archivos seleccionados.`
-    );
-
-    // Crear un manejador de patrones de ignorado
-    const ig = ignore().add(ignorePatterns);
-
-    // Filtrar los archivos seleccionados según los patrones de ignorado
-    const filteredSpecificFiles = specificFiles.filter(
-      (filePath) => !ig.ignores(toPosix(filePath))
-    );
-
-    if (filteredSpecificFiles.length < specificFiles.length) {
-      this.progressReporter.log(
-        `Se omitieron ${
-          specificFiles.length - filteredSpecificFiles.length
-        } archivos debido a patrones de ignorado.`
-      );
-    }
-
-    const filePromises = filteredSpecificFiles.map(async (filePath) => {
-      const fullPath = path.join(rootPath, filePath);
-      const content = await this.fs.readFile(fullPath);
-      if (content !== null) {
-        return { path: toPosix(filePath), content };
-      }
-      return null;
-    });
-    const fileResults = await Promise.all(filePromises);
-    const files = fileResults.filter(
-      (file): file is FileEntry => file !== null
-    );
-
-    this.progressReporter.log(
-      `Archivos cargados por selección específica después de filtrados: ${files.length}`
-    );
-    return files;
   }
 
   /**
@@ -238,58 +229,5 @@ export class CompactProject implements CompactUseCase {
       ...gitIgnorePatterns,
       ...(options.customIgnorePatterns || []),
     ];
-  }
-
-  /**
-   * Obtiene archivos filtrados por patrones de ignorado
-   */
-  private async getFilteredFiles(
-    options: CompactOptions,
-    ignorePatterns: string[]
-  ): Promise<FileEntry[]> {
-    this.progressReporter.log("Modo de selección por directorio con filtros");
-
-    const ig = ignore().add(ignorePatterns);
-    return this.fs.getFiles(options.rootPath, ig);
-  }
-
-  /**
-   * Genera la estructura de árbol (ASCII), recortando directorios
-   * demasiado grandes y aplicando los patrones de ignore.
-   */
-  private async generateTree(
-    options: CompactOptions,
-    _files: FileEntry[]
-  ): Promise<string> {
-    this.progressReporter.log("Generando estructura del árbol…");
-    const ignorePatterns = await this.getIgnorePatterns(options);
-    const ig = ignore().add(ignorePatterns);
-
-    let treeContent = "";
-    if (options.selectionMode === "files" && options.specificFiles) {
-      // poda recursiva: sólo visita subárboles necesarios
-      treeContent = await this.treeGenerator.generatePrunedTreeText(
-        options.rootPath,
-        ig,
-        options.specificFiles
-      );
-    } else {
-      // en 'directory' modo, paso *todos* los paths
-      const all = (await this.fs.getFiles(options.rootPath, ig)).map(
-        (f) => f.path
-      );
-      treeContent = await this.treeGenerator.generatePrunedTreeText(
-        options.rootPath,
-        ig,
-        all
-      );
-    }
-
-    if (!treeContent.trim()) {
-      this.progressReporter.warn(
-        "Advertencia: no se pudo generar árbol (quizá todo está ignorado)."
-      );
-    }
-    return treeContent;
   }
 }
