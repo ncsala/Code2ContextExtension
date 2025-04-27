@@ -1,4 +1,5 @@
 import { FileTree } from "../../../domain/model/FileTree";
+import { compareFileTrees } from "../../../shared/utils/sortUtils";
 
 /**
  * Servicio para formatear la estructura de árbol de archivos
@@ -31,12 +32,7 @@ export class TreeFormatter {
     let result = "";
 
     // Ordenar: primero directorios, luego archivos (alfabéticamente)
-    const sortedChildren = [...node.children].sort((a, b) => {
-      if (a.isDirectory === b.isDirectory) {
-        return a.name.localeCompare(b.name);
-      }
-      return a.isDirectory ? -1 : 1;
-    });
+    const sortedChildren = [...node.children].sort(compareFileTrees);
 
     for (let i = 0; i < sortedChildren.length; i++) {
       const child = sortedChildren[i];

@@ -96,22 +96,23 @@ export class WebviewProvider implements SelectionChangeListener {
   /** * Crea un interceptor para los logs de consola */
   private createLogInterceptor() {
     return (...args: unknown[]) => {
-      // Llamar al original primero
+      // Primero al original
       this.originalConsoleLog.apply(console, args);
 
-      // Si hay un panel activo, enviar el debug
-      if (this.panel) {
+      // Sólo si el panel existe _y_ está visible en UI
+      if (this.panel?.visible) {
         try {
+          const message = args
+            .map((arg) =>
+              typeof arg === "object" ? JSON.stringify(arg) : String(arg)
+            )
+            .join(" ");
           this.panel.webview.postMessage({
             command: "debug",
-            data: args
-              .map((arg) =>
-                typeof arg === "object" ? JSON.stringify(arg) : String(arg)
-              )
-              .join(" "),
+            data: message,
           });
-        } catch (e) {
-          // Ignorar errores de envío
+        } catch {
+          // silenciar
         }
       }
     };

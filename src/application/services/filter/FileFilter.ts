@@ -1,5 +1,6 @@
 import { FileEntry } from "../../../domain/model/FileEntry";
 import ignore from "ignore";
+import { defaultIgnorePatterns } from "../../../shared/utils/ignorePatterns";
 
 /**
  * Servicio para filtrar archivos basados en patrones de ignorado
@@ -10,56 +11,7 @@ export class FileFilter {
    * @returns Array de patrones de ignorado por defecto
    */
   getDefaultIgnorePatterns(): string[] {
-    return [
-      "node_modules/**",
-      ".git/**",
-      "*.lock",
-      "*.log",
-      "*.exe",
-      "*.dll",
-      "*.so",
-      "*.dylib",
-      "*.zip",
-      "*.tar",
-      "*.gz",
-      "*.rar",
-      "*.7z",
-      "*.jpg",
-      "*.jpeg",
-      "*.png",
-      "*.gif",
-      "*.bmp",
-      "*.ico",
-      "*.svg",
-      "*.pdf",
-      "*.doc",
-      "*.docx",
-      "*.xls",
-      "*.xlsx",
-      "*.ppt",
-      "*.pptx",
-      "*.bin",
-      "*.dat",
-      "*.db",
-      "*.sqlite",
-      "*.sqlite3",
-      "*.class",
-      "*.jar",
-      "*.war",
-      "*.ear",
-      "*.mp3",
-      "*.mp4",
-      "*.avi",
-      "*.mov",
-      "*.mkv",
-      "*.ttf",
-      "*.otf",
-      "*.woff",
-      "*.woff2",
-      "*.pyc",
-      "*.pyo",
-      "*.pyd",
-    ];
+    return defaultIgnorePatterns;
   }
 
   /**

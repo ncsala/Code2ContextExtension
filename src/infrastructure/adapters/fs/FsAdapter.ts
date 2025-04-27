@@ -4,8 +4,11 @@ import { FileEntry } from "../../../domain/model/FileEntry";
 import { FileTree } from "../../../domain/model/FileTree";
 import { FileSystemPort } from "../../../domain/ports/secondary/FileSystemPort";
 import { toPosix } from "../../../shared/utils/pathUtils";
+import { compareFileTrees } from "../../../shared/utils/sortUtils";
+import pLimit from "p-limit";
 
 const DEBUG = false;
+const concurrencyLimit = pLimit(32);
 
 /**
  * Adaptador para el sistema de archivos
@@ -91,32 +94,23 @@ export class FsAdapter implements FileSystemPort {
       }
 
       await Promise.all(
-        entries.map(async (entry) => {
-          const entryPath = path.join(currentPath, entry.name);
-          const entryRel = toPosix(path.join(relativePath, entry.name));
-
-          const node: FileTree = {
-            path: entryRel,
-            name: entry.name,
-            isDirectory: entry.isDirectory(),
-          };
-
-          if (entry.isDirectory()) {
-            node.children = [];
-            await this.buildDirectoryTree(entryPath, node, entryRel);
-          }
-
-          parentNode.children!.push(node);
-        })
+        entries.map((entry) =>
+          concurrencyLimit(async () => {
+            const entryPath = path.join(currentPath, entry.name);
+            const entryRel = toPosix(path.join(relativePath, entry.name));
+            const node: FileTree = {
+              path: entryRel,
+              name: entry.name,
+              isDirectory: entry.isDirectory(),
+            };
+            if (entry.isDirectory()) {
+              node.children = [];
+              await this.buildDirectoryTree(entryPath, node, entryRel);
+            }
+            parentNode.children!.push(node);
+          })
+        )
       );
-
-      // 🎯 Aquí extraemos el ternario en una función nombrada
-      const compareFileTrees = (a: FileTree, b: FileTree): number => {
-        if (a.isDirectory === b.isDirectory) {
-          return a.name.localeCompare(b.name);
-        }
-        return a.isDirectory ? -1 : 1;
-      };
 
       parentNode.children.sort(compareFileTrees);
     } catch (error) {
@@ -149,17 +143,18 @@ export class FsAdapter implements FileSystemPort {
       });
 
       await Promise.all(
-        entries.map(async (entry) => {
-          const entryPath = path.join(currentPath, entry.name);
-          const entryRel = toPosix(path.join(relativePath, entry.name));
-
-          if (entry.isDirectory()) {
-            await this.collectFiles(entryPath, entryRel, files);
-          } else {
-            const content = await fs.promises.readFile(entryPath, "utf-8");
-            files.push({ path: entryRel, content });
-          }
-        })
+        entries.map((entry) =>
+          concurrencyLimit(async () => {
+            const entryPath = path.join(currentPath, entry.name);
+            const entryRel = toPosix(path.join(relativePath, entry.name));
+            if (entry.isDirectory()) {
+              await this.collectFiles(entryPath, entryRel, files);
+            } else {
+              const content = await fs.promises.readFile(entryPath, "utf-8");
+              files.push({ path: entryRel, content });
+            }
+          })
+        )
       );
     } catch (error) {
       console.error(`Error collecting files from ${currentPath}:`, error);

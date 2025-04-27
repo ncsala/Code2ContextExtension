@@ -2,6 +2,10 @@
  * Servicio para formatear el contenido de los archivos
  */
 export class ContentFormatter {
+  public static readonly TREE_MARKER = "@Tree:";
+  public static readonly INDEX_MARKER = "@Index:";
+  public static readonly FILE_MARKER = "@F:";
+
   /**
    * Genera un encabezado estándar para el archivo combinado
    * @param treeMarker   Marcador para el árbol de directorios

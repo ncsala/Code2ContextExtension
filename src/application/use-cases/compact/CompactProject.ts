@@ -15,6 +15,7 @@ import * as path from "path";
 import ignore from "ignore";
 import { toPosix } from "../../../shared/utils/pathUtils";
 import { ContentFormatter } from "../../services/content/ContentFormatter";
+const { TREE_MARKER, INDEX_MARKER, FILE_MARKER } = ContentFormatter;
 
 /**
  * Implementación del caso de uso de compactación
@@ -25,6 +26,7 @@ export class CompactProject implements CompactUseCase {
   private readonly fileFilter: FileFilter;
   private readonly progressReporter: ProgressReporter;
   private readonly contentFormatter: ContentFormatter;
+  private readonly formatter = new ContentFormatter();
 
   constructor(
     private readonly fs: FileSystemPort,
@@ -47,10 +49,6 @@ export class CompactProject implements CompactUseCase {
           error: `El directorio ${options.rootPath} no existe`,
         };
       }
-
-      const TREE = "@Tree:";
-      const INDEX = "@Index:";
-      const FILE = "@F:";
 
       let files: FileEntry[] = [];
 
@@ -86,7 +84,9 @@ export class CompactProject implements CompactUseCase {
       this.progressReporter.startOperation("Generate index and tree");
 
       // Generar índice y estructura de árbol
-      const indexContent = this.generateIndex(files);
+      const indexContent = this.formatter.generateIndex(
+        files.map((f) => f.path)
+      );
       let treeContent = "";
       if (options.includeTree === true) {
         treeContent = await this.generateTree(options, files);
@@ -100,22 +100,27 @@ export class CompactProject implements CompactUseCase {
 
       // Generar el contenido final combinado
       let combined = this.contentFormatter.generateHeader(
-        TREE,
-        INDEX,
-        FILE,
+        TREE_MARKER,
+        INDEX_MARKER,
+        FILE_MARKER,
         shouldMinify,
         options.includeTree === true && treeContent.trim() !== ""
       );
 
       if (options.includeTree === true && treeContent) {
-        combined += `${TREE}\n${treeContent}\n\n`;
+        combined += `${TREE_MARKER}\n${treeContent}\n\n`;
       }
 
-      combined += `${INDEX}\n${indexContent}\n\n`;
+      combined += `${INDEX_MARKER}\n${indexContent}\n\n`;
 
       // Procesar cada archivo
-      const processedFiles = await this.processFiles(files, FILE, shouldMinify);
-      combined += processedFiles.join("\n");
+      const processed = files.map((f, i) => {
+        const content = shouldMinify
+          ? this.contentMinifier.minify(f.content)
+          : f.content;
+        return this.formatter.formatFileEntry(i + 1, f.path, content, FILE_MARKER);
+      });
+      combined += processed.join("\n");
 
       this.progressReporter.endOperation("Process file contents");
 
@@ -247,13 +252,6 @@ export class CompactProject implements CompactUseCase {
   }
 
   /**
-   * Genera el índice de archivos
-   */
-  private generateIndex(files: FileEntry[]): string {
-    return files.map((f, i) => `${i + 1}|${f.path}`).join("\n");
-  }
-
-  /**
    * Genera la estructura de árbol
    */
   private async generateTree(
@@ -293,23 +291,5 @@ export class CompactProject implements CompactUseCase {
     }
 
     return treeContent;
-  }
-
-  /**
-   * Procesa los archivos para el contenido combinado
-   */
-  private async processFiles(
-    files: FileEntry[],
-    FILE: string,
-    shouldMinify: boolean
-  ): Promise<string[]> {
-    const processedFilesPromises = files.map(async (f, i) => {
-      const content = shouldMinify
-        ? this.contentMinifier.minify(f.content)
-        : f.content;
-      return `${FILE}|${i + 1}|${f.path}|${content}`;
-    });
-
-    return await Promise.all(processedFilesPromises);
   }
 }

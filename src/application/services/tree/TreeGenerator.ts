@@ -7,12 +7,19 @@ import { toPosix } from "../../../shared/utils/pathUtils";
  */
 export class TreeGenerator {
   // Función pura para decidir si un nodo es relevante
-  private isRelevantChild(child: FileTree, selectedPosix: string[]): boolean {
+  private isRelevantChild(
+    child: FileTree,
+    selectedPosix: Set<string>
+  ): boolean {
+    const childPath = toPosix(child.path);
     if (!child.isDirectory) {
-      return selectedPosix.includes(toPosix(child.path));
+      // O(1) lookup
+      return selectedPosix.has(childPath);
     }
-    const dir = toPosix(child.path);
-    return selectedPosix.some((f) => f.startsWith(dir + "/") || f === dir);
+    // si es directorio, buscamos todos los archivos que empiecen por dir/ o igual al dir
+    return Array.from(selectedPosix).some(
+      (f) => f === childPath || f.startsWith(childPath + "/")
+    );
   }
 
   /**
@@ -23,17 +30,13 @@ export class TreeGenerator {
     selectedFiles: string[],
     pfx = ""
   ): string {
-    if (!node || !node.isDirectory || !node.children?.length) {
-      return "";
-    }
+    if (!node?.isDirectory || !node.children?.length) return "";
 
-    const selectedPosix = selectedFiles.map(toPosix);
+    const selectedPosix = new Set(selectedFiles.map(toPosix));
     const relevantChildren = node.children.filter((child) =>
       this.isRelevantChild(child, selectedPosix)
     );
-    if (!relevantChildren.length) {
-      return "";
-    }
+    if (!relevantChildren.length) return "";
 
     let result = "";
     for (let i = 0; i < relevantChildren.length; i++) {

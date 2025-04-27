@@ -6,6 +6,7 @@ import { selectionService } from "../../services/selectionService";
 import { notificationService } from "../../services/notificationService";
 import ignore from "ignore";
 import { rel } from "../../../../shared/utils/pathUtils";
+import { defaultIgnorePatterns } from "../../../../shared/utils/ignorePatterns";
 
 /** * Proveedor para el explorador de archivos en el TreeView */
 export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
@@ -49,52 +50,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
   /** * Obtiene patrones predeterminados para archivos binarios */
   private getDefaultBinaryPatterns(): string[] {
-    return [
-      "*.exe",
-      "*.dll",
-      "*.so",
-      "*.dylib",
-      "*.zip",
-      "*.tar",
-      "*.gz",
-      "*.rar",
-      "*.7z",
-      "*.jpg",
-      "*.jpeg",
-      "*.png",
-      "*.gif",
-      "*.bmp",
-      "*.ico",
-      "*.svg",
-      "*.pdf",
-      "*.doc",
-      "*.docx",
-      "*.xls",
-      "*.xlsx",
-      "*.ppt",
-      "*.pptx",
-      "*.bin",
-      "*.dat",
-      "*.db",
-      "*.sqlite",
-      "*.sqlite3",
-      "*.class",
-      "*.jar",
-      "*.war",
-      "*.ear",
-      "*.mp3",
-      "*.mp4",
-      "*.avi",
-      "*.mov",
-      "*.mkv",
-      "*.ttf",
-      "*.otf",
-      "*.woff",
-      "*.woff2",
-      "*.pyc",
-      "*.pyo",
-      "*.pyd",
-    ];
+    return defaultIgnorePatterns;
   }
 
   /** * Establece un nuevo directorio raíz * @param path Ruta del nuevo directorio raíz */

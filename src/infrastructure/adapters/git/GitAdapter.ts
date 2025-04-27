@@ -9,7 +9,11 @@ import { promisify } from "util";
  * Adaptador para Git
  */
 export class GitAdapter implements GitPort {
-  private exec = promisify(cp.exec);
+  private readonly exec = promisify(cp.exec);
+  private static readonly ignoreCache = new Map<
+    string,
+    { mtime: number; patterns: string[] }
+  >();
 
   /**
    * Verifica si una ruta está siendo ignorada por Git
@@ -124,42 +128,39 @@ export class GitAdapter implements GitPort {
    * @returns Lista de patrones de ignorado
    */
   async getIgnorePatterns(rootPath: string): Promise<string[]> {
-    const patterns: string[] = [];
+    const fileName = ".gitignore";
+    const filePath = path.join(rootPath, fileName);
 
-    // Archivos a verificar
-    const ignoreFiles = [
-      ".gitignore",
-      ".llmignore", // Archivo personalizado para esta extensión
-      ".npmignore",
-    ];
-
-    for (const fileName of ignoreFiles) {
-      const filePath = path.join(rootPath, fileName);
-
-      try {
-        if (await this.fileExists(filePath)) {
-          console.log(`Leyendo archivo de ignorado: ${fileName}`);
-
-          const content = await fs.promises.readFile(filePath, "utf-8");
-
-          // Procesar el contenido línea por línea
-          const lines = content.split(/\r?\n/);
-
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-
-            // Ignorar líneas vacías y comentarios
-            if (trimmedLine && !trimmedLine.startsWith("#")) {
-              patterns.push(trimmedLine);
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`Error reading ignore file ${fileName}:`, error);
-      }
+    // Intentamos stat para ver fecha de modificación
+    let stat: fs.Stats | null = null;
+    try {
+      stat = await fs.promises.stat(filePath);
+    } catch {
+      // si no existe .gitignore, devolvemos vacío
+      return [];
     }
 
-    console.log(`Patrones de ignore encontrados: ${patterns.length}`);
+    const mtime = stat.mtimeMs;
+    const cached = GitAdapter.ignoreCache.get(rootPath);
+    if (cached && cached.mtime === mtime) {
+      // devolvemos directamente el cache
+      return cached.patterns;
+    }
+
+    // Leer y parsear de verdad
+    let patterns: string[] = [];
+    try {
+      const content = await fs.promises.readFile(filePath, "utf-8");
+      patterns = content
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith("#"));
+    } catch (err) {
+      console.error(`Error leyendo ${fileName}:`, err);
+    }
+
+    // Guardar en cache
+    GitAdapter.ignoreCache.set(rootPath, { mtime, patterns });
     return patterns;
   }
 
