@@ -13,15 +13,18 @@
   ],
   "main": "out/interface/vscode/index.js",
   "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "tsc -p ./",
+    "clean": "rimraf ./out ./dist",
+    "compile": "tsc --build --clean && tsc -p ./",
+    "compile:clean": "npm run clean && npm run compile",
     "watch": "tsc -watch -p ./",
     "build-webview": "cd webview && npm run build",
-    "pretest": "npm run compile && npm run lint",
+    "build-all": "npm run compile && npm run build-webview",
+    "build-all:clean": "rimraf ./out ./dist ./webview-dist && npm run build-all",
+    "pretest": "npm run compile:clean && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "vscode-test",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "package": "npm run compile:clean && vsce package",
+    "publish": "npm run compile:clean && vsce publish"
   },
   "contributes": {
     "commands": [
@@ -136,6 +139,7 @@
     "p-limit": "3.1.0"
   },
   "devDependencies": {
+    "rimraf": "6.0.1",
     "@types/node": "18.19.86",
     "@types/vscode": "1.99.1",
     "@typescript-eslint/eslint-plugin": "6.21.0",
