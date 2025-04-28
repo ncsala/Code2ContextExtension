@@ -1,124 +1,137 @@
-import { promises as fs, Dirent } from "fs";
+import { promises as fs, Dirent, Dir } from "fs";
 import * as path from "path";
 import pLimit from "p-limit";
 import { Ignore } from "ignore";
 import { toPosix } from "../../../shared/utils/pathUtils";
 import { FileTree } from "../../../domain/model/FileTree";
+import { PrefixSet } from "../../../shared/utils/PrefixSet";
+import { quickCountDir } from "../../../shared/utils/quickCountDir";
 
-/** Mensaje de truncado personalizado con el nombre de la carpeta */
-/**
- * Placeholder de truncado (puede ir en tu archivo o importarse)
- */
-function placeholder(relDir: string, total: number): FileTree {
-  const folderName = relDir.split("/").pop() || relDir;
-  return {
-    name: `[ ${folderName}: carpeta truncada con ${total} entradas ]`,
-    path: relDir,
-    isDirectory: false,
-  };
+const PLACEHOLDER = (dir: string, total: number): FileTree => ({
+  name: `[ ${dir.split("/").pop()}: folder truncated with ${total} entries ]`,
+  path: dir,
+  isDirectory: false,
+});
+
+export interface TreeLimits {
+  /** nº de hijos directos antes de truncar -visual-mente  */
+  maxDirect: number;
+  /** nº de nodos (recursivo) antes de decir “es demasiado grande”          */
+  maxTotal: number;
 }
 
 /**
- * Nunca trunca la raíz ni los directorios de primer nivel
+ *  ───────────────────────────────────────────────────────────────
+ *  Genera un árbol (FileTree) y la versión ASCII:
+ *  • Trunca visualmente los directorios con muchos hijos directos.
+ *  • **Ignora completamente** los directorios “gigantes” (más de
+ *    `maxTotal` nodos en todo su sub-árbol) a menos que el usuario
+ *    haya seleccionado algo dentro de ellos.
+ *  ───────────────────────────────────────────────────────────────
  */
-function isRootLevelDir(dir: string): boolean {
-  return dir !== "" && !dir.includes("/");
-}
-
 export class TreeGenerator {
-  // ─────── ajustes ───────
-  private readonly MAX_DIRECT: number; // hijos directos
-  private readonly MAX_TOTAL: number; // todo su sub-árbol
-  // ───────────────────────
+  private readonly limits: TreeLimits;
+  private readonly io = pLimit(32); // I/O paralelo
+  private readonly cache = new Map<string, Dirent[]>(); // dir → dirents[]
 
-  private readonly readdirCache = new Map<string, Dirent[]>();
-  private readonly limit: ReturnType<typeof pLimit>;
+  private truncated = new Set<string>(); // carpetas truncadas (para saltar contenido)
+  private selected = new Set<string>(); // paths elegidos por el usuario (posix)
+  private prefixes!: PrefixSet; // todos sus ancestros
 
-  private selectedSet = new Set<string>();
-  private selectedList: string[] = [];
-  private truncated = new Set<string>();
+  /* métricas solo para logging */
+  private direntCacheHits = 0;
+  private totalDirectoriesProcessed = 0;
+  private totalFilesProcessed = 0;
+  private totalEntriesSkipped = 0;
 
-  // Para debugging y protección
-  private truncatedInfo: Array<{ path: string; count: number }> = [];
-
-  constructor(maxEntriesPerDir = 50, concurrency = 32) {
-    this.MAX_DIRECT = maxEntriesPerDir;
-    this.MAX_TOTAL = maxEntriesPerDir * 4; // ← puede ajustarse
-    this.limit = pLimit(concurrency);
+  constructor(l: Partial<TreeLimits> = {}) {
+    this.limits = { maxDirect: l.maxDirect ?? 20, maxTotal: l.maxTotal ?? 600 };
+    console.log(
+      `🔧 TreeGenerator → maxDirect=${this.limits.maxDirect}, maxTotal=${this.limits.maxTotal}`
+    );
   }
 
-  /** API principal */
-  public async generatePrunedTreeText(
+  /*─────────────────  API pública  ─────────────────*/
+
+  async generatePrunedTreeText(
     root: string,
     ig: Ignore,
-    selected: string[]
-  ): Promise<{
-    treeText: string;
-    fileTree: FileTree;
-    truncatedPaths: Set<string>;
-  }> {
-    this.selectedList = selected;
-    this.selectedSet = new Set(selected);
-    this.truncated.clear();
-    this.truncatedInfo = [];
+    selectedPaths: string[]
+  ) {
+    console.time("🕒 TreeGenerator.generatePrunedTreeText");
 
-    const tree = (await this.build(root, ig, root)).node;
+    /* 1️⃣  normalizo selección y creo prefixes */
+    this.selected = new Set(selectedPaths.map((p) => toPosix(p)));
 
-    // Información de debug importante
-    console.log("Directorios truncados:", this.truncatedInfo);
-
-    // PROTECCIÓN: Si todos los archivos están en carpetas truncadas, revertimos
-    // la truncación del directorio raíz para permitir ver algo
-    if (this.truncated.has("") || this.truncated.has(root)) {
-      console.log(
-        "¡ADVERTENCIA! Se detectó truncado en la raíz, revirtiendo para mostrar estructura"
-      );
-      this.truncated.delete("");
-      this.truncated.delete(root);
-    }
-
-    // Si el truncado resultaría en un índice vacío, deshabilitamos el truncado más expansivo
-    let nonTruncatedFiles = this.selectedList.filter(
-      (file) => !this.isInsideTruncatedDir(file, this.truncated)
+    this.prefixes = new PrefixSet(
+      [...this.selected].flatMap((p) => {
+        const parts = p.split("/");
+        return parts.map((_, i) => parts.slice(0, i + 1).join("/"));
+      })
     );
 
-    if (nonTruncatedFiles.length === 0 && this.truncated.size > 0) {
-      console.log(
-        "¡ADVERTENCIA! El truncado eliminaría todos los archivos. Mostrando al menos los directorios de primer nivel"
-      );
+    /* 2️⃣  reseteo contadores */
+    this.truncated.clear();
+    this.direntCacheHits =
+      this.totalDirectoriesProcessed =
+      this.totalFilesProcessed =
+      this.totalEntriesSkipped =
+        0;
 
-      // Mantenemos solo las truncaciones más profundas
-      const truncatedArray = Array.from(this.truncated);
-      const rootLevelDirs = truncatedArray.filter((dir) => !dir.includes("/"));
+    console.log(`🚀 Árbol raíz: ${root}`);
+    console.log(`📋 Paths seleccionados: ${this.selected.size}`);
 
-      // Eliminar truncaciones de primer nivel para permitir ver algo
-      for (const dir of rootLevelDirs) {
-        if (truncatedArray.some((d) => d !== dir && d.startsWith(dir + "/"))) {
-          console.log(
-            `Eliminando truncado de directorio de primer nivel: ${dir}`
-          );
-          this.truncated.delete(dir);
-        }
-      }
-    }
+    const { node: fileTree, count } = await this.build(root, ig, root);
+
+    console.log(
+      `✅ Construidos ${count} nodos totales – truncados: ${this.truncated.size}`
+    );
+
+    /* 3️⃣  ASCII */
+    console.time("🕒 ascii");
+    const treeText = this.ascii(fileTree, "");
+    console.timeEnd("🕒 ascii");
+
+    console.timeEnd("🕒 TreeGenerator.generatePrunedTreeText");
 
     return {
-      treeText: this.format(tree, ""),
-      fileTree: tree,
-      truncatedPaths: new Set(this.truncated), // copia
+      treeText,
+      fileTree,
+      truncatedPaths: new Set(this.truncated),
     };
   }
 
-  /**
-   * Núcleo recursivo de TreeGenerator: construye el FileTree y cuenta entradas.
-   */
+  /*─────────────────  Recursivo  ─────────────────*/
+  // ────────────────────────────────────────────────────────────────────
+  // Método build() completo, con chequeo “gigante” basado en isHugeDirectory()
+  // ────────────────────────────────────────────────────────────────────
   private async build(
     dirFs: string,
     ig: Ignore,
     root: string
   ): Promise<{ node: FileTree; count: number }> {
-    // 1. Relativo y nodo base
+    this.totalDirectoriesProcessed++;
+
     const relDir = toPosix(path.relative(root, dirFs));
+
+    // 0) Si es un sub-árbol enorme (saltando ignorados) ⇒ placeholder inmediato
+    if (
+      relDir !== "" && // nunca la raíz
+      !(this.selected.size && this.hasExplicitSelectionInside(relDir)) &&
+      (await this.isHugeDirectory(dirFs, ig, root))
+    ) {
+      this.truncated.add(relDir);
+      // Nodo “fake” para que forceTruncate genere el placeholder
+      const fake: FileTree = {
+        name: path.basename(dirFs),
+        path: relDir,
+        isDirectory: true,
+        children: [],
+      };
+      return this.forceTruncate(fake, relDir, this.limits.maxTotal + 1);
+    }
+
+    // 1) Creamos el nodo normal
     const node: FileTree = {
       name: path.basename(dirFs),
       path: relDir,
@@ -126,84 +139,190 @@ export class TreeGenerator {
       children: [],
     };
 
-    // 2. Leer directorio con caché + p-limit
-    const dirents = await this.getDirents(dirFs);
-
-    // 3. Filtrar .ignore
-    const notIgnored = dirents.filter((d) => {
-      const rel = toPosix(path.relative(root, path.join(dirFs, d.name)));
-      return !ig.ignores(rel + (d.isDirectory() ? "/" : ""));
-    });
-
-    // 4. Quedarnos solo con los archivos/carpetas relevantes
-    const relevant = notIgnored.filter((entry) => {
-      const rel = toPosix(path.relative(root, path.join(dirFs, entry.name)));
-      if (entry.isDirectory()) {
-        const prefix = rel === "" ? "" : rel + "/";
-        return this.selectedList.some((f) => f === rel || f.startsWith(prefix));
-      }
-      return this.selectedSet.has(rel);
-    });
-
-    // 5. Truncado rápido por hijos directos
-    //    → NO en la raíz (relDir==='') ni en directorios de primer nivel
-    if (
-      relDir !== "" &&
-      !isRootLevelDir(relDir) &&
-      relevant.length > this.MAX_DIRECT
-    ) {
-      node.isTruncated = true;
-      node.children = [placeholder(relDir, relevant.length)];
-      this.truncated.add(relDir);
-      return { node, count: relevant.length };
+    // 2) truncado visual por nº de hijos directos
+    if (await this.shouldQuickTruncate(dirFs, relDir)) {
+      return this.quickTruncate(node, relDir);
     }
 
-    // 6. Procesar recursivamente y contar totales
+    // 3) Leemos y filtramos entradas relevantes
+    const entries = await this.getRelevantEntries(dirFs, ig, root);
+
     let total = 0;
-    for (const entry of relevant) {
-      const abs = path.join(dirFs, entry.name);
-      const rel = toPosix(path.relative(root, abs));
+    for (const entry of entries) {
+      total += await this.processEntry(entry, dirFs, ig, root, node);
 
-      if (entry.isDirectory()) {
-        const { node: child, count } = await this.build(abs, ig, root);
-        node.children!.push(child);
-        total += count;
-      } else {
-        node.children!.push({
-          name: entry.name,
-          path: rel,
-          isDirectory: false,
-        });
-        total += 1;
-      }
-
-      // 7. Truncado por tamaño de sub-árbol
-      //    → idem: nunca en raíz ni nivel-1
-      if (relDir !== "" && !isRootLevelDir(relDir) && total > this.MAX_TOTAL) {
-        node.isTruncated = true;
-        node.children = [placeholder(relDir, total)];
-        this.truncated.add(relDir);
-        return { node, count: total };
+      // 4) truncado por tamaño total si excede maxTotal
+      if (this.shouldTruncateByTotal(relDir, total)) {
+        return this.forceTruncate(node, relDir, total);
       }
     }
 
-    // 8. Si llegamos aquí, no truncamos: devolvemos el nodo completo
+    // 5) Todo procesado sin truncar
     return { node, count: total };
   }
 
-  /** lectura de directorio con caché + p-limit */
+  /*─────────────────  Decisiones de truncado  ─────────────────*/
+
+  private quickTruncate(node: FileTree, relDir: string) {
+    node.isTruncated = true;
+    node.children = [PLACEHOLDER(relDir, this.limits.maxDirect + 1)];
+    this.truncated.add(relDir);
+    return { node, count: this.limits.maxDirect + 1 };
+  }
+
+  private forceTruncate(node: FileTree, relDir: string, total: number) {
+    node.isTruncated = true;
+    node.children = [PLACEHOLDER(relDir, total)];
+    this.truncated.add(relDir);
+    return { node, count: total };
+  }
+
+  /*─────────────────  Lectura + filtrado  ─────────────────*/
+
+  private async getRelevantEntries(dirFs: string, ig: Ignore, root: string) {
+    const dirents = await this.getDirents(dirFs);
+    const relevant: Dirent[] = [];
+
+    for (const d of dirents) {
+      if (!(await this.isRelevant(d, dirFs, ig, root))) continue;
+      relevant.push(d);
+    }
+
+    this.totalEntriesSkipped += dirents.length - relevant.length;
+    return relevant;
+  }
+
   private async getDirents(dir: string): Promise<Dirent[]> {
-    const cached = this.readdirCache.get(dir);
-    if (cached) return cached;
-    const dirents = await this.limit(() =>
+    const cached = this.cache.get(dir);
+    if (cached) {
+      this.direntCacheHits++;
+      return cached;
+    }
+    const dirents = await this.io(() =>
       fs.readdir(dir, { withFileTypes: true })
     );
-    this.readdirCache.set(dir, dirents);
+    this.cache.set(dir, dirents);
     return dirents;
   }
 
-  /** ASCII */
-  private format(n: FileTree, p: string): string {
+  /**
+   * Decide si una entrada (archivo o directorio) merece entrar al árbol.
+   *
+   * Reglas (en orden):
+   *   1.  Se descarta si es enlace simbólico.
+   *   2.  Se descarta si coincide con .gitignore o patrones custom.
+   *   3.  Si es directorio y su sub-árbol supera `maxTotal` nodos
+   *       **se descarta SIEMPRE**, aunque el usuario lo hubiera elegido.
+   *   4.  Si NO hay selección explícita → lo que queda es relevante.
+   *   5.  Con selección explícita:
+   *         • dir  → relevante si `prefixes` contiene su path.
+   *         • file → relevante si `selected` contiene su path.
+   */
+  private async isRelevant(
+    d: Dirent,
+    dirFs: string,
+    ig: Ignore,
+    root: string
+  ): Promise<boolean> {
+    /* 1 ─ simbólicos fuera */
+    if (d.isSymbolicLink()) return false;
+
+    const abs = path.join(dirFs, d.name);
+    const rel = toPosix(path.relative(root, abs));
+
+    /* 2 ─ .gitignore / patrones custom */
+    if (ig.ignores(rel + (d.isDirectory() ? "/" : ""))) return false;
+
+    /* 4 ─ sin selección explícita ⇒ aceptar */
+    if (this.selected.size === 0) return true;
+
+    /* 5 ─ con selección explícita */
+    return d.isDirectory() ? this.prefixes.has(rel) : this.selected.has(rel);
+  }
+
+  /**
+   * Devuelve true si el sub-árbol de `dirFs` supera `maxTotal` nodos.
+   * Recorre en profundidad pero se corta tan pronto pasa el límite
+   * (≈ O(límite) en vez de O(tamaño real)).
+   */
+  // ────────────────────────────────────────────────────────────────────
+  // Método isHugeDirectory() completo, ahora saltando rutas ignoradas
+  // ────────────────────────────────────────────────────────────────────
+  private async isHugeDirectory(
+    dirFs: string,
+    ig: Ignore,
+    root: string
+  ): Promise<boolean> {
+    const limit = this.limits.maxTotal + 1;
+    let seen = 0;
+    const stack: string[] = [dirFs];
+
+    while (stack.length) {
+      const current = stack.pop()!;
+      let handle: Dir | null = null;
+
+      try {
+        handle = await fs.opendir(current);
+        for await (const entry of handle) {
+          const abs = path.join(current, entry.name);
+          const rel = toPosix(path.relative(root, abs));
+
+          // ⛔ saltar enlaces simbólicos y rutas ignoradas por ig
+          if (
+            entry.isSymbolicLink() ||
+            ig.ignores(rel + (entry.isDirectory() ? "/" : ""))
+          ) {
+            continue;
+          }
+
+          seen++;
+          if (seen >= limit) {
+            // ¡muy grande!
+            return true;
+          }
+
+          if (entry.isDirectory()) {
+            stack.push(abs);
+          }
+        }
+      } catch {
+        // si no podemos leer, prudencia: asumimos “grande”
+        return true;
+      } finally {
+        await handle?.close().catch(() => {});
+      }
+    }
+
+    // no supera el umbral contando sólo lo relevante
+    return false;
+  }
+
+  /*─────────────────  Procesamiento de entradas  ─────────────────*/
+
+  private async processEntry(
+    entry: Dirent,
+    dirFs: string,
+    ig: Ignore,
+    root: string,
+    parent: FileTree
+  ): Promise<number> {
+    const abs = path.join(dirFs, entry.name);
+    const rel = toPosix(path.relative(root, abs));
+
+    if (entry.isDirectory()) {
+      const { node, count } = await this.build(abs, ig, root);
+      parent.children!.push(node);
+      return count;
+    }
+
+    this.totalFilesProcessed++;
+    parent.children!.push({ name: entry.name, path: rel, isDirectory: false });
+    return 1;
+  }
+
+  /*─────────────────  Utilidades  ─────────────────*/
+
+  private ascii(n: FileTree, p: string): string {
     if (!n.children?.length) return "";
     return n.children
       .map((c, i) => {
@@ -211,22 +330,47 @@ export class TreeGenerator {
         const line = `${p}${last ? "`-- " : "|-- "}${c.name}\n`;
         return (
           line +
-          (c.isDirectory ? this.format(c, p + (last ? "    " : "|   ")) : "")
+          (c.isDirectory ? this.ascii(c, p + (last ? "    " : "|   ")) : "")
         );
       })
       .join("");
   }
 
-  /** util para CompactProject mejorado */
-  public isInsideTruncatedDir(file: string, truncated: Set<string>): boolean {
-    const posix = toPosix(file);
-    for (const dir of truncated) {
-      if (dir === "" || !dir) continue; // Ignorar la raíz
-      // Verificación más estricta: el archivo debe estar dentro de la carpeta truncada
-      if (posix === dir || posix.startsWith(dir + "/")) {
-        return true;
-      }
+  /** true si `file` está dentro de un directorio truncado */
+  public isInsideTruncatedDir(file: string, trunc: Set<string>): boolean {
+    const f = toPosix(file);
+    for (const dir of trunc) {
+      if (f === dir || f.startsWith(dir + "/")) return true;
     }
+    return false;
+  }
+
+  /*─────────────────  Decisiones de truncado  ─────────────────*/
+
+  /** n hijos directos > maxDirect  ⇒ placeholder + no descendemos */
+  private async shouldQuickTruncate(dirFs: string, relDir: string) {
+    if (relDir === "") return false; // raíz nunca
+    const limit = this.limits.maxDirect + 1;
+    const n = await quickCountDir(dirFs, limit).catch(async () => {
+      try {
+        return (await fs.readdir(dirFs)).length;
+      } catch {
+        return limit;
+      }
+    });
+    return n > this.limits.maxDirect;
+  }
+
+  /** sub-árbol > maxTotal  ⇒ placeholder + no descendemos */
+  private shouldTruncateByTotal(relDir: string, total: number) {
+    if (relDir === "") return false; // raíz nunca
+    return total > this.limits.maxTotal;
+  }
+
+  /** helper opcional – quedará para la futura “excepción manual” */
+  private hasExplicitSelectionInside(_dir: string): boolean {
+    /* Mantén la firma para futuros flags.  
+     Ahora devuelve siempre false → no evita truncar. */
     return false;
   }
 }
