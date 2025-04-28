@@ -38,7 +38,7 @@ export class TreeGenerator {
   private selected = new Set<string>(); // paths elegidos por el usuario (posix)
   private prefixes!: PrefixSet; // todos sus ancestros
   private preTruncated = new Set<string>(); // ← resultado del PreScan
-  private scanDepth = 4; // valor por defecto, se recalcula
+  private scanDepth = 3; // valor por defecto, se recalcula
 
   /* métricas solo para logging */
   private direntCacheHits = 0;
