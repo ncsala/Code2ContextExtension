@@ -35,7 +35,7 @@ export class CompactProject implements CompactUseCase {
     private readonly git: GitPort,
     progressReporter?: ProgressReporter
   ) {
-    this.treeGenerator = new TreeGenerator({ maxDirect: 50, maxTotal: 200 });
+    this.treeGenerator = new TreeGenerator({ maxDirect: 30, maxTotal: 80 });
     this.contentMinifier = new ContentMinifier();
     this.fileFilter = new FileFilter();
     this.progressReporter = progressReporter || new ConsoleProgressReporter();
