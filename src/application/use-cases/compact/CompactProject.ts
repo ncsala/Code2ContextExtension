@@ -17,6 +17,7 @@ import { ContentFormatter } from "../../services/content/ContentFormatter";
 import pLimit from "p-limit";
 import { fileListFromTree } from "../../../shared/utils/fileListFromTree";
 import { FileTree } from "../../../domain/model/FileTree";
+
 const { TREE_MARKER, INDEX_MARKER, FILE_MARKER } = ContentFormatter;
 
 /**
@@ -35,7 +36,7 @@ export class CompactProject implements CompactUseCase {
     private readonly git: GitPort,
     progressReporter?: ProgressReporter
   ) {
-    this.treeGenerator = new TreeGenerator({ maxDirect: 40, maxTotal: 200 });
+    this.treeGenerator = new TreeGenerator({ maxDirect: 40, maxTotal: 2000 });
     this.contentMinifier = new ContentMinifier();
     this.fileFilter = new FileFilter();
     this.progressReporter = progressReporter || new ConsoleProgressReporter();
@@ -127,13 +128,18 @@ export class CompactProject implements CompactUseCase {
       this.progressReporter.log(`🎉 Proceso completado con éxito`);
       this.progressReporter.endOperation("CompactProject.execute");
       return { ok: true, content: combined };
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const errMsg =
+        e && typeof e === "object" && "message" in e
+          ? (e as Error).message
+          : String(e);
+
       this.progressReporter.error(
-        `❌ Error durante la compactación: ${e?.message ?? String(e)}`,
+        `❌ Error durante la compactación: ${errMsg}`,
         e
       );
       this.progressReporter.endOperation("CompactProject.execute");
-      return { ok: false, error: e?.message ?? String(e) };
+      return { ok: false, error: errMsg };
     }
   }
 
@@ -150,8 +156,6 @@ export class CompactProject implements CompactUseCase {
     this.progressReporter.log(`✅ Directorio encontrado: ${root}`);
   }
 
-  /** Construye el árbol con la lógica de truncado */
-  /** Construye el árbol con la lógica de truncado */
   private async buildTree(opts: CompactOptions) {
     this.progressReporter.startOperation("getIgnorePatterns");
     this.progressReporter.log(`🔍 Obteniendo patrones de ignorado...`);
@@ -193,7 +197,6 @@ export class CompactProject implements CompactUseCase {
     );
     this.progressReporter.endOperation("generateTreeText");
 
-    // ¡Ahora también devolvemos truncatedPaths!
     return { treeText, fileTree, truncatedPaths };
   }
 
@@ -213,7 +216,7 @@ export class CompactProject implements CompactUseCase {
     let processed = 0;
     let lastProgress = 0;
 
-    const out = await Promise.all(
+    const results = await Promise.all(
       paths.map((p) =>
         limit(async () => {
           const content = await this.fs.readFile(path.join(root, p));
@@ -233,8 +236,8 @@ export class CompactProject implements CompactUseCase {
       )
     );
 
-    const result = out.filter((e): e is FileEntry => e !== null);
-    const failedCount = totalFiles - result.length;
+    const loadedFiles = results.filter((e): e is FileEntry => e !== null);
+    const failedCount = totalFiles - loadedFiles.length;
 
     if (failedCount > 0) {
       this.progressReporter.warn(
@@ -242,7 +245,7 @@ export class CompactProject implements CompactUseCase {
       );
     }
 
-    return result;
+    return loadedFiles;
   }
 
   private composeOutput(
@@ -271,6 +274,7 @@ export class CompactProject implements CompactUseCase {
 
     const index = this.formatter.generateIndex(indexPaths);
     const parts: string[] = [header];
+
     if (treeText) {
       this.progressReporter.log(
         `🌳 Incluyendo estructura de árbol: ${
@@ -279,6 +283,7 @@ export class CompactProject implements CompactUseCase {
       );
       parts.push(`${TREE_MARKER}\n${treeText}\n\n`);
     }
+
     parts.push(`${INDEX_MARKER}\n${index}\n\n`);
 
     this.progressReporter.log(
@@ -297,7 +302,6 @@ export class CompactProject implements CompactUseCase {
         : f.content;
 
       totalProcessedSize += txt.length;
-
       parts.push(
         this.formatter.formatFileEntry(i++, f.path, txt, FILE_MARKER),
         "\n"
@@ -327,7 +331,9 @@ export class CompactProject implements CompactUseCase {
   }
 
   private async writeIfNeeded(outPath: string | undefined, content: string) {
-    if (!outPath) return;
+    if (!outPath) {
+      return;
+    }
 
     this.progressReporter.log(
       `💾 Escribiendo archivo de salida: ${outPath} (${this.formatFileSize(
@@ -336,7 +342,6 @@ export class CompactProject implements CompactUseCase {
     );
 
     const ok = await this.fs.writeFile(outPath, content);
-
     if (ok === false) {
       this.progressReporter.error(`❌ Error al escribir en ${outPath}`);
       throw new Error(`No se pudo escribir en ${outPath}`);
@@ -347,13 +352,8 @@ export class CompactProject implements CompactUseCase {
     );
   }
 
-  /**
-   * Obtiene todos los patrones de ignorado aplicables
-   */
   private async getIgnorePatterns(options: CompactOptions): Promise<string[]> {
-    // Obtener patrones de ignorado desde git si está habilitado
     const gitEnabled = options.includeGitIgnore === true;
-
     this.progressReporter.log(
       `🔍 Configuración de ignorado: includeGitIgnore=${
         gitEnabled ? "sí" : "no"
@@ -365,7 +365,6 @@ export class CompactProject implements CompactUseCase {
       `📋 Patrones predeterminados: ${defaultPatterns.length}`
     );
 
-    // Obtener patrones de Git si está habilitado
     let gitIgnorePatterns: string[] = [];
     if (gitEnabled) {
       this.progressReporter.startOperation("getGitIgnorePatterns");
@@ -379,7 +378,6 @@ export class CompactProject implements CompactUseCase {
       this.progressReporter.endOperation("getGitIgnorePatterns");
     }
 
-    // Patrones personalizados
     const customPatterns = options.customIgnorePatterns || [];
     if (customPatterns.length > 0) {
       this.progressReporter.log(
@@ -387,32 +385,25 @@ export class CompactProject implements CompactUseCase {
       );
     }
 
-    // Combinar patrones con el orden correcto (los últimos tienen mayor prioridad)
     const allPatterns = [
       ...defaultPatterns,
       ...gitIgnorePatterns,
       ...customPatterns,
     ];
-
     this.progressReporter.log(
       `📋 Total de patrones combinados: ${allPatterns.length}`
     );
-
     return allPatterns;
   }
-
-  // Funciones auxiliares para los logs
 
   private countFilesInTree(tree: FileTree): number {
     if (!tree.children || tree.children.length === 0) {
       return 1; // Contar el nodo actual
     }
-
     let count = 1; // Contar el nodo actual
     for (const child of tree.children) {
       count += this.countFilesInTree(child);
     }
-
     return count;
   }
 
@@ -429,7 +420,6 @@ export class CompactProject implements CompactUseCase {
       size /= 1024;
       unitIndex++;
     }
-
     return `${size.toFixed(2)} ${units[unitIndex]}`;
   }
 }

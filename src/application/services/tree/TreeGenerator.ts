@@ -55,9 +55,9 @@ export class TreeGenerator {
 
   /*─────────────────  API pública  ─────────────────*/
 
-  /*──────────────────────────────
+  /**
    * 1. generatePrunedTreeText()
-   *──────────────────────────────*/
+   */
   async generatePrunedTreeText(
     root: string,
     ig: Ignore,
@@ -152,9 +152,7 @@ export class TreeGenerator {
     };
   }
 
-  /*───────────────────────────
-   * preScanHugeDirs() – versión completa
-   *───────────────────────────*/
+  /*─────────────────  preScanHugeDirs()  ─────────────────*/
   private async preScanHugeDirs(
     startDir: string,
     ig: Ignore,
@@ -214,9 +212,7 @@ export class TreeGenerator {
     return huge;
   }
 
-  /*──────────────────────────────
-   * 3. quickCountDescendants()
-   *──────────────────────────────*/
+  /*─────────────────  quickCountDescendants()  ─────────────────*/
   private async quickCountDescendants(
     dirFs: string,
     ig: Ignore,
@@ -230,10 +226,7 @@ export class TreeGenerator {
       for (const entry of await this.getDirents(cur)) {
         const abs = path.join(cur, entry.name);
         const rel = toPosix(path.relative(root, abs));
-        if (
-          entry.isSymbolicLink() ||
-          ig.ignores(rel + (entry.isDirectory() ? "/" : ""))
-        ) {
+        if (this.isLinkOrIgnored(entry, rel, ig)) {
           continue; // ignorado ⇒ no cuenta
         }
         seen++;
@@ -244,7 +237,8 @@ export class TreeGenerator {
     return seen; // tamaño real (< limit)
   }
 
-  /* Devuelve sólo subdirectorios relevantes (sin ignores) */
+  /*─────────────────  getSubDirs()  ─────────────────*/
+  /** Devuelve sólo subdirectorios relevantes (sin ignores) */
   private async getSubDirs(dirFs: string, ig: Ignore): Promise<string[]> {
     const out: string[] = [];
     for (const d of await this.getDirents(dirFs)) {
@@ -256,10 +250,8 @@ export class TreeGenerator {
     return out;
   }
 
-  /*─────────────────  Recursivo  ─────────────────*/
-
   /*───────────────────────────────────────────────────────────────────
-   * 4. build() – árbol con chequeos de pre-scan y truncados calientes
+   *  build() – árbol con chequeos de pre-scan y truncados en caliente
    *───────────────────────────────────────────────────────────────────*/
   private async build(
     dirFs: string,
@@ -280,7 +272,7 @@ export class TreeGenerator {
       if (isTopLevel) {
         console.log(`✂️ Directorio pre-truncado: ${relDir}`);
       }
-      return this.forceTruncate(
+      return this.truncateNode(
         {
           name: path.basename(dirFs),
           path: relDir,
@@ -292,7 +284,7 @@ export class TreeGenerator {
       );
     }
 
-    // b) Chequeo en caliente para carpetas que quedaron fuera del pre-scan
+    // b) Chequeo en caliente para carpetas no identificadas en pre-scan
     if (
       relDir !== "" &&
       !this.hasExplicitSelectionInside(relDir) &&
@@ -301,7 +293,7 @@ export class TreeGenerator {
       if (isTopLevel) {
         console.log(`🔍 Detectado directorio grande en tiempo real: ${relDir}`);
       }
-      return this.forceTruncate(
+      return this.truncateNode(
         {
           name: path.basename(dirFs),
           path: relDir,
@@ -330,7 +322,11 @@ export class TreeGenerator {
           }`
         );
       }
-      return this.quickTruncate(node, relDir);
+      return this.truncateNode(
+        node,
+        relDir,
+        this.limits.maxDirect + 1 /* count */
+      );
     }
 
     // 2) Leemos y filtramos entradas relevantes
@@ -344,7 +340,7 @@ export class TreeGenerator {
       );
     }
 
-    // 3) Procesamos cada entrada, acumular count
+    // 3) Procesamos cada entrada, acumulando count
     let total = 0;
     for (const entry of entries) {
       total += await this.processEntry(entry, dirFs, ig, root, node);
@@ -358,7 +354,7 @@ export class TreeGenerator {
             }): ${relDir || "directorio raíz"}`
           );
         }
-        return this.forceTruncate(node, relDir, total);
+        return this.truncateNode(node, relDir, total);
       }
     }
 
@@ -375,14 +371,11 @@ export class TreeGenerator {
 
   /*─────────────────  Decisiones de truncado  ─────────────────*/
 
-  private quickTruncate(node: FileTree, relDir: string) {
-    node.isTruncated = true;
-    node.children = [PLACEHOLDER(relDir, this.limits.maxDirect + 1)];
-    this.truncated.add(relDir);
-    return { node, count: this.limits.maxDirect + 1 };
-  }
-
-  private forceTruncate(node: FileTree, relDir: string, total: number) {
+  private truncateNode(
+    node: FileTree,
+    relDir: string,
+    total: number
+  ): { node: FileTree; count: number } {
     node.isTruncated = true;
     node.children = [PLACEHOLDER(relDir, total)];
     this.truncated.add(relDir);
@@ -396,7 +389,9 @@ export class TreeGenerator {
     const relevant: Dirent[] = [];
 
     for (const d of dirents) {
-      if (!(await this.isRelevant(d, dirFs, ig, root))) continue;
+      if (!(await this.isRelevant(d, dirFs, ig, root))) {
+        continue;
+      }
       relevant.push(d);
     }
 
@@ -417,49 +412,33 @@ export class TreeGenerator {
     return dirents;
   }
 
-  /**
-   * Decide si una entrada (archivo o directorio) merece entrar al árbol.
-   *
-   * Reglas (en orden):
-   *   1.  Se descarta si es enlace simbólico.
-   *   2.  Se descarta si coincide con .gitignore o patrones custom.
-   *   3.  Si es directorio y su sub-árbol supera `maxTotal` nodos
-   *       **se descarta SIEMPRE**, aunque el usuario lo hubiera elegido.
-   *   4.  Si NO hay selección explícita → lo que queda es relevante.
-   *   5.  Con selección explícita:
-   *         • dir  → relevante si `prefixes` contiene su path.
-   *         • file → relevante si `selected` contiene su path.
-   */
   private async isRelevant(
     d: Dirent,
     dirFs: string,
     ig: Ignore,
     root: string
   ): Promise<boolean> {
-    /* 1 ─ simbólicos fuera */
-    if (d.isSymbolicLink()) return false;
-
+    /* 1 ─ simbólicos fuera o ignorados */
     const abs = path.join(dirFs, d.name);
     const rel = toPosix(path.relative(root, abs));
-
-    /* 2 ─ .gitignore / patrones custom */
-    if (ig.ignores(rel + (d.isDirectory() ? "/" : ""))) return false;
+    if (this.isLinkOrIgnored(d, rel, ig)) {
+      return false;
+    }
 
     /* 4 ─ sin selección explícita ⇒ aceptar */
-    if (this.selected.size === 0) return true;
+    if (this.selected.size === 0) {
+      return true;
+    }
 
     /* 5 ─ con selección explícita */
     return d.isDirectory() ? this.prefixes.has(rel) : this.selected.has(rel);
   }
 
   /**
-   * Devuelve true si el sub-árbol de `dirFs` supera `maxTotal` nodos.
+   * Decide si el sub-árbol de `dirFs` supera `maxTotal` nodos.
    * Recorre en profundidad pero se corta tan pronto pasa el límite
    * (≈ O(límite) en vez de O(tamaño real)).
    */
-  // ────────────────────────────────────────────────────────────────────
-  // Método isHugeDirectory() completo, ahora saltando rutas ignoradas
-  // ────────────────────────────────────────────────────────────────────
   private async isHugeDirectory(
     dirFs: string,
     ig: Ignore,
@@ -479,11 +458,8 @@ export class TreeGenerator {
           const abs = path.join(current, entry.name);
           const rel = toPosix(path.relative(root, abs));
 
-          // ⛔ saltar enlaces simbólicos y rutas ignoradas por ig
-          if (
-            entry.isSymbolicLink() ||
-            ig.ignores(rel + (entry.isDirectory() ? "/" : ""))
-          ) {
+          // ⛔ saltar enlaces simbólicos y rutas ignoradas
+          if (this.isLinkOrIgnored(entry, rel, ig)) {
             continue;
           }
 
@@ -532,7 +508,7 @@ export class TreeGenerator {
     return 1;
   }
 
-  /*─────────────────  Utilidades  ─────────────────*/
+  /*─────────────────  ASCII  ─────────────────*/
 
   private ascii(n: FileTree, p: string): string {
     if (!n.children?.length) return "";
@@ -548,16 +524,18 @@ export class TreeGenerator {
       .join("");
   }
 
+  /*─────────────────  Comprobaciones y utilidades  ─────────────────*/
+
   /** true si `file` está dentro de un directorio truncado */
   public isInsideTruncatedDir(file: string, trunc: Set<string>): boolean {
     const f = toPosix(file);
     for (const dir of trunc) {
-      if (f === dir || f.startsWith(dir + "/")) return true;
+      if (f === dir || f.startsWith(dir + "/")) {
+        return true;
+      }
     }
     return false;
   }
-
-  /*─────────────────  Decisiones de truncado  ─────────────────*/
 
   /** n hijos directos > maxDirect  ⇒ placeholder + no descendemos */
   private async shouldQuickTruncate(dirFs: string, relDir: string) {
@@ -577,7 +555,9 @@ export class TreeGenerator {
   private shouldTruncateByTotal(relDir: string, total: number) {
     if (relDir === "") return false; // nunca la raíz
     /* ⬇️  NO truncar cuando el usuario tiene algo elegido dentro */
-    if (this.hasExplicitSelectionInside(relDir)) return false; // <- 🔧 NUEVA línea
+    if (this.hasExplicitSelectionInside(relDir)) {
+      return false;
+    }
     return total > this.limits.maxTotal;
   }
 
@@ -587,5 +567,15 @@ export class TreeGenerator {
     if (this.selected.has(dir)) return true;
     const prefix = dir ? dir + "/" : "";
     return [...this.selected].some((s) => s.startsWith(prefix));
+  }
+
+  /**
+   * Verifica si la entrada es symlink o está ignorada según `Ignore`.
+   */
+  private isLinkOrIgnored(entry: Dirent, rel: string, ig: Ignore): boolean {
+    return (
+      entry.isSymbolicLink() ||
+      ig.ignores(rel + (entry.isDirectory() ? "/" : ""))
+    );
   }
 }
