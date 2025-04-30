@@ -14,33 +14,21 @@ const PLACEHOLDER = (dir: string, total: number): FileTree => ({
 });
 
 export interface TreeLimits {
-  /** nº de hijos directos antes de truncar -visual-mente  */
+  /** nº de hijos directos antes de truncar -visual-mente */
   maxDirect: number;
-  /** nº de nodos (recursivo) antes de decir "es demasiado grande"          */
+  /** nº de nodos (recursivo) antes de decir "es demasiado grande" */
   maxTotal: number;
 }
 
-/**
- *  ───────────────────────────────────────────────────────────────
- *  Genera un árbol (FileTree) y la versión ASCII:
- *  • Trunca visualmente los directorios con muchos hijos directos.
- *  • **Ignora completamente** los directorios "gigantes" (más de
- *    `maxTotal` nodos en todo su sub-árbol) a menos que el usuario
- *    haya seleccionado algo dentro de ellos.
- *  ───────────────────────────────────────────────────────────────
- */
 export class TreeGenerator {
   private readonly limits: TreeLimits;
   private readonly io = pLimit(32); // I/O paralelo
   private readonly cache = new Map<string, Dirent[]>(); // dir → dirents[]
-
-  private truncated = new Set<string>(); // carpetas truncadas (para saltar contenido)
+  private truncated = new Set<string>(); // carpetas truncadas
   private selected = new Set<string>(); // paths elegidos por el usuario (posix)
-  private prefixes!: PrefixSet; // todos sus ancestros
-  private preTruncated = new Set<string>(); // ← resultado del PreScan
-  private scanDepth = 3; // valor por defecto, se recalcula
+  private prefixes!: PrefixSet; // ancestros de la selección
 
-  /* métricas solo para logging */
+  /* métricas sólo para logging */
   private direntCacheHits = 0;
   private totalDirectoriesProcessed = 0;
   private totalFilesProcessed = 0;
@@ -53,8 +41,7 @@ export class TreeGenerator {
     );
   }
 
-  /*─────────────────  API pública  ─────────────────*/
-
+  /** API pública */
   async generatePrunedTreeText(
     root: string,
     ig: Ignore,
@@ -73,7 +60,7 @@ export class TreeGenerator {
 
     console.time("🕒 TreeGenerator.generatePrunedTreeText");
 
-    // Normalizamos selección y creamos PrefixSet
+    // Preparamos selección y PrefixSet
     this.selected = new Set(selectedPaths.map(toPosix));
     this.prefixes = new PrefixSet(
       [...this.selected].flatMap((p) => {
@@ -81,12 +68,11 @@ export class TreeGenerator {
         return parts.map((_, i) => parts.slice(0, i + 1).join("/"));
       })
     );
-
     console.log(
-      `🔍 Creado PrefixSet con ${this.prefixes["set"].size} prefijos para directorios relevantes`
+      `🔍 PrefixSet con ${this.prefixes["set"].size} prefijos para selección`
     );
 
-    // Reset métricas y sets previa construcción
+    // Reset métricas/estados de build
     this.truncated.clear();
     this.direntCacheHits =
       this.totalDirectoriesProcessed =
@@ -98,20 +84,17 @@ export class TreeGenerator {
     const { node: fileTree, count } = await this.build(root, ig, root);
 
     console.log(
-      `✅ Árbol construido: ${count} nodos totales, ${this.totalDirectoriesProcessed} directorios procesados, ${this.totalFilesProcessed} archivos incluidos`
+      `✅ Árbol construido: ${count} nodos totales, ${this.totalDirectoriesProcessed} directorios, ${this.totalFilesProcessed} archivos`
     );
     console.log(`🔄 Directorios truncados: ${this.truncated.size}`);
     console.log(
-      `💾 Cache: ${this.direntCacheHits} hits, ${this.totalEntriesSkipped} entradas omitidas`
+      `💾 Cache hits: ${this.direntCacheHits}, entradas omitidas: ${this.totalEntriesSkipped}`
     );
 
     console.time("🕒 ascii");
-    console.log(`🖨️ Generando representación ASCII del árbol...`);
+    console.log(`🖨️ Generando ASCII...`);
     const treeText = this.ascii(fileTree, "");
     console.timeEnd("🕒 ascii");
-
-    const treeLines = treeText.split("\n").length;
-    console.log(`📝 Árbol ASCII generado: ${treeLines} líneas`);
 
     console.timeEnd("🕒 TreeGenerator.generatePrunedTreeText");
     console.log(`🏁 PROCESO COMPLETADO`);
@@ -123,107 +106,7 @@ export class TreeGenerator {
     };
   }
 
-  /*─────────────────  preScanHugeDirs()  ─────────────────*/
-  private async preScanHugeDirs(
-    startDir: string,
-    ig: Ignore,
-    root: string
-  ): Promise<Set<string>> {
-    interface Info {
-      size: number;
-      depth: number;
-    }
-    const info = new Map<string, Info>();
-    const q: Array<{ dir: string; depth: number }> = [
-      { dir: startDir, depth: 0 },
-    ];
-
-    /* ▸ 1ª fase – BFS superficial (depth ≤ scanDepth) */
-    while (q.length) {
-      const { dir, depth } = q.shift()!;
-      const rel = toPosix(path.relative(root, dir));
-      const sel = this.hasExplicitSelectionInside(rel);
-
-      const sz = await this.quickCountDescendants(
-        dir,
-        ig,
-        root,
-        this.limits.maxTotal + 1
-      );
-      info.set(rel, { size: sz, depth });
-
-      console.log(
-        `DBG[p1] d:${depth} ${rel || "."} size:${sz}${sel ? " (sel)" : ""}`
-      );
-
-      /* 🔧 SIEMPRE seguir bajando – incluso si sel===true */
-      if (depth < this.scanDepth) {
-        for (const child of await this.getSubDirs(dir, ig)) {
-          q.push({ dir: child, depth: depth + 1 });
-        }
-      }
-    }
-
-    /* ▸ 2ª fase – elegir carpetas a truncar */
-    const huge = new Set<string>();
-    [...info.entries()]
-      .filter(
-        ([dir, { size }]) =>
-          dir !== "" &&
-          size >= this.limits.maxTotal + 1 &&
-          !this.hasExplicitSelectionInside(dir)
-      )
-      .sort((a, b) => b[1].depth - a[1].depth)
-      .forEach(([dir]) => {
-        if ([...huge].some((h) => dir.startsWith(h + "/"))) return;
-        huge.add(dir);
-        console.log(`DBG[p2]   truncate → ${dir}`);
-      });
-
-    return huge;
-  }
-
-  /*─────────────────  quickCountDescendants()  ─────────────────*/
-  private async quickCountDescendants(
-    dirFs: string,
-    ig: Ignore,
-    root: string,
-    limit: number
-  ): Promise<number> {
-    let seen = 0;
-    const stack = [dirFs];
-    while (stack.length) {
-      const cur = stack.pop()!;
-      for (const entry of await this.getDirents(cur)) {
-        const abs = path.join(cur, entry.name);
-        const rel = toPosix(path.relative(root, abs));
-        if (this.isLinkOrIgnored(entry, rel, ig)) {
-          continue; // ignorado ⇒ no cuenta
-        }
-        seen++;
-        if (seen >= limit) return limit; // saturado
-        if (entry.isDirectory()) stack.push(abs);
-      }
-    }
-    return seen; // tamaño real (< limit)
-  }
-
-  /*─────────────────  getSubDirs()  ─────────────────*/
-  /** Devuelve sólo subdirectorios relevantes (sin ignores) */
-  private async getSubDirs(dirFs: string, ig: Ignore): Promise<string[]> {
-    const out: string[] = [];
-    for (const d of await this.getDirents(dirFs)) {
-      if (!d.isDirectory()) continue;
-      const relName = d.name + "/";
-      if (ig.ignores(relName)) continue;
-      out.push(path.join(dirFs, d.name));
-    }
-    return out;
-  }
-
-  /*───────────────────────────────────────────────────────────────────
-   *  build() – árbol con chequeos de pre-scan y truncados en caliente
-   *───────────────────────────────────────────────────────────────────*/
+  /** El “smart quick-truncate”: procesa hijos pequeños primero */
   private async build(
     dirFs: string,
     ig: Ignore,
@@ -237,15 +120,109 @@ export class TreeGenerator {
       console.log(`🔄 Procesando ${relDir || "directorio raíz"}...`);
     }
 
-    // SIEMPRE chequeo en caliente para id. de carpetas gigantes
+    // Nodo base
+    const node: FileTree = {
+      name: path.basename(dirFs),
+      path: relDir,
+      isDirectory: true,
+      children: [],
+    };
+
+    // 1) Leemos sólo las entradas relevantes
+    const entries = await this.getRelevantEntries(dirFs, ig, root);
+    if (isTopLevel) {
+      console.log(
+        `📂 ${relDir || "Directorio raíz"}: ${entries.length} hijos directos`
+      );
+    }
+
+    // 2) Si > maxDirect, aplicamos Smart-Quick
+    if (entries.length > this.limits.maxDirect) {
+      if (isTopLevel) {
+        console.log(
+          `🔍 Smart-quick (>${this.limits.maxDirect} hijos): ${relDir}`
+        );
+      }
+
+      // 2.a) Conteo rápido de cada hijo (hasta maxTotal+1)
+      const measured = await Promise.all(
+        entries.map(async (entry) => {
+          const abs = path.join(dirFs, entry.name);
+          const rel = toPosix(path.relative(root, abs));
+          const cnt = entry.isDirectory()
+            ? await this.quickCountDescendants(
+                abs,
+                ig,
+                root,
+                this.limits.maxTotal + 1
+              )
+            : 1;
+          return { entry, abs, rel, count: cnt };
+        })
+      );
+
+      // 2.b) Ordenamos ascendente por tamaño
+      measured.sort((a, b) => a.count - b.count);
+
+      // 2.c) Procesamos pequeños primero, truncamos sólo los realmente grandes
+      let total = 0;
+      for (const { entry, abs, rel, count } of measured) {
+        if (entry.isDirectory()) {
+          if (
+            count >= this.limits.maxTotal + 1 &&
+            !this.hasExplicitSelectionInside(rel)
+          ) {
+            isTopLevel && console.log(`✂️ Truncando pesado: ${rel}`);
+            node.children!.push(PLACEHOLDER(rel, count));
+            total += count;
+          } else {
+            const { node: childNode, count: childCnt } = await this.build(
+              abs,
+              ig,
+              root
+            );
+            node.children!.push(childNode);
+            total += childCnt;
+          }
+        } else {
+          this.totalFilesProcessed++;
+          node.children!.push({
+            name: entry.name,
+            path: rel,
+            isDirectory: false,
+          });
+          total += 1;
+        }
+
+        // 2.d) Truncado global si superamos maxTotal
+        if (
+          relDir !== "" &&
+          !this.hasExplicitSelectionInside(relDir) &&
+          total > this.limits.maxTotal
+        ) {
+          isTopLevel &&
+            console.log(
+              `✂️ Truncado global (${total} > ${this.limits.maxTotal}): ${relDir}`
+            );
+          return this.truncateNode(node, relDir, this.limits.maxTotal + 1);
+        }
+      }
+
+      isTopLevel &&
+        console.log(`✅ Smart-quick completado: ${relDir} – ${total} nodos`);
+      return { node, count: total };
+    }
+
+    // 3) Si no hay smart-quick, volvemos al flujo tradicional:
+
+    // 3.a) Chequeo temprano de maxTotal
     if (
       relDir !== "" &&
       !this.hasExplicitSelectionInside(relDir) &&
       (await this.isHugeDirectory(dirFs, ig, root))
     ) {
-      if (isTopLevel) {
-        console.log(`🔍 Directorio grande detectado en tiempo real: ${relDir}`);
-      }
+      isTopLevel &&
+        console.log(`🔍 Carpeta gigante detectada en caliente: ${relDir}`);
       return this.truncateNode(
         {
           name: path.basename(dirFs),
@@ -258,61 +235,54 @@ export class TreeGenerator {
       );
     }
 
-    // Nodo normal
-    const node: FileTree = {
-      name: path.basename(dirFs),
-      path: relDir,
-      isDirectory: true,
-      children: [],
-    };
-
-    if (await this.shouldQuickTruncate(dirFs, relDir)) {
-      if (isTopLevel) {
-        console.log(
-          `🔍 Truncado visual por muchos hijos directos: ${
-            relDir || "directorio raíz"
-          }`
-        );
-      }
-      return this.truncateNode(node, relDir, this.limits.maxDirect + 1);
-    }
-
-    const entries = await this.getRelevantEntries(dirFs, ig, root);
-    if (isTopLevel) {
-      console.log(
-        `📂 ${relDir || "Directorio raíz"}: procesando ${
-          entries.length
-        } entradas relevantes`
-      );
-    }
-
+    // 3.b) Build clásico
     let total = 0;
     for (const entry of entries) {
       total += await this.processEntry(entry, dirFs, ig, root, node);
-      if (this.shouldTruncateByTotal(relDir, total)) {
-        if (isTopLevel) {
+      if (
+        relDir !== "" &&
+        !this.hasExplicitSelectionInside(relDir) &&
+        total > this.limits.maxTotal
+      ) {
+        isTopLevel &&
           console.log(
-            `✂️ Truncado por tamaño total (${total} > ${
-              this.limits.maxTotal
-            }): ${relDir || "directorio raíz"}`
+            `✂️ Truncado por maxTotal (${total} > ${this.limits.maxTotal}): ${relDir}`
           );
-        }
-        return this.truncateNode(node, relDir, total);
+        return this.truncateNode(node, relDir, this.limits.maxTotal + 1);
       }
     }
 
-    if (isTopLevel) {
+    isTopLevel &&
       console.log(
-        `✅ Directorio completado: ${
-          relDir || "directorio raíz"
-        } - ${total} nodos totales`
+        `✅ Carpeta completada: ${relDir || "raíz"} – ${total} nodos totales`
       );
-    }
     return { node, count: total };
   }
 
-  /*─────────────────  Decisiones de truncado  ─────────────────*/
+  /** Método helper: recuento rápido hasta límite */
+  private async quickCountDescendants(
+    dirFs: string,
+    ig: Ignore,
+    root: string,
+    limit: number
+  ): Promise<number> {
+    let seen = 0;
+    const stack = [dirFs];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      for (const entry of await this.getDirents(cur)) {
+        const abs = path.join(cur, entry.name);
+        const rel = toPosix(path.relative(root, abs));
+        if (this.isLinkOrIgnored(entry, rel, ig)) continue;
+        seen++;
+        if (seen >= limit) return seen;
+        if (entry.isDirectory()) stack.push(abs);
+      }
+    }
+    return seen;
+  }
 
+  /** Trunca un nodo con placeholder */
   private truncateNode(
     node: FileTree,
     relDir: string,
@@ -324,23 +294,18 @@ export class TreeGenerator {
     return { node, count: total };
   }
 
-  /*─────────────────  Lectura + filtrado  ─────────────────*/
-
+  /** Filtra y devuelve Dirent relevantes */
   private async getRelevantEntries(dirFs: string, ig: Ignore, root: string) {
     const dirents = await this.getDirents(dirFs);
     const relevant: Dirent[] = [];
-
     for (const d of dirents) {
-      if (!(await this.isRelevant(d, dirFs, ig, root))) {
-        continue;
-      }
-      relevant.push(d);
+      if (await this.isRelevant(d, dirFs, ig, root)) relevant.push(d);
     }
-
     this.totalEntriesSkipped += dirents.length - relevant.length;
     return relevant;
   }
 
+  /** Lee y cachea readdir */
   private async getDirents(dir: string): Promise<Dirent[]> {
     const cached = this.cache.get(dir);
     if (cached) {
@@ -354,33 +319,21 @@ export class TreeGenerator {
     return dirents;
   }
 
+  /** Decisión de inclusión */
   private async isRelevant(
     d: Dirent,
     dirFs: string,
     ig: Ignore,
     root: string
   ): Promise<boolean> {
-    /* 1 ─ simbólicos fuera o ignorados */
     const abs = path.join(dirFs, d.name);
     const rel = toPosix(path.relative(root, abs));
-    if (this.isLinkOrIgnored(d, rel, ig)) {
-      return false;
-    }
-
-    /* 4 ─ sin selección explícita ⇒ aceptar */
-    if (this.selected.size === 0) {
-      return true;
-    }
-
-    /* 5 ─ con selección explícita */
+    if (this.isLinkOrIgnored(d, rel, ig)) return false;
+    if (this.selected.size === 0) return true;
     return d.isDirectory() ? this.prefixes.has(rel) : this.selected.has(rel);
   }
 
-  /**
-   * Decide si el sub-árbol de `dirFs` supera `maxTotal` nodos.
-   * Recorre en profundidad pero se corta tan pronto pasa el límite
-   * (≈ O(límite) en vez de O(tamaño real)).
-   */
+  /** Detecta subárboles gigantes */
   private async isHugeDirectory(
     dirFs: string,
     ig: Ignore,
@@ -389,46 +342,29 @@ export class TreeGenerator {
     const limit = this.limits.maxTotal + 1;
     let seen = 0;
     const stack: string[] = [dirFs];
-
     while (stack.length) {
-      const current = stack.pop()!;
+      const cur = stack.pop()!;
       let handle: Dir | null = null;
-
       try {
-        handle = await fs.opendir(current);
+        handle = await fs.opendir(cur);
         for await (const entry of handle) {
-          const abs = path.join(current, entry.name);
+          const abs = path.join(cur, entry.name);
           const rel = toPosix(path.relative(root, abs));
-
-          // ⛔ saltar enlaces simbólicos y rutas ignoradas
-          if (this.isLinkOrIgnored(entry, rel, ig)) {
-            continue;
-          }
-
+          if (this.isLinkOrIgnored(entry, rel, ig)) continue;
           seen++;
-          if (seen >= limit) {
-            // ¡muy grande!
-            return true;
-          }
-
-          if (entry.isDirectory()) {
-            stack.push(abs);
-          }
+          if (seen >= limit) return true;
+          if (entry.isDirectory()) stack.push(abs);
         }
       } catch {
-        // si no podemos leer, prudencia: asumimos "grande"
         return true;
       } finally {
         await handle?.close().catch(() => {});
       }
     }
-
-    // no supera el umbral contando sólo lo relevante
     return false;
   }
 
-  /*─────────────────  Procesamiento de entradas  ─────────────────*/
-
+  /** Procesa ficheros y subdirectorios */
   private async processEntry(
     entry: Dirent,
     dirFs: string,
@@ -438,20 +374,17 @@ export class TreeGenerator {
   ): Promise<number> {
     const abs = path.join(dirFs, entry.name);
     const rel = toPosix(path.relative(root, abs));
-
     if (entry.isDirectory()) {
       const { node, count } = await this.build(abs, ig, root);
       parent.children!.push(node);
       return count;
     }
-
     this.totalFilesProcessed++;
     parent.children!.push({ name: entry.name, path: rel, isDirectory: false });
     return 1;
   }
 
-  /*─────────────────  ASCII  ─────────────────*/
-
+  /** Genera ASCII del árbol */
   private ascii(n: FileTree, p: string): string {
     if (!n.children?.length) return "";
     return n.children
@@ -466,44 +399,16 @@ export class TreeGenerator {
       .join("");
   }
 
-  /*─────────────────  Comprobaciones y utilidades  ─────────────────*/
-
-  /** true si `file` está dentro de un directorio truncado */
+  /** ¿Dentro de carpeta truncada? */
   public isInsideTruncatedDir(file: string, trunc: Set<string>): boolean {
     const f = toPosix(file);
     for (const dir of trunc) {
-      if (f === dir || f.startsWith(dir + "/")) {
-        return true;
-      }
+      if (f === dir || f.startsWith(dir + "/")) return true;
     }
     return false;
   }
 
-  /** n hijos directos > maxDirect  ⇒ placeholder + no descendemos */
-  private async shouldQuickTruncate(dirFs: string, relDir: string) {
-    if (relDir === "") return false; // raíz nunca
-    const limit = this.limits.maxDirect + 1;
-    const n = await quickCountDir(dirFs, limit).catch(async () => {
-      try {
-        return (await fs.readdir(dirFs)).length;
-      } catch {
-        return limit;
-      }
-    });
-    return n > this.limits.maxDirect;
-  }
-
-  /** sub-árbol > maxTotal ⇒ placeholder … */
-  private shouldTruncateByTotal(relDir: string, total: number) {
-    if (relDir === "") return false; // nunca la raíz
-    /* ⬇️  NO truncar cuando el usuario tiene algo elegido dentro */
-    if (this.hasExplicitSelectionInside(relDir)) {
-      return false;
-    }
-    return total > this.limits.maxTotal;
-  }
-
-  /** helper opcional – quedará para la futura "excepción manual" */
+  /** No truncar si hay selección dentro */
   private hasExplicitSelectionInside(dir: string): boolean {
     if (this.selected.size === 0) return false;
     if (this.selected.has(dir)) return true;
@@ -511,9 +416,7 @@ export class TreeGenerator {
     return [...this.selected].some((s) => s.startsWith(prefix));
   }
 
-  /**
-   * Verifica si la entrada es symlink o está ignorada según `Ignore`.
-   */
+  /** Symlinks o paths ignorados */
   private isLinkOrIgnored(entry: Dirent, rel: string, ig: Ignore): boolean {
     return (
       entry.isSymbolicLink() ||
