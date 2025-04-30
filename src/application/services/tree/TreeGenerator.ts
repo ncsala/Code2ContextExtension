@@ -90,7 +90,6 @@ export class TreeGenerator {
     );
 
     /* Profundidad fija de pre-scan (cámbiala cuando quieras) */
-    this.scanDepth = 4;
     console.log(
       `📊 Configuración de pre-scan: profundidad máxima = ${this.scanDepth}`
     );
