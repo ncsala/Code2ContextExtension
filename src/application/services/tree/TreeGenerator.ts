@@ -55,9 +55,6 @@ export class TreeGenerator {
 
   /*─────────────────  API pública  ─────────────────*/
 
-  /**
-   * 1. generatePrunedTreeText()
-   */
   async generatePrunedTreeText(
     root: string,
     ig: Ignore,
@@ -76,7 +73,7 @@ export class TreeGenerator {
 
     console.time("🕒 TreeGenerator.generatePrunedTreeText");
 
-    /* Selección normalizada y PrefixSet */
+    // Normalizamos selección y creamos PrefixSet
     this.selected = new Set(selectedPaths.map(toPosix));
     this.prefixes = new PrefixSet(
       [...this.selected].flatMap((p) => {
@@ -89,32 +86,7 @@ export class TreeGenerator {
       `🔍 Creado PrefixSet con ${this.prefixes["set"].size} prefijos para directorios relevantes`
     );
 
-    /* Profundidad fija de pre-scan (cámbiala cuando quieras) */
-    console.log(
-      `📊 Configuración de pre-scan: profundidad máxima = ${this.scanDepth}`
-    );
-
-    /* ─── Pre-scan BFS limitado ─── */
-    console.time("🕒 preScan");
-    console.log(
-      `🔍 Iniciando pre-scan para identificar directorios grandes...`
-    );
-    this.preTruncated = await this.preScanHugeDirs(root, ig, root);
-    console.timeEnd("🕒 preScan");
-    console.log(
-      `🔍 Pre-scan completado: ${this.preTruncated.size} carpetas identificadas como "grandes" (serán truncadas)`
-    );
-
-    if (this.preTruncated.size > 0) {
-      const sampleDirs = [...this.preTruncated].slice(0, 3);
-      console.log(
-        `📁 Ejemplos de directorios truncados: ${sampleDirs.join(", ")}${
-          this.preTruncated.size > 3 ? "..." : ""
-        }`
-      );
-    }
-
-    /* Reset métricas y sets del build real */
+    // Reset métricas y sets previa construcción
     this.truncated.clear();
     this.direntCacheHits =
       this.totalDirectoriesProcessed =
@@ -259,38 +231,20 @@ export class TreeGenerator {
   ): Promise<{ node: FileTree; count: number }> {
     this.totalDirectoriesProcessed++;
     const relDir = toPosix(path.relative(root, dirFs));
-
-    // Añadir log solo para directorios importantes (raíz o profundidad 1)
     const isTopLevel = relDir === "" || !relDir.includes("/");
+
     if (isTopLevel) {
       console.log(`🔄 Procesando ${relDir || "directorio raíz"}...`);
     }
 
-    // a) Si el pre-scan marcó este directorio como "gigante", truncamos y salimos
-    if (relDir !== "" && this.preTruncated.has(relDir)) {
-      if (isTopLevel) {
-        console.log(`✂️ Directorio pre-truncado: ${relDir}`);
-      }
-      return this.truncateNode(
-        {
-          name: path.basename(dirFs),
-          path: relDir,
-          isDirectory: true,
-          children: [],
-        },
-        relDir,
-        this.limits.maxTotal + 1
-      );
-    }
-
-    // b) Chequeo en caliente para carpetas no identificadas en pre-scan
+    // SIEMPRE chequeo en caliente para id. de carpetas gigantes
     if (
       relDir !== "" &&
       !this.hasExplicitSelectionInside(relDir) &&
       (await this.isHugeDirectory(dirFs, ig, root))
     ) {
       if (isTopLevel) {
-        console.log(`🔍 Detectado directorio grande en tiempo real: ${relDir}`);
+        console.log(`🔍 Directorio grande detectado en tiempo real: ${relDir}`);
       }
       return this.truncateNode(
         {
@@ -304,7 +258,7 @@ export class TreeGenerator {
       );
     }
 
-    // c) Nodo normal
+    // Nodo normal
     const node: FileTree = {
       name: path.basename(dirFs),
       path: relDir,
@@ -312,7 +266,6 @@ export class TreeGenerator {
       children: [],
     };
 
-    // 1) Truncado "rápido" si hay demasiados hijos directos
     if (await this.shouldQuickTruncate(dirFs, relDir)) {
       if (isTopLevel) {
         console.log(
@@ -321,16 +274,10 @@ export class TreeGenerator {
           }`
         );
       }
-      return this.truncateNode(
-        node,
-        relDir,
-        this.limits.maxDirect + 1 /* count */
-      );
+      return this.truncateNode(node, relDir, this.limits.maxDirect + 1);
     }
 
-    // 2) Leemos y filtramos entradas relevantes
     const entries = await this.getRelevantEntries(dirFs, ig, root);
-
     if (isTopLevel) {
       console.log(
         `📂 ${relDir || "Directorio raíz"}: procesando ${
@@ -339,12 +286,9 @@ export class TreeGenerator {
       );
     }
 
-    // 3) Procesamos cada entrada, acumulando count
     let total = 0;
     for (const entry of entries) {
       total += await this.processEntry(entry, dirFs, ig, root, node);
-
-      // 4) Truncado por tamaño acumulado
       if (this.shouldTruncateByTotal(relDir, total)) {
         if (isTopLevel) {
           console.log(
@@ -357,7 +301,6 @@ export class TreeGenerator {
       }
     }
 
-    // 5) Todo procesado sin truncar
     if (isTopLevel) {
       console.log(
         `✅ Directorio completado: ${
