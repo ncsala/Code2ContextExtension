@@ -37,8 +37,8 @@ export class TreeGenerator {
   constructor(l: Partial<TreeLimits> = {}) {
     // sube un poco los umbrales si te estaba cortando demasiado pronto:
     this.limits = {
-      maxTotal: l.maxTotal ?? 2000,
-      maxChildren: l.maxChildren ?? 70,
+      maxTotal: l.maxTotal ?? 800,
+      maxChildren: l.maxChildren ?? 50,
     };
     console.log(
       `🔧 TreeGenerator → Iniciado con maxTotal=${this.limits.maxTotal}, maxChildren=${this.limits.maxChildren}`
@@ -96,7 +96,6 @@ export class TreeGenerator {
       children: [],
     };
 
-    // LOG #1: inicio de this.build, muestro si está en selección y si es raíz
     console.log(
       `LOG: build("${rel}") → isRoot=${isRoot}, explicitSelected=${this.selected.has(
         rel
@@ -105,7 +104,6 @@ export class TreeGenerator {
 
     // 1) Filtrar sólo las entradas relevantes
     const entries = await this.getRelevantEntries(dirFs, ig, root);
-    // LOG #2: cuántas entradas pasaron el filtro
     console.log(
       `LOG: build("${rel}") → entries after filter=${entries.length}`
     );
@@ -130,12 +128,11 @@ export class TreeGenerator {
     // 3) Ordenar ascendente por tamaño
     measured.sort((a, b) => a.cnt - b.cnt);
 
-    // LOG #3: resumen de tamaños (mín, máx y total)
     const totalDesc = measured.reduce((sum, m) => sum + m.cnt, 0);
-    const minCnt = measured[0]?.cnt ?? 0;
-    const maxCnt = measured[measured.length - 1]?.cnt ?? 0;
     console.log(
-      `LOG: build("${rel}") → descendants summary: totalDesc=${totalDesc}, min=${minCnt}, max=${maxCnt}`
+      `LOG: build("${rel}") → descendants summary: totalDesc=${totalDesc}, min=${
+        measured[0]?.cnt ?? 0
+      }, max=${measured[measured.length - 1]?.cnt ?? 0}`
     );
 
     // ────────────────────────────────────────────────────────────────────────
@@ -164,7 +161,6 @@ export class TreeGenerator {
       return { node, count: total };
     }
 
-    // this.selectionMode === "directory" && // <— compruebas el modo
     // BYPASS #2: directorio “pequeño” → expandir por completo
     if (
       !isRoot &&
@@ -195,22 +191,61 @@ export class TreeGenerator {
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    // 4) Truncado inteligente: Top-K / Middle / Bottom-K
-    const ext = Math.min(
-      Math.floor(this.limits.maxChildren / 2),
-      Math.floor(measured.length / 2)
-    );
-    // LOG #4: parámetros de truncado inteligente
-    console.log(
-      `LOG: build("${rel}") → smart truncate: maxChildren=${this.limits.maxChildren}, ext=${ext}, totalEntries=${measured.length}`
-    );
-
-    const small = measured.slice(0, ext);
-    const large = measured.slice(measured.length - ext);
-
+    // 4) Truncado de dirs “pesados” (>50% del totalDesc)
+    const heavyThreshold = 0.5;
+    const rest: typeof measured = [];
     let total = 0;
 
-    // 5) Procesar los K más pequeños
+    for (const { entry, abs, rel: childRel, cnt } of measured) {
+      const weight = cnt / totalDesc;
+      if (
+        entry.isDirectory() &&
+        weight > heavyThreshold &&
+        !this.hasSelectionInside(childRel)
+      ) {
+        console.log(
+          `LOG: build("${rel}") → heavy truncate "${childRel}" (weight=${(
+            weight * 100
+          ).toFixed(1)}%)`
+        );
+        node.children!.push(PLACEHOLDER(childRel, cnt));
+        this.truncated.add(childRel);
+        total += cnt;
+      } else {
+        rest.push({ entry, abs, rel: childRel, cnt });
+      }
+    }
+
+    // 5) Escalado dinámico de maxChildren según tamaño relativo
+    const ratio = totalDesc / this.limits.maxTotal;
+    let localMaxChildren = this.limits.maxChildren;
+    if (ratio > 1) {
+      localMaxChildren = Math.max(
+        Math.floor(this.limits.maxChildren / ratio),
+        1,
+        Math.floor(this.limits.maxChildren * 0.1)
+      );
+    }
+    console.log(
+      `LOG: build("${rel}") → dynamic maxChildren=${localMaxChildren} (ratio=${ratio.toFixed(
+        2
+      )})`
+    );
+
+    // 6) Smart‐truncate sobre “rest”
+    const ext = Math.min(
+      Math.floor(localMaxChildren / 2),
+      Math.floor(rest.length / 2)
+    );
+    console.log(
+      `LOG: build("${rel}") → smart truncate rest: ext=${ext}, restEntries=${rest.length}`
+    );
+
+    const small = rest.slice(0, ext);
+    const large = rest.slice(rest.length - ext);
+    const middle = rest.slice(ext, rest.length - ext);
+
+    // 7) Procesar “small”
     console.log(
       `LOG: build("${rel}") → processing small [${small
         .map((m) => m.rel)
@@ -239,8 +274,7 @@ export class TreeGenerator {
       }
     }
 
-    // 6) Placeholder único para el “middle chunk”
-    const middle = measured.slice(ext, measured.length - ext);
+    // 8) Placeholder único para el “middle chunk”
     if (middle.length > 0) {
       const middleTotal = middle.reduce((sum, m) => sum + m.cnt, 0);
       console.log(
@@ -251,7 +285,7 @@ export class TreeGenerator {
       total += middleTotal;
     }
 
-    // 7) Procesar los K más grandes
+    // 9) Procesar “large”
     console.log(
       `LOG: build("${rel}") → processing large [${large
         .map((m) => m.rel)
@@ -280,7 +314,7 @@ export class TreeGenerator {
       }
     }
 
-    // 8) Retornar el nodo completo y el conteo
+    // 10) Retornar el nodo completo y el conteo
     console.log(`LOG: build("${rel}") → returning count=${total}`);
     return { node, count: total };
   }
