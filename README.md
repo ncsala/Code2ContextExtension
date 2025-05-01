@@ -1,60 +1,148 @@
-# Code2Context
+A grandes rasgos, éste es el flujo de nuestro TreeGenerator con truncado “inteligente”:
 
-A Visual Studio Code extension that helps compact your code files into a single document, making it easier to provide context to Large Language Models (LLMs).
+Listar y filtrar
+— Leemos sólo las entradas (archivos o subdirectorios) relevantes de la carpeta actual, descartando symlinks e ignorados.
+— Si el usuario ha seleccionado rutas, sólo incluimos directorios cuyo path sea prefijo de alguna selección, o archivos que estén explicitados.
 
-## Features
+Medir cada hijo
+Para cada entrada calculamos, con un barrido rápido (quickCountDescendants), cuántos nodos (archivos+dirs) tiene ese subárbol, pero sólo hasta maxTotal+1.
+Esto es rápido (O(límite) en vez de O(tamaño real)) y nos da un “peso” aproximado de cada hijo.
 
-- Creates a compact representation of your project structure
-- Generates a combined file with all code and directory structure
-- Supports ignoring files by pattern or via .gitignore
-- Configurable output format
-- Easy to use UI interface
+Ordenar de menor a mayor
+Con esa estimación ordenamos los hijos de más “pequeño” a más “grande”.
+De esta forma siempre pintamos primero lo que cabe entero con seguridad, y dejamos al final lo demasiado volumin­oso.
 
-## How to Use
+Procesar en orden, truncando paso a paso
+Recorremos esa lista ordenada, acumulando un contador total de nodos ya incluidos:
 
-1. Install the extension
-2. Open a workspace/project in VS Code
-3. Open the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac)
-4. Type and select: `Code2Context: Open Generator Panel`
-5. In the panel that opens:
-   - The root directory defaults to your workspace root
-   - Customize output options as needed
-   - Click "Generate context" to create the compacted view
-   - Copy the result to your clipboard with the "Copy" button
-   - Optionally, save to a file by specifying the output path
+Si la entrada es directorio
 
-## Output Format
+Si su peso estimado count > maxTotal y no contiene archivos seleccionados dentro, la truncamos localmente:
 
-The generated output follows this format:
+makefile
+Copiar
+Editar
+node.children.push(
+  PLACEHOLDER(subdir, count)
+);  
+total += count;  
+(añadimos sólo un nodo “placeholder” y no descendemos)
 
-```
-// @Tree: Shows directory structure
-// @Index: List all files with indices
-// @F: File content in format @F:|index|path|minified-content
-```
+Sino, entramos recursivamente en ese subdirectorio.
 
-This format is optimized for providing code context to LLMs while maintaining information about the project structure.
+Si la entrada es archivo, lo añadimos y total += 1.
 
-## Development
+Después de cada hijo procesado:
 
-### Prerequisites
+Si total > maxTotal en este directorio (y no es la raíz), truncamos globalmente el resto con un único placeholder y salimos.
 
-- Node.js & npm
-- Visual Studio Code
+Si llevamos ya maxChildren hijos procesados (aunque cada uno sea pequeño), truncamos proactivamente para no iterar docenas de miles de subdirectorios pequeñitos.
 
-### Setup
+Dibujar ASCII
+Finalmente, convertimos el árbol resultante (con placeholders) a la representación |-- ….
 
-1. Clone the repository
-2. Run `npm install` in the root directory
-3. Run `cd webview && npm install` to install webview dependencies
-4. Run `npm run compile` to build the extension
+Ejemplos de “dibujitos”
+A) Carpeta con un subdir enorme
+Parámetros:
 
-### Testing the Extension
+ini
+Copiar
+Editar
+maxTotal = 100  
+maxChildren = 50  
+Estructura real:
 
-1. Press `F5` to start debugging
-2. In the Extension Development Host window, open the command palette
-3. Run the `Code2Context: Open Generator Panel` command
+Copiar
+Editar
+webview/
+  ├─ small1/         (5 nodos)
+  ├─ small2/         (3 nodos)
+  ├─ node_modules/   (300 nodos)
+  └─ other/          (10 nodos)
+Paso a paso:
 
-## License
+Medimos: small2(3), small1(5), other(10), node_modules(300)
 
-MIT
+Procesamos en ese orden:
+
+small2 → cabe, lo recorremos y pintamos todo. total=3
+
+small1 → cabe, pintamos. total=8
+
+other → cabe, pintamos. total=18
+
+node_modules → como 300>maxTotal y no hay selección dentro, truncamos:
+
+lua
+Copiar
+Editar
+webview
+|-- small2
+|-- small1
+|-- other
+`-- [ node_modules: folder truncated with 300 entries ]
+B) Carpeta con muchos subdirs pequeños
+Imaginemos un proyecto “monorepo”:
+
+Copiar
+Editar
+packages/
+  ├─ pkg1/   (1 nodo)
+  ├─ pkg2/   (1 nodo)
+  ├─ …
+  ├─ pkg100/(1 nodo)
+Con maxTotal = 50 y maxChildren = 50, el conteo de cada pkgX es 1, así que no supera maxTotal.
+Pero al procesar el hijo número 51, como ya llegamos a processedChildren == maxChildren, proactivamente truncamos el resto:
+
+lua
+Copiar
+Editar
+packages
+|-- pkg1
+|-- pkg2
+|   …
+|-- pkg50
+`-- [ packages: folder truncated with 100 entries ]
+C) Selección de archivos
+Si el usuario pide sólo webview/src/index.ts:
+
+Al filtrar, sólo incluimos ese archivo y sus ancestros:
+
+css
+Copiar
+Editar
+webview/
+└─ src/
+   └─ index.ts
+Luego aplicamos el mismo proceso: medimos, ordenamos (aquí sólo hay un hijo), entramos en src, volvemos a medir… y si algún subdirectorio fuera muy grande, lo truncaríamos aún en modo “files”.
+
+Pero nuestra comprobación hasSelectionInside(path) impide truncar cualquier carpeta que contenga un archivo explictamente seleccionado, garantizando que el usuario pueda ver la ruta completa.
+
+Recapitulando qué hace y cuándo
+Filtro inicial: sólo paths relevantes según selección y .gitignore.
+
+Medida rápida: estimar tamaño de cada hijo sin recorrerlo del todo.
+
+Orden: procesar primero lo ligero, luego lo pesado.
+
+Truncados:
+
+Local: cada subdirectorio con count > maxTotal se reemplaza por placeholder.
+
+Global: si el acumulado total supera maxTotal, cortamos todo lo que quede.
+
+Proactivo: si hay más de maxChildren hijos procesados, cortamos para no tardar eternamente.
+
+Recursión: dentro de cada hijo “aceptado” volvemos a aplicar el mismo algoritmo.
+
+ASCII: pintamos el árbol con |-- y \--`.
+
+Con esta combinación cubrimos:
+
+Subárboles enormes (p. ej. node_modules).
+
+Directorios con centenares de subdirs pequeños (monorepos).
+
+Selección de archivos sin perder la ruta completa de los seleccionados.
+
+Balance entre profundidad (“entrar donde importa”) y anchura (“truncar donde no hay nada relevante”).

@@ -1,4 +1,3 @@
-// File: src/services/tree/TreeGenerator.ts
 import { promises as fs, Dirent } from "fs";
 import * as path from "path";
 import pLimit from "p-limit";
@@ -14,8 +13,10 @@ const PLACEHOLDER = (dir: string, total: number): FileTree => ({
 });
 
 export interface TreeLimits {
-  /** nº de nodos (recursivo) antes de truncar subdirectorios */
+  /** máximo nodos recursivos antes de truncar */
   maxTotal: number;
+  /** máximo hijos a procesar antes de truncar proactivamente */
+  maxChildren: number;
 }
 
 export class TreeGenerator {
@@ -28,45 +29,46 @@ export class TreeGenerator {
 
   /* métricas */
   private direntCacheHits = 0;
-  private totalDirectoriesProcessed = 0;
-  private totalFilesProcessed = 0;
-  private totalEntriesSkipped = 0;
+  private totalDirs = 0;
+  private totalFiles = 0;
+  private totalSkipped = 0;
 
   constructor(l: Partial<TreeLimits> = {}) {
-    this.limits = { maxTotal: l.maxTotal ?? 600 };
+    // sube un poco los umbrales si te estaba cortando demasiado pronto:
+    this.limits = {
+      maxTotal: l.maxTotal ?? 3000,
+      maxChildren: l.maxChildren ?? 100,
+    };
     console.log(
-      `🔧 TreeGenerator → Iniciado con límite maxTotal=${this.limits.maxTotal}`
+      `🔧 TreeGenerator → Iniciado con maxTotal=${this.limits.maxTotal}, maxChildren=${this.limits.maxChildren}`
     );
   }
 
-  /** API pública */
   async generatePrunedTreeText(
     root: string,
     ig: Ignore,
     selectedPaths: string[]
   ) {
-    console.log(`🚀 Generando árbol desde ${root}`);
     this.selected = new Set(selectedPaths.map(toPosix));
     this.prefixes = new PrefixSet(
-      [...this.selected].flatMap(p =>
+      [...this.selected].flatMap((p) =>
         p.split("/").map((_, i, arr) => arr.slice(0, i + 1).join("/"))
       )
     );
     this.truncated.clear();
     this.direntCacheHits =
-      this.totalDirectoriesProcessed =
-      this.totalFilesProcessed =
-      this.totalEntriesSkipped =
+      this.totalDirs =
+      this.totalFiles =
+      this.totalSkipped =
         0;
 
     console.time("🕒 TreeGenerator");
     const { node: fileTree, count } = await this.build(root, ig, root);
     console.timeEnd("🕒 TreeGenerator");
 
-    console.log(`✅ Árbol: ${count} nodos, dirProc=${this.totalDirectoriesProcessed}, files=${this.totalFilesProcessed}`);
-    console.log(`🔄 Truncados: ${this.truncated.size}`);
-    console.log(`💾 cache hits: ${this.direntCacheHits}`);
-
+    console.log(
+      `✅ Árbol: ${count} nodos, dirs=${this.totalDirs}, files=${this.totalFiles}, truncados=${this.truncated.size}, cacheHits=${this.direntCacheHits}`
+    );
     console.time("🕒 ascii");
     const treeText = this.ascii(fileTree, "");
     console.timeEnd("🕒 ascii");
@@ -74,65 +76,167 @@ export class TreeGenerator {
     return { treeText, fileTree, truncatedPaths: new Set(this.truncated) };
   }
 
-  /** Smart-Quick: medimos, ordenamos y truncamos cada subdir pesado */
   private async build(
     dirFs: string,
     ig: Ignore,
     root: string
   ): Promise<{ node: FileTree; count: number }> {
-    this.totalDirectoriesProcessed++;
-    const relDir = toPosix(path.relative(root, dirFs));
-    const isRoot = relDir === "";
+    this.totalDirs++;
+    const rel = toPosix(path.relative(root, dirFs));
+    const isRoot = rel === "";
 
     const node: FileTree = {
       name: path.basename(dirFs),
-      path: relDir,
+      path: rel,
       isDirectory: true,
       children: [],
     };
 
+    // 1) Filtrar sólo las entradas relevantes
     const entries = await this.getRelevantEntries(dirFs, ig, root);
 
-    // medir todos los hijos (hasta límite)
+    // 2) Quick-count de cada hijo (hasta límite+1)
     const measured = await Promise.all(
-      entries.map(async entry => {
+      entries.map(async (entry) => {
         const abs = path.join(dirFs, entry.name);
-        const rel = toPosix(path.relative(root, abs));
+        const childRel = toPosix(path.relative(root, abs));
         const cnt = entry.isDirectory()
-          ? await this.quickCountDescendants(abs, ig, root, this.limits.maxTotal + 1)
+          ? await this.quickCountDescendants(
+              abs,
+              ig,
+              root,
+              this.limits.maxTotal + 1
+            )
           : 1;
-        return { entry, abs, rel, count: cnt };
+        return { entry, abs, rel: childRel, cnt };
       })
     );
 
-    // ordenar ascendente
-    measured.sort((a, b) => a.count - b.count);
+    // 3) Ordenar ascendente por tamaño
+    measured.sort((a, b) => a.cnt - b.cnt);
+
+    // ────────────────────────────────────────────────────────────────────────
+    // BYPASS #1: raíz o selección explícita → expandir todo
+    if (
+      (isRoot && this.selected.size > 0) ||
+      (!isRoot && this.selected.has(rel))
+    ) {
+      let total = 0;
+      for (const { entry, abs, rel: childRel } of measured) {
+        if (entry.isDirectory()) {
+          const { node: cNode, count: cCnt } = await this.build(abs, ig, root);
+          node.children!.push(cNode);
+          total += cCnt;
+        } else {
+          this.totalFiles++;
+          node.children!.push({
+            name: entry.name,
+            path: childRel,
+            isDirectory: false,
+          });
+          total++;
+        }
+      }
+      return { node, count: total };
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // BYPASS #2: directorio “pequeño” → expandir por completo
+    const totalDesc = measured.reduce((sum, m) => sum + m.cnt, 0);
+    if (
+      !isRoot &&
+      measured.length <= this.limits.maxChildren &&
+      totalDesc <= this.limits.maxTotal
+    ) {
+      let total = 0;
+      for (const { entry, abs, rel: childRel } of measured) {
+        if (entry.isDirectory()) {
+          const { node: cNode, count: cCnt } = await this.build(abs, ig, root);
+          node.children!.push(cNode);
+          total += cCnt;
+        } else {
+          this.totalFiles++;
+          node.children!.push({
+            name: entry.name,
+            path: childRel,
+            isDirectory: false,
+          });
+          total++;
+        }
+      }
+      return { node, count: total };
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    // 4) Top-K / Middle / Bottom-K (truncado inteligente)
+    const ext = Math.min(
+      Math.floor(this.limits.maxChildren / 2),
+      Math.floor(measured.length / 2)
+    );
+    const small = measured.slice(0, ext);
+    const large = measured.slice(measured.length - ext);
 
     let total = 0;
-    for (const { entry, abs, rel, count } of measured) {
+
+    // 5) Procesar los K más pequeños
+    for (const { entry, abs, rel: childRel, cnt } of small) {
       if (entry.isDirectory()) {
-        if (!isRoot && count > this.limits.maxTotal && !this.hasSelectionInside(rel)) {
-          // truncar sólo este subdirectorio
-          node.children!.push(PLACEHOLDER(rel, count));
-          this.truncated.add(rel);
-          total += count;
+        if (cnt > this.limits.maxTotal && !this.hasSelectionInside(childRel)) {
+          node.children!.push(PLACEHOLDER(childRel, cnt));
+          this.truncated.add(childRel);
+          total += cnt;
         } else {
-          // recursión profunda
-          const { node: childNode, count: childCnt } = await this.build(abs, ig, root);
-          node.children!.push(childNode);
-          total += childCnt;
+          const { node: cNode, count: cCnt } = await this.build(abs, ig, root);
+          node.children!.push(cNode);
+          total += cCnt;
         }
       } else {
-        this.totalFilesProcessed++;
-        node.children!.push({ name: entry.name, path: rel, isDirectory: false });
-        total += 1;
+        this.totalFiles++;
+        node.children!.push({
+          name: entry.name,
+          path: childRel,
+          isDirectory: false,
+        });
+        total++;
       }
     }
 
+    // 6) Placeholder para el “middle chunk”
+    const middle = measured.slice(ext, measured.length - ext);
+    if (middle.length > 0) {
+      const middleTotal = middle.reduce((sum, m) => sum + m.cnt, 0);
+      node.children!.push(PLACEHOLDER(rel, middleTotal));
+      this.truncated.add(rel);
+      total += middleTotal;
+    }
+
+    // 7) Procesar los K más grandes
+    for (const { entry, abs, rel: childRel, cnt } of large) {
+      if (entry.isDirectory()) {
+        if (cnt > this.limits.maxTotal && !this.hasSelectionInside(childRel)) {
+          node.children!.push(PLACEHOLDER(childRel, cnt));
+          this.truncated.add(childRel);
+          total += cnt;
+        } else {
+          const { node: cNode, count: cCnt } = await this.build(abs, ig, root);
+          node.children!.push(cNode);
+          total += cCnt;
+        }
+      } else {
+        this.totalFiles++;
+        node.children!.push({
+          name: entry.name,
+          path: childRel,
+          isDirectory: false,
+        });
+        total++;
+      }
+    }
+
+    // 8) Return final
     return { node, count: total };
   }
 
-  /** recuento rápido hasta límite */
   private async quickCountDescendants(
     dirFs: string,
     ig: Ignore,
@@ -145,75 +249,85 @@ export class TreeGenerator {
       const cur = stack.pop()!;
       for (const e of await this.getDirents(cur)) {
         const abs = path.join(cur, e.name);
-        const rel = toPosix(path.relative(root, abs));
-        if (this.isLinkOrIgnored(e, rel, ig)) {continue;}
-        if (++seen >= limit) {return seen;}
-        if (e.isDirectory()) {stack.push(abs);}
+        const r = toPosix(path.relative(root, abs));
+        if (this.isLinkOrIgnored(e, r, ig)) {
+          continue;
+        }
+        if (++seen >= limit) {
+          return seen;
+        }
+        if (e.isDirectory()) {
+          stack.push(abs);
+        }
       }
     }
     return seen;
   }
 
-  /** readdir + cache */
-  private async getDirents(dir: string): Promise<Dirent[]> {
-    const c = this.cache.get(dir);
-    if (c) {
-      this.direntCacheHits++;
-      return c;
-    }
-    const dirents = await this.io(() => fs.readdir(dir, { withFileTypes: true }));
-    this.cache.set(dir, dirents);
-    return dirents;
-  }
-
-  private async getRelevantEntries(
-    dirFs: string,
-    ig: Ignore,
-    root: string
-  ) {
+  private async getRelevantEntries(dirFs: string, ig: Ignore, root: string) {
     const dirents = await this.getDirents(dirFs);
-    const rels: Dirent[] = [];
+    const out: Dirent[] = [];
     for (const d of dirents) {
       const abs = path.join(dirFs, d.name);
-      const rel = toPosix(path.relative(root, abs));
+      const r = toPosix(path.relative(root, abs));
       if (
-        !this.isLinkOrIgnored(d, rel, ig) &&
+        !this.isLinkOrIgnored(d, r, ig) &&
         (this.selected.size === 0 ||
-          (d.isDirectory() ? this.prefixes.has(rel) : this.selected.has(rel)))
-      ) {rels.push(d);}
+          (d.isDirectory() ? this.prefixes.has(r) : this.selected.has(r)))
+      ) {
+        out.push(d);
+      }
     }
-    this.totalEntriesSkipped += dirents.length - rels.length;
-    return rels;
+    this.totalSkipped += dirents.length - out.length;
+    return out;
+  }
+
+  private async getDirents(dir: string) {
+    const cached = this.cache.get(dir);
+    if (cached) {
+      this.direntCacheHits++;
+      return cached;
+    }
+    const arr = await this.io(() => fs.readdir(dir, { withFileTypes: true }));
+    this.cache.set(dir, arr);
+    return arr;
+  }
+
+  private hasSelectionInside(rel: string) {
+    if (this.selected.size === 0) {
+      return false;
+    }
+    if (this.selected.has(rel)) {
+      return true;
+    }
+    return [...this.selected].some((s) => s.startsWith(rel + "/"));
+  }
+
+  public isInsideTruncatedDir(file: string, trunc: Set<string>) {
+    const f = toPosix(file);
+    return [...trunc].some((d) => f === d || f.startsWith(d + "/"));
+  }
+
+  private ascii(n: FileTree, p: string): string {
+    if (!n.children?.length) {
+      return "";
+    }
+    return n.children
+      .map((c, i) => {
+        const last = i === n.children!.length - 1;
+        const line = `${p}${last ? "`-- " : "|-- "}${c.name}\n`;
+        return (
+          line +
+          (c.isDirectory ? this.ascii(c, p + (last ? "    " : "|   ")) : "")
+        );
+      })
+      .join("");
   }
 
   private isLinkOrIgnored(entry: Dirent, rel: string, ig: Ignore) {
-    return entry.isSymbolicLink() || ig.ignores(rel + (entry.isDirectory() ? "/" : ""));
-  }
-
-  /** Verifica si hay selección dentro de un directorio */
-  private hasSelectionInside(rel: string): boolean {
-    if (this.selected.size === 0) {return false;}
-    if (this.selected.has(rel)) {return true;}
-    const prefix = rel + "/";
-    return [...this.selected].some(s => s.startsWith(prefix));
-  }
-
-  /** utilidad para CompactProject */
-  public isInsideTruncatedDir(file: string, trunc: Set<string>): boolean {
-    const f = toPosix(file);
-    for (const dir of trunc) {
-      if (f === dir || f.startsWith(dir + "/")) {return true;}
-    }
-    return false;
-  }
-
-  /** ASCII renderer */
-  private ascii(n: FileTree, p: string): string {
-    if (!n.children?.length) {return "";}
-    return n.children.map((c, i) => {
-      const last = i === n.children!.length - 1;
-      const line = `${p}${last ? "`-- " : "|-- "}${c.name}\n`;
-      return line + (c.isDirectory ? this.ascii(c, p + (last ? "    " : "|   ")) : "");
-    }).join("");
+    return (
+      entry.isSymbolicLink() ||
+      ig.ignores(rel + (entry.isDirectory() ? "/" : ""))
+    );
   }
 }
