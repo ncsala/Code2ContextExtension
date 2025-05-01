@@ -5,7 +5,6 @@ import { Ignore } from "ignore";
 import { toPosix } from "../../../shared/utils/pathUtils";
 import { FileTree } from "../../../domain/model/FileTree";
 import { PrefixSet } from "../../../shared/utils/PrefixSet";
-import { quickCountDir } from "../../../shared/utils/quickCountDir";
 
 const PLACEHOLDER = (dir: string, total: number): FileTree => ({
   name: `[ ${dir.split("/").pop()}: folder truncated with ${total} entries ]`,
@@ -273,10 +272,10 @@ export class TreeGenerator {
       for (const entry of await this.getDirents(cur)) {
         const abs = path.join(cur, entry.name);
         const rel = toPosix(path.relative(root, abs));
-        if (this.isLinkOrIgnored(entry, rel, ig)) continue;
+        if (this.isLinkOrIgnored(entry, rel, ig)) {continue;}
         seen++;
-        if (seen >= limit) return seen;
-        if (entry.isDirectory()) stack.push(abs);
+        if (seen >= limit) {return seen;}
+        if (entry.isDirectory()) {stack.push(abs);}
       }
     }
     return seen;
@@ -299,7 +298,7 @@ export class TreeGenerator {
     const dirents = await this.getDirents(dirFs);
     const relevant: Dirent[] = [];
     for (const d of dirents) {
-      if (await this.isRelevant(d, dirFs, ig, root)) relevant.push(d);
+      if (await this.isRelevant(d, dirFs, ig, root)) {relevant.push(d);}
     }
     this.totalEntriesSkipped += dirents.length - relevant.length;
     return relevant;
@@ -328,8 +327,8 @@ export class TreeGenerator {
   ): Promise<boolean> {
     const abs = path.join(dirFs, d.name);
     const rel = toPosix(path.relative(root, abs));
-    if (this.isLinkOrIgnored(d, rel, ig)) return false;
-    if (this.selected.size === 0) return true;
+    if (this.isLinkOrIgnored(d, rel, ig)) {return false;}
+    if (this.selected.size === 0) {return true;}
     return d.isDirectory() ? this.prefixes.has(rel) : this.selected.has(rel);
   }
 
@@ -350,10 +349,10 @@ export class TreeGenerator {
         for await (const entry of handle) {
           const abs = path.join(cur, entry.name);
           const rel = toPosix(path.relative(root, abs));
-          if (this.isLinkOrIgnored(entry, rel, ig)) continue;
+          if (this.isLinkOrIgnored(entry, rel, ig)) {continue;}
           seen++;
-          if (seen >= limit) return true;
-          if (entry.isDirectory()) stack.push(abs);
+          if (seen >= limit) {return true;}
+          if (entry.isDirectory()) {stack.push(abs);}
         }
       } catch {
         return true;
@@ -386,7 +385,7 @@ export class TreeGenerator {
 
   /** Genera ASCII del árbol */
   private ascii(n: FileTree, p: string): string {
-    if (!n.children?.length) return "";
+    if (!n.children?.length) {return "";}
     return n.children
       .map((c, i) => {
         const last = i === n.children!.length - 1;
@@ -403,15 +402,15 @@ export class TreeGenerator {
   public isInsideTruncatedDir(file: string, trunc: Set<string>): boolean {
     const f = toPosix(file);
     for (const dir of trunc) {
-      if (f === dir || f.startsWith(dir + "/")) return true;
+      if (f === dir || f.startsWith(dir + "/")) {return true;}
     }
     return false;
   }
 
   /** No truncar si hay selección dentro */
   private hasExplicitSelectionInside(dir: string): boolean {
-    if (this.selected.size === 0) return false;
-    if (this.selected.has(dir)) return true;
+    if (this.selected.size === 0) {return false;}
+    if (this.selected.has(dir)) {return true;}
     const prefix = dir ? dir + "/" : "";
     return [...this.selected].some((s) => s.startsWith(prefix));
   }
