@@ -69,17 +69,9 @@ export class GitAdapter implements GitPort {
    */
   private isIgnoredByCommonPatterns(filePath: string): boolean {
     // Patrones comunes de ignorado
+    // TODO revisr estos patrones
     const commonPatterns = [
-      "node_modules/",
-      ".git/",
-      "dist/",
-      "build/",
       ".DS_Store",
-      "*.log",
-      "*.lock",
-      "*.swp",
-      ".env",
-      "package-lock.json",
     ];
 
     // Verificar si el archivo coincide con alguno de los patrones

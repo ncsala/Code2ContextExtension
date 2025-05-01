@@ -1,3 +1,4 @@
+// File: src/application/use-cases/compact/CompactProject.ts
 import { CompactOptions } from "../../../domain/model/CompactOptions";
 import { CompactUseCase } from "../../../domain/ports/primary/CompactUseCase";
 import { FileSystemPort } from "../../../domain/ports/secondary/FileSystemPort";
@@ -20,15 +21,12 @@ import { FileTree } from "../../../domain/model/FileTree";
 
 const { TREE_MARKER, INDEX_MARKER, FILE_MARKER } = ContentFormatter;
 
-/**
- * Implementación del caso de uso de compactación
- */
 export class CompactProject implements CompactUseCase {
   private readonly treeGenerator: TreeGenerator;
-  private readonly contentMinifier: ContentMinifier;
-  private readonly fileFilter: FileFilter;
+  private readonly contentMinifier = new ContentMinifier();
+  private readonly fileFilter = new FileFilter();
   private readonly progressReporter: ProgressReporter;
-  private readonly contentFormatter: ContentFormatter;
+  private readonly contentFormatter = new ContentFormatter();
   private readonly formatter = new ContentFormatter();
 
   constructor(
@@ -36,216 +34,151 @@ export class CompactProject implements CompactUseCase {
     private readonly git: GitPort,
     progressReporter?: ProgressReporter
   ) {
-    this.treeGenerator = new TreeGenerator({ maxDirect: 40, maxTotal: 2000 });
-    this.contentMinifier = new ContentMinifier();
-    this.fileFilter = new FileFilter();
-    this.progressReporter = progressReporter || new ConsoleProgressReporter();
-    this.contentFormatter = new ContentFormatter();
+    this.treeGenerator = new TreeGenerator({ maxTotal: 75 });
+    this.progressReporter = progressReporter ?? new ConsoleProgressReporter();
   }
 
   async execute(
     opts: CompactOptions & { truncateTree?: boolean }
   ): Promise<CompactResult> {
     this.progressReporter.startOperation("CompactProject.execute");
-    this.progressReporter.log(
-      `🚀 Iniciando compactación de proyecto en: ${opts.rootPath}`
-    );
-    this.progressReporter.log(`📋 Modo de selección: ${opts.selectionMode}`);
+    this.progressReporter.log(`🚀 Compactación en: ${opts.rootPath}`);
+    this.progressReporter.log(`📋 Selección: ${opts.selectionMode}`);
 
     try {
-      /* 0️⃣ sanity check de la ruta root */
+      // 0️⃣ Verificar ruta raíz
       await this.ensureRootExists(opts.rootPath);
 
-      /* 1️⃣ generar árbol (con truncados) */
+      // 1️⃣ Generar árbol truncado
       this.progressReporter.startOperation("buildTree");
       const { treeText, fileTree, truncatedPaths } = await this.buildTree(opts);
-      const fileTreeCount = this.countFilesInTree(fileTree);
-      this.progressReporter.log(
-        `✅ Árbol generado con éxito: ${fileTreeCount} nodos totales`
-      );
+      const totalNodes = this.countFilesInTree(fileTree);
+      this.progressReporter.log(`✅ Árbol generado: ${totalNodes} nodos`);
       this.progressReporter.endOperation("buildTree");
 
-      /* 2️⃣ determinar la lista de archivos A LEER */
+      // 2️⃣ Preparar lista de archivos a leer
       this.progressReporter.startOperation("prepareFileList");
-
       const isInsideTrunc = (p: string) =>
         this.treeGenerator.isInsideTruncatedDir(p, truncatedPaths);
-
       const filePaths: string[] =
         opts.selectionMode === "files"
           ? (opts.specificFiles ?? []).filter((p) => !isInsideTrunc(p))
           : fileListFromTree(fileTree).filter((p) => !isInsideTrunc(p));
-
       this.progressReporter.log(
-        `📑 Se prepararán ${filePaths.length} archivos para lectura`
+        `📑 Archivos a leer: ${filePaths.length}`
       );
       this.progressReporter.endOperation("prepareFileList");
 
-      /* 3️⃣ leer contenidos */
+      // 3️⃣ Leer contenidos
       this.progressReporter.startOperation("loadFiles");
       this.progressReporter.log(
-        `📖 Leyendo contenido de ${filePaths.length} archivos...`
+        `📖 Leyendo ${filePaths.length} archivos...`
       );
-
       const files = await this.loadFiles(opts.rootPath, filePaths);
-
-      const totalSize = this.calculateTotalSize(files);
+      const size = this.calculateTotalSize(files);
       this.progressReporter.log(
-        `✅ Lectura completada: ${files.length}/${
-          filePaths.length
-        } archivos leídos (${this.formatFileSize(totalSize)})`
+        `✅ Leídos ${files.length}/${filePaths.length} archivos (${this.formatFileSize(size)})`
       );
-
-      if (files.length !== filePaths.length) {
-        this.progressReporter.warn(
-          `⚠️ No se pudieron leer ${filePaths.length - files.length} archivos`
-        );
-      }
       this.progressReporter.endOperation("loadFiles");
 
-      /* 4️⃣ componer la salida */
+      // 4️⃣ Componer salida
       this.progressReporter.startOperation("composeOutput");
-      this.progressReporter.log(`🔄 Componiendo salida final...`);
-
+      this.progressReporter.log("🔄 Componiendo resultado...");
       const combined = this.composeOutput(filePaths, files, treeText, opts);
-
       this.progressReporter.log(
         `✅ Salida compuesta: ${this.formatFileSize(combined.length)}`
       );
       this.progressReporter.endOperation("composeOutput");
 
-      /* 5️⃣ escribir disco si hace falta */
+      // 5️⃣ Escribir si procede
       if (opts.outputPath) {
         this.progressReporter.startOperation("writeOutput");
-        this.progressReporter.log(
-          `💾 Escribiendo resultado en: ${opts.outputPath}`
-        );
+        this.progressReporter.log(`💾 Guardando en ${opts.outputPath}`);
         await this.writeIfNeeded(opts.outputPath, combined);
-        this.progressReporter.log(`✅ Archivo escrito correctamente`);
+        this.progressReporter.log("✅ Archivo escrito");
         this.progressReporter.endOperation("writeOutput");
       }
 
-      this.progressReporter.log(`🎉 Proceso completado con éxito`);
+      this.progressReporter.log("🎉 Proceso completado");
       this.progressReporter.endOperation("CompactProject.execute");
       return { ok: true, content: combined };
-    } catch (e: unknown) {
-      const errMsg =
-        e && typeof e === "object" && "message" in e
-          ? (e as Error).message
-          : String(e);
-
+    } catch (e: any) {
       this.progressReporter.error(
-        `❌ Error durante la compactación: ${errMsg}`,
+        `❌ Error en compactación: ${e.message}`,
         e
       );
       this.progressReporter.endOperation("CompactProject.execute");
-      return { ok: false, error: errMsg };
+      return { ok: false, error: e.message };
     }
   }
 
-  /*─────────── pasos privados ───────────*/
-
   private async ensureRootExists(root: string) {
-    this.progressReporter.log(
-      `🔍 Verificando existencia del directorio: ${root}`
-    );
+    this.progressReporter.log(`🔍 Verificando directorio: ${root}`);
     if (!(await this.fs.exists(root))) {
-      this.progressReporter.error(`❌ El directorio no existe: ${root}`);
-      throw new Error(`El directorio ${root} no existe`);
+      throw new Error(`Directorio no existe: ${root}`);
     }
-    this.progressReporter.log(`✅ Directorio encontrado: ${root}`);
+    this.progressReporter.log(`✅ Directorio encontrado`);
   }
 
   private async buildTree(opts: CompactOptions) {
+    // a) Patrones de ignore
     this.progressReporter.startOperation("getIgnorePatterns");
-    this.progressReporter.log(`🔍 Obteniendo patrones de ignorado...`);
-
+    this.progressReporter.log("🔍 Obteniendo ignores...");
     const ig = ignore().add(await this.getIgnorePatterns(opts));
-
-    this.progressReporter.log(`✅ Patrones de ignorado aplicados`);
+    this.progressReporter.log("✅ Ignore aplicado");
     this.progressReporter.endOperation("getIgnorePatterns");
 
-    // Si estamos en modo "files", sólo incluimos esas rutas
+    // b) Selección
     const selected =
       opts.selectionMode === "files" ? opts.specificFiles ?? [] : [];
-
     if (selected.length) {
       this.progressReporter.log(
-        `📋 Modo de selección específica: ${selected.length} archivos seleccionados`
+        `📋 Archivos seleccionados: ${selected.length}`
       );
     }
 
+    // c) Generar árbol
     this.progressReporter.startOperation("generateTreeText");
-    this.progressReporter.log(`🌳 Generando texto del árbol...`);
-
-    const { treeText, fileTree, truncatedPaths } =
-      await this.treeGenerator.generatePrunedTreeText(
-        opts.rootPath,
-        ig,
-        selected
-      );
-
-    if (truncatedPaths.size) {
+    this.progressReporter.log("🌳 Generando árbol...");
+    const result = await this.treeGenerator.generatePrunedTreeText(
+      opts.rootPath,
+      ig,
+      selected
+    );
+    if (result.truncatedPaths.size) {
       this.progressReporter.log(
-        `⚠️ Se truncaron ${truncatedPaths.size} directorios por exceder el límite`
+        `⚠️ Truncados: ${result.truncatedPaths.size} dirs`
       );
     }
-
-    const treeTextLines = treeText.split("\n").length;
-    this.progressReporter.log(
-      `✅ Texto del árbol generado: ${treeTextLines} líneas`
-    );
     this.progressReporter.endOperation("generateTreeText");
-
-    return { treeText, fileTree, truncatedPaths };
+    return result;
   }
 
   private async loadFiles(root: string, paths: string[]): Promise<FileEntry[]> {
-    const totalFiles = paths.length;
-    this.progressReporter.log(
-      `🔄 Iniciando carga en paralelo de ${totalFiles} archivos...`
-    );
-
-    if (totalFiles > 500) {
-      this.progressReporter.warn(
-        `⚠️ La cantidad de archivos es grande (${totalFiles}), esto puede tardar...`
-      );
-    }
-
+    const total = paths.length;
+    this.progressReporter.log(`🔄 Cargando ${total} archivos...`);
     const limit = pLimit(32);
-    let processed = 0;
-    let lastProgress = 0;
-
+    let count = 0, lastPct = 0;
     const results = await Promise.all(
       paths.map((p) =>
         limit(async () => {
           const content = await this.fs.readFile(path.join(root, p));
-
-          // Incrementar contador y mostrar progreso cada 10%
-          processed++;
-          const progress = Math.floor((processed / totalFiles) * 100);
-          if (progress >= lastProgress + 10) {
-            this.progressReporter.log(
-              `📊 Progreso de carga: ${progress}% (${processed}/${totalFiles})`
-            );
-            lastProgress = progress;
+          count++;
+          const pct = Math.floor((count / total) * 100);
+          if (pct >= lastPct + 10) {
+            this.progressReporter.log(`📊 ${pct}% (${count}/${total})`);
+            lastPct = pct;
           }
-
           return content ? { path: p, content } : null;
         })
       )
     );
-
-    const loadedFiles = results.filter((e): e is FileEntry => e !== null);
-    const failedCount = totalFiles - loadedFiles.length;
-
-    if (failedCount > 0) {
-      this.progressReporter.warn(
-        `⚠️ No se pudieron cargar ${failedCount} archivos`
-      );
+    const entries = results.filter((x): x is FileEntry => !!x);
+    const failed = total - entries.length;
+    if (failed) {
+      this.progressReporter.warn(`⚠️ ${failed} archivos fallaron`);
     }
-
-    return loadedFiles;
+    return entries;
   }
 
   private composeOutput(
@@ -254,172 +187,81 @@ export class CompactProject implements CompactUseCase {
     treeText: string,
     opts: CompactOptions
   ): string {
-    this.progressReporter.startOperation("formatOutput");
     this.progressReporter.log(
-      `📝 Formateando salida: ${indexPaths.length} archivos en índice, ${files.length} con contenido`
+      `📝 Formateando: índice(${indexPaths.length}), contenido(${files.length})`
     );
-
-    const shouldMinify = opts.minifyContent === true;
-    if (shouldMinify) {
-      this.progressReporter.log(`🔍 Minificación de contenido activada`);
-    }
-
+    const minify = opts.minifyContent === true;
+    if (minify) {this.progressReporter.log("🔍 Minificando contenido");}
     const header = this.contentFormatter.generateHeader(
       TREE_MARKER,
       INDEX_MARKER,
       FILE_MARKER,
-      shouldMinify,
+      minify,
       !!treeText.trim()
     );
-
-    const index = this.formatter.generateIndex(indexPaths);
-    const parts: string[] = [header];
-
-    if (treeText) {
-      this.progressReporter.log(
-        `🌳 Incluyendo estructura de árbol: ${
-          treeText.split("\n").length
-        } líneas`
-      );
-      parts.push(`${TREE_MARKER}\n${treeText}\n\n`);
-    }
-
-    parts.push(`${INDEX_MARKER}\n${index}\n\n`);
-
-    this.progressReporter.log(
-      `📊 Procesando ${files.length} archivos para contenido...`
-    );
-
-    let i = 1;
-    let totalOriginalSize = 0;
-    let totalProcessedSize = 0;
-
+    const parts = [header];
+    if (treeText) {parts.push(`${TREE_MARKER}\n${treeText}\n\n`);}
+    parts.push(`${INDEX_MARKER}\n${this.formatter.generateIndex(indexPaths)}\n\n`);
+    let i = 1, origSize = 0, procSize = 0;
     for (const f of files) {
-      totalOriginalSize += f.content.length;
-
-      const txt = shouldMinify
-        ? this.contentMinifier.minify(f.content)
-        : f.content;
-
-      totalProcessedSize += txt.length;
+      origSize += f.content.length;
+      const txt = minify ? this.contentMinifier.minify(f.content) : f.content;
+      procSize += txt.length;
       parts.push(
         this.formatter.formatFileEntry(i++, f.path, txt, FILE_MARKER),
         "\n"
       );
     }
-
-    const result = parts.join("");
-
-    if (shouldMinify) {
-      const savings = (
-        (1 - totalProcessedSize / totalOriginalSize) *
-        100
-      ).toFixed(2);
+    if (minify) {
+      const savePct = ((1 - procSize / origSize) * 100).toFixed(2);
       this.progressReporter.log(
-        `📊 Minificación: ${this.formatFileSize(
-          totalOriginalSize
-        )} → ${this.formatFileSize(totalProcessedSize)} (ahorro: ${savings}%)`
+        `📊 Minificado: ${this.formatFileSize(origSize)} → ${this.formatFileSize(procSize)} (${savePct}%)`
       );
     }
-
     this.progressReporter.log(
-      `✅ Formato de salida completado: ${this.formatFileSize(result.length)}`
+      `✅ Formato listo: ${this.formatFileSize(parts.join("").length)}`
     );
-    this.progressReporter.endOperation("formatOutput");
-
-    return result;
+    return parts.join("");
   }
 
-  private async writeIfNeeded(outPath: string | undefined, content: string) {
-    if (!outPath) {
-      return;
-    }
-
-    this.progressReporter.log(
-      `💾 Escribiendo archivo de salida: ${outPath} (${this.formatFileSize(
-        content.length
-      )})`
-    );
-
-    const ok = await this.fs.writeFile(outPath, content);
-    if (ok === false) {
-      this.progressReporter.error(`❌ Error al escribir en ${outPath}`);
-      throw new Error(`No se pudo escribir en ${outPath}`);
-    }
-
-    this.progressReporter.log(
-      `✅ Archivo escrito correctamente en: ${outPath}`
-    );
+  private async writeIfNeeded(out: string | undefined, content: string) {
+    if (!out) {return;}
+    this.progressReporter.log(`💾 Escribiendo ${out}`);
+    const ok = await this.fs.writeFile(out, content);
+    if (!ok) {throw new Error(`Error al escribir ${out}`);}
   }
 
-  private async getIgnorePatterns(options: CompactOptions): Promise<string[]> {
-    const gitEnabled = options.includeGitIgnore === true;
+  private async getIgnorePatterns(opts: CompactOptions): Promise<string[]> {
     this.progressReporter.log(
-      `🔍 Configuración de ignorado: includeGitIgnore=${
-        gitEnabled ? "sí" : "no"
-      }`
+      `🔍 includeGitIgnore=${opts.includeGitIgnore}`
     );
-
-    const defaultPatterns = this.fileFilter.getDefaultIgnorePatterns();
-    this.progressReporter.log(
-      `📋 Patrones predeterminados: ${defaultPatterns.length}`
-    );
-
-    let gitIgnorePatterns: string[] = [];
-    if (gitEnabled) {
-      this.progressReporter.startOperation("getGitIgnorePatterns");
-      this.progressReporter.log(`🔄 Obteniendo patrones de .gitignore...`);
-
-      gitIgnorePatterns = await this.git.getIgnorePatterns(options.rootPath);
-
-      this.progressReporter.log(
-        `✅ Patrones de .gitignore: ${gitIgnorePatterns.length}`
-      );
-      this.progressReporter.endOperation("getGitIgnorePatterns");
+    const defaults = this.fileFilter.getDefaultIgnorePatterns();
+    let gitPatterns: string[] = [];
+    if (opts.includeGitIgnore) {
+      gitPatterns = await this.git.getIgnorePatterns(opts.rootPath);
     }
-
-    const customPatterns = options.customIgnorePatterns || [];
-    if (customPatterns.length > 0) {
-      this.progressReporter.log(
-        `📋 Patrones personalizados: ${customPatterns.length}`
-      );
-    }
-
-    const allPatterns = [
-      ...defaultPatterns,
-      ...gitIgnorePatterns,
-      ...customPatterns,
-    ];
-    this.progressReporter.log(
-      `📋 Total de patrones combinados: ${allPatterns.length}`
-    );
-    return allPatterns;
+    const customs = opts.customIgnorePatterns ?? [];
+    return [...defaults, ...gitPatterns, ...customs];
   }
 
   private countFilesInTree(tree: FileTree): number {
-    if (!tree.children || tree.children.length === 0) {
-      return 1; // Contar el nodo actual
+    let cnt = 1;
+    if (tree.children) {
+      for (const c of tree.children) {cnt += this.countFilesInTree(c);}
     }
-    let count = 1; // Contar el nodo actual
-    for (const child of tree.children) {
-      count += this.countFilesInTree(child);
-    }
-    return count;
+    return cnt;
   }
 
   private calculateTotalSize(files: FileEntry[]): number {
-    return files.reduce((acc, file) => acc + file.content.length, 0);
+    return files.reduce((sum, f) => sum + f.content.length, 0);
   }
 
   private formatFileSize(bytes: number): string {
-    const units = ["B", "KB", "MB", "GB"];
-    let size = bytes;
-    let unitIndex = 0;
-
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024;
-      unitIndex++;
+    const units = ["B","KB","MB","GB"];
+    let i = 0, sz = bytes;
+    while (sz >= 1024 && i < units.length-1) {
+      sz /= 1024; i++;
     }
-    return `${size.toFixed(2)} ${units[unitIndex]}`;
+    return `${sz.toFixed(2)} ${units[i]}`;
   }
 }

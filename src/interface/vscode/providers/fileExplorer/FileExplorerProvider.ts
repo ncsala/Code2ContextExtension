@@ -19,7 +19,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
   private readonly selectedItems: Map<string, FileItem> = new Map();
   private rootPath: string | undefined;
-  private ignorePatterns: string[] = [".git", "node_modules", "dist", "build", "package-lock.json"];
+  private ignorePatterns: string[] = [];
 
   // Manejador de ignore para uso en varios métodos
   private ignoreHandler: ReturnType<typeof ignore> | null = null;
@@ -443,11 +443,7 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       }
       // Marcar como seleccionado
       this.selectedItems.set(directoryPath, item);
-      // Propagar a todos los archivos y subdirectorios y obtener archivos seleccionados
-      const selectedFiles = await this.propagateSelectionToChildrenAndGetFiles(
-        directoryPath,
-        true
-      );
+
       // Actualizar la UI
       this._onDidChangeTreeData.fire();
       // Actualizar servicio de selección con todos los archivos seleccionados

@@ -66,13 +66,7 @@ export function activate(context: vscode.ExtensionContext) {
     const defaultOptions: CompactOptions = {
       rootPath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "",
       outputPath: "combined.txt",
-      customIgnorePatterns: [
-        "node_modules",
-        ".git",
-        "dist",
-        "build",
-        "package-lock.json",
-      ],
+      customIgnorePatterns: [],
       includeGitIgnore: true,
       includeTree: true,
       minifyContent: true,
