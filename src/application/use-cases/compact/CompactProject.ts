@@ -129,7 +129,8 @@ export class CompactProject implements CompactUseCase {
     const result = await this.treeGenerator.generatePrunedTreeText(
       opts.rootPath,
       ig,
-      selectedPaths
+      selectedPaths,
+      opts.selectionMode 
     );
     this.progressReporter.endOperation("generateTreeText");
 

@@ -26,6 +26,7 @@ export class TreeGenerator {
   private truncated = new Set<string>();
   private selected = new Set<string>();
   private prefixes!: PrefixSet;
+  private selectionMode: "directory" | "files" = "directory";
 
   /* métricas */
   private direntCacheHits = 0;
@@ -36,8 +37,8 @@ export class TreeGenerator {
   constructor(l: Partial<TreeLimits> = {}) {
     // sube un poco los umbrales si te estaba cortando demasiado pronto:
     this.limits = {
-      maxTotal: l.maxTotal ?? 3000,
-      maxChildren: l.maxChildren ?? 100,
+      maxTotal: l.maxTotal ?? 2000,
+      maxChildren: l.maxChildren ?? 70,
     };
     console.log(
       `🔧 TreeGenerator → Iniciado con maxTotal=${this.limits.maxTotal}, maxChildren=${this.limits.maxChildren}`
@@ -47,8 +48,10 @@ export class TreeGenerator {
   async generatePrunedTreeText(
     root: string,
     ig: Ignore,
-    selectedPaths: string[]
+    selectedPaths: string[],
+    selectionMode: "directory" | "files"
   ) {
+    this.selectionMode = selectionMode;
     this.selected = new Set(selectedPaths.map(toPosix));
     this.prefixes = new PrefixSet(
       [...this.selected].flatMap((p) =>
@@ -85,6 +88,7 @@ export class TreeGenerator {
     const rel = toPosix(path.relative(root, dirFs));
     const isRoot = rel === "";
 
+    // Nodo inicial
     const node: FileTree = {
       name: path.basename(dirFs),
       path: rel,
@@ -92,8 +96,19 @@ export class TreeGenerator {
       children: [],
     };
 
+    // LOG #1: inicio de this.build, muestro si está en selección y si es raíz
+    console.log(
+      `LOG: build("${rel}") → isRoot=${isRoot}, explicitSelected=${this.selected.has(
+        rel
+      )}`
+    );
+
     // 1) Filtrar sólo las entradas relevantes
     const entries = await this.getRelevantEntries(dirFs, ig, root);
+    // LOG #2: cuántas entradas pasaron el filtro
+    console.log(
+      `LOG: build("${rel}") → entries after filter=${entries.length}`
+    );
 
     // 2) Quick-count de cada hijo (hasta límite+1)
     const measured = await Promise.all(
@@ -115,12 +130,20 @@ export class TreeGenerator {
     // 3) Ordenar ascendente por tamaño
     measured.sort((a, b) => a.cnt - b.cnt);
 
+    // LOG #3: resumen de tamaños (mín, máx y total)
+    const totalDesc = measured.reduce((sum, m) => sum + m.cnt, 0);
+    const minCnt = measured[0]?.cnt ?? 0;
+    const maxCnt = measured[measured.length - 1]?.cnt ?? 0;
+    console.log(
+      `LOG: build("${rel}") → descendants summary: totalDesc=${totalDesc}, min=${minCnt}, max=${maxCnt}`
+    );
+
     // ────────────────────────────────────────────────────────────────────────
-    // BYPASS #1: raíz o selección explícita → expandir todo
-    if (
-      (isRoot && this.selected.size > 0) ||
-      (!isRoot && this.selected.has(rel))
-    ) {
+    // BYPASS #1: raíz con selección o carpeta explícita
+    if ((isRoot && this.selected.size > 0) || this.selected.has(rel)) {
+      console.log(
+        `LOG: build("${rel}") → BYPASS#1 full expand (explicit selection or root+selection)`
+      );
       let total = 0;
       for (const { entry, abs, rel: childRel } of measured) {
         if (entry.isDirectory()) {
@@ -137,17 +160,20 @@ export class TreeGenerator {
           total++;
         }
       }
+      console.log(`LOG: build("${rel}") → returning count=${total}`);
       return { node, count: total };
     }
 
-    // ────────────────────────────────────────────────────────────────────────
+    // this.selectionMode === "directory" && // <— compruebas el modo
     // BYPASS #2: directorio “pequeño” → expandir por completo
-    const totalDesc = measured.reduce((sum, m) => sum + m.cnt, 0);
     if (
       !isRoot &&
       measured.length <= this.limits.maxChildren &&
       totalDesc <= this.limits.maxTotal
     ) {
+      console.log(
+        `LOG: build("${rel}") → BYPASS#2 full expand (small dir: entries=${measured.length}, totalDesc=${totalDesc})`
+      );
       let total = 0;
       for (const { entry, abs, rel: childRel } of measured) {
         if (entry.isDirectory()) {
@@ -164,21 +190,33 @@ export class TreeGenerator {
           total++;
         }
       }
+      console.log(`LOG: build("${rel}") → returning count=${total}`);
       return { node, count: total };
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    // 4) Top-K / Middle / Bottom-K (truncado inteligente)
+    // 4) Truncado inteligente: Top-K / Middle / Bottom-K
     const ext = Math.min(
       Math.floor(this.limits.maxChildren / 2),
       Math.floor(measured.length / 2)
     );
+    // LOG #4: parámetros de truncado inteligente
+    console.log(
+      `LOG: build("${rel}") → smart truncate: maxChildren=${this.limits.maxChildren}, ext=${ext}, totalEntries=${measured.length}`
+    );
+
     const small = measured.slice(0, ext);
     const large = measured.slice(measured.length - ext);
 
     let total = 0;
 
     // 5) Procesar los K más pequeños
+    console.log(
+      `LOG: build("${rel}") → processing small [${small
+        .map((m) => m.rel)
+        .slice(0, 3)
+        .join(", ")}${small.length > 3 ? ", …" : ""}]`
+    );
     for (const { entry, abs, rel: childRel, cnt } of small) {
       if (entry.isDirectory()) {
         if (cnt > this.limits.maxTotal && !this.hasSelectionInside(childRel)) {
@@ -201,16 +239,25 @@ export class TreeGenerator {
       }
     }
 
-    // 6) Placeholder para el “middle chunk”
+    // 6) Placeholder único para el “middle chunk”
     const middle = measured.slice(ext, measured.length - ext);
     if (middle.length > 0) {
       const middleTotal = middle.reduce((sum, m) => sum + m.cnt, 0);
+      console.log(
+        `LOG: build("${rel}") → inserting middle placeholder (items=${middle.length}, total=${middleTotal})`
+      );
       node.children!.push(PLACEHOLDER(rel, middleTotal));
       this.truncated.add(rel);
       total += middleTotal;
     }
 
     // 7) Procesar los K más grandes
+    console.log(
+      `LOG: build("${rel}") → processing large [${large
+        .map((m) => m.rel)
+        .slice(-3)
+        .join(", ")}${large.length > 3 ? ", …" : ""}]`
+    );
     for (const { entry, abs, rel: childRel, cnt } of large) {
       if (entry.isDirectory()) {
         if (cnt > this.limits.maxTotal && !this.hasSelectionInside(childRel)) {
@@ -233,7 +280,8 @@ export class TreeGenerator {
       }
     }
 
-    // 8) Return final
+    // 8) Retornar el nodo completo y el conteo
+    console.log(`LOG: build("${rel}") → returning count=${total}`);
     return { node, count: total };
   }
 
