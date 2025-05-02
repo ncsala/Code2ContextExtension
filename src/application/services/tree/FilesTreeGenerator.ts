@@ -5,6 +5,7 @@ import { Ignore } from "ignore";
 import { toPosix } from "../../../shared/utils/pathUtils";
 import { FileTree } from "../../../domain/model/FileTree";
 import { PrefixSet } from "../../../shared/utils/PrefixSet";
+import { DirectoryTreeGenerator } from "./DirectoryTreeGenerator";
 
 /** Límites de truncado */
 export interface TreeLimits {
@@ -39,7 +40,7 @@ export abstract class BaseTreeGenerator {
 
   constructor(protected limits: TreeLimits) {}
 
-  /** Entrada única: retorna texto ASCII, objeto FileTree y paths truncados */
+  /** Punto de entrada común */
   async generatePrunedTreeText(
     root: string,
     ig: Ignore,
@@ -53,8 +54,9 @@ export abstract class BaseTreeGenerator {
     );
     this.truncated.clear();
 
-    const { node, count } = await this.build(root, ig, root);
+    const { node } = await this.build(root, ig, root);
     const treeText = this.ascii(node, "");
+    // devolvemos también las rutas truncadas recogidas
     return {
       treeText,
       fileTree: node,
@@ -68,6 +70,17 @@ export abstract class BaseTreeGenerator {
     ig: Ignore,
     root: string
   ): Promise<{ node: FileTree; count: number }>;
+
+  /** Cuenta total de nodos de un árbol */
+  protected countTree(node: FileTree): number {
+    let cnt = 1;
+    if (node.children) {
+      for (const c of node.children) {
+        cnt += this.countTree(c);
+      }
+    }
+    return cnt;
+  }
 
   // ────────────────────────────────────────────────────────────────
   // Métodos COMUNES
@@ -158,7 +171,7 @@ export abstract class BaseTreeGenerator {
     totalDesc: number
   ): [{ node: FileTree; count: number }[], MeasuredEntry[]] {
     const heavyAbsolute = this.limits.maxTotal;
-    const heavyRelative = 0.5; // 50% peso
+    const heavyRelative = 0.8;
     const minRelSize = Math.floor(this.limits.maxTotal * 0.2);
     const heavy: { node: FileTree; count: number }[] = [];
     const rest: MeasuredEntry[] = [];
@@ -293,9 +306,41 @@ export abstract class BaseTreeGenerator {
  * Generador para modo "files": sólo expande ramas que
  * contienen archivos seleccionados, filtrando subsecuentemente.
  */
+/** * Generador para modo "files": sólo expande ramas que * contienen archivos seleccionados, filtrando subsecuentemente. */
 export class FilesTreeGenerator extends BaseTreeGenerator {
   constructor(l: Partial<TreeLimits> = {}) {
-    super({ maxTotal: l.maxTotal ?? 800, maxChildren: l.maxChildren ?? 80 });
+    super({
+      maxTotal: l.maxTotal ?? 500,
+      maxChildren: l.maxChildren ?? 40,
+    });
+  }
+
+  // Nuevo método para corregir las rutas en el árbol
+  private fixTreePaths(node: FileTree, prefix: string): void {
+    // No hacer nada si estamos en la raíz sin prefijo
+    if (prefix === "") return;
+
+    // Corregir los hijos recursivamente
+    if (node.children) {
+      for (const child of node.children) {
+        // Preservar rutas placeholder
+        if (child.name.startsWith("[ ")) continue;
+
+        // Actualizar la ruta del hijo para incluir el prefijo
+        if (
+          child.path &&
+          !child.path.startsWith(prefix + "/") &&
+          child.path !== prefix
+        ) {
+          child.path = child.path === "" ? prefix : `${prefix}/${child.path}`;
+        }
+
+        // Recursión para los directorios
+        if (child.isDirectory) {
+          this.fixTreePaths(child, prefix);
+        }
+      }
+    }
   }
 
   protected async build(
@@ -305,62 +350,122 @@ export class FilesTreeGenerator extends BaseTreeGenerator {
   ): Promise<{ node: FileTree; count: number }> {
     const rel = toPosix(path.relative(root, dirFs));
     const isRoot = rel === "";
+    console.log(`\nLOG: [FILES] build("${rel}")`);
 
-    // 1) Listar y medir igual que antes
-    const entries = await this.listRelevantEntries(dirFs, ig, root);
-    const measured = await this.measureEntries(entries, dirFs, ig, root);
-    const totalDesc = measured.reduce((s, e) => s + e.cnt, 0);
+    // ── 0) Si el usuario ha seleccionado *todos* los ficheros de esta carpeta → delegar a modo "directory"
+    const selInDir = [...this.selected].filter((s) =>
+      s.startsWith(rel === "" ? "" : rel + "/")
+    );
 
-    // ── NUEVO BLOQUE: si la selección cubre *exactamente* todos los nodos,
-    // tratamos como carpeta completa y aplicamos truncado inteligente
-    const selCount = [...this.selected].filter((s) =>
-      s.startsWith(rel + "/")
-    ).length;
-    if (selCount > 0 && selCount === totalDesc) {
-      const { DirectoryTreeGenerator } = await import(
-        "./DirectoryTreeGenerator"
-      );
-      const dirGen = new DirectoryTreeGenerator({
-        maxTotal: this.limits.maxTotal,
-        maxChildren: this.limits.maxChildren,
-      });
-      return dirGen.build(dirFs, ig, root);
+    console.log(`LOG: [FILES] → sel=${selInDir.length} under "${rel}"`);
+
+    if (selInDir.length > 0) {
+      const totalFiles = await this.countDescendantFiles(dirFs, ig, root);
+      console.log(`LOG: [FILES] → actual files under "${rel}" = ${totalFiles}`);
+
+      if (selInDir.length === totalFiles) {
+        console.log(
+          `LOG: [FILES] → delegating "${rel}" to DirectoryTreeGenerator`
+        );
+
+        // 1) obtenemos el subtree truncado en modo carpeta
+        const dirGen = new DirectoryTreeGenerator({
+          maxTotal: this.limits.maxTotal,
+          maxChildren: this.limits.maxChildren,
+        });
+
+        const { fileTree: subTree, truncatedPaths: subTrunc } =
+          await dirGen.generatePrunedTreeText(dirFs, ig, []);
+
+        // 2) prefijamos cada ruta truncada con nuestro rel
+        for (const p of subTrunc) {
+          const full = rel === "" ? p : `${rel}/${p}`;
+          console.log(`LOG: [FILES] → adding truncated path "${full}"`);
+          this.truncated.add(full);
+        }
+
+        // 3) ajustamos la ruta del nodo raíz del subtree
+        subTree.path = rel;
+
+        // 4) Corregir TODAS las rutas en el árbol para que contengan el prefijo correcto
+        this.fixTreePaths(subTree, rel);
+
+        // 5) devolvemos ese subtree
+        const cnt = this.countTree(subTree);
+        return { node: subTree, count: cnt };
+      }
     }
 
-    // ── Resto del método “files” exactamente igual que antes ──
+    // ── 1) Filtrar sólo las entradas relevantes
+    const entries = await this.listRelevantEntries(dirFs, ig, root);
+    console.log(`LOG: [FILES] → entries after filter=${entries.length}`);
 
-    // ByPass: expandir si esta carpeta contiene algo seleccionado o es root
+    // ── 2) Medir cada entrada (hasta límites)
+    const measured: MeasuredEntry[] = await this.measureEntries(
+      entries,
+      dirFs,
+      ig,
+      root
+    );
+    console.log(`LOG: [FILES] → measured entries=${measured.length}`);
+
+    // ── 3) Total descendientes
+    const totalDesc = measured.reduce((sum, e) => sum + e.cnt, 0);
+    console.log(`LOG: [FILES] → totalDesc=${totalDesc}`);
+
+    // ── 4) BYPASS#1: expandir todo si es raíz o contiene selección
     if (this.hasSelectionInside(rel) || isRoot) {
+      console.log(
+        `LOG: [FILES] → BYPASS#1 expandAll (selInside=${this.hasSelectionInside(
+          rel
+        )}, isRoot=${isRoot})`
+      );
       return this.expandAll(rel, measured, ig, root, isRoot, true);
     }
 
-    // ByPass: carpeta pequeña
+    // ── 5) BYPASS#2: carpeta pequeña → expandir sin truncar
     if (
       measured.length <= this.limits.maxChildren &&
       totalDesc <= this.limits.maxTotal
     ) {
+      console.log(
+        `LOG: [FILES] → BYPASS#2 expandAll (small dir: entries=${measured.length}, totalDesc=${totalDesc})`
+      );
       return this.expandAll(rel, measured, ig, root, isRoot, true);
     }
 
-    // Truncados + smart-truncate en ramas NO seleccionadas
+    // ── 6) Truncado "pesado"
     const [heavy, rest] = this.applyHeavyTruncation(measured, totalDesc);
-    const [small, middle, large] = this.applySmartTruncation(rest, totalDesc);
+    console.log(
+      `LOG: [FILES] → heavy truncated=${heavy.length}, kept=${rest.length}`
+    );
 
+    // ── 7) Smart‐truncate (small / middle / large)
+    const [small, middle, large] = this.applySmartTruncation(rest, totalDesc);
+    console.log(
+      `LOG: [FILES] → smart small=${small.length}, middle=${middle.length}, large=${large.length}`
+    );
+
+    // ── 8) Ensamblar el FileTree resultante
     let count = 0;
     const children: FileTree[] = [];
 
-    // heavy
+    // – placeholders "heavy"
     for (const h of heavy) {
+      console.log(`LOG: [FILES] → placeholder "${h.node.path}" (${h.count})`);
       children.push(h.node);
       count += h.count;
     }
-    // small
+
+    // – "small" (recursión si es carpeta, o archivo)
     for (const s of small) {
       if (s.entry.isDirectory()) {
+        console.log(`LOG: [FILES] → recurse small dir "${s.rel}"`);
         const sub = await this.build(s.abs, ig, root);
         children.push(sub.node);
         count += sub.count;
       } else {
+        console.log(`LOG: [FILES] → add small file "${s.rel}"`);
         children.push({
           name: s.entry.name,
           path: s.rel,
@@ -369,27 +474,33 @@ export class FilesTreeGenerator extends BaseTreeGenerator {
         count++;
       }
     }
-    // middle
+
+    // – placeholder "middle"
     if (middle.length) {
+      console.log(`LOG: [FILES] → middlePlaceholder (${middle.length})`);
       children.push(this.middlePlaceholder(middle));
-      count += middle.reduce((s, e) => s + e.cnt, 0);
+      count += middle.reduce((sum, e) => sum + e.cnt, 0);
     }
-    // large
-    for (const lrg of large) {
-      if (lrg.entry.isDirectory()) {
-        const sub = await this.build(lrg.abs, ig, root);
+
+    // – "large" (recursión o archivo)
+    for (const l of large) {
+      if (l.entry.isDirectory()) {
+        console.log(`LOG: [FILES] → recurse large dir "${l.rel}"`);
+        const sub = await this.build(l.abs, ig, root);
         children.push(sub.node);
         count += sub.count;
       } else {
+        console.log(`LOG: [FILES] → add large file "${l.rel}"`);
         children.push({
-          name: lrg.entry.name,
-          path: lrg.rel,
+          name: l.entry.name,
+          path: l.rel,
           isDirectory: false,
         });
         count++;
       }
     }
 
+    console.log(`LOG: [FILES] → returning "${rel}" count=${count}`);
     return {
       node: {
         name: path.basename(dirFs),
@@ -399,5 +510,26 @@ export class FilesTreeGenerator extends BaseTreeGenerator {
       },
       count,
     };
+  }
+
+  /** Cuenta solo ficheros bajo un dir (sin expandir) */
+  private async countDescendantFiles(
+    dirFs: string,
+    ig: Ignore,
+    root: string
+  ): Promise<number> {
+    let files = 0;
+    const stack = [dirFs];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      for (const e of await this.getDirents(cur)) {
+        const abs = path.join(cur, e.name);
+        const rel = toPosix(path.relative(root, abs));
+        if (this.isLinkOrIgnored(e, rel, ig)) continue;
+        if (e.isDirectory()) stack.push(abs);
+        else files++;
+      }
+    }
+    return files;
   }
 }

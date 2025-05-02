@@ -1,19 +1,29 @@
+// shared/utils/fileListFromTree.ts
+
 import { FileTree } from "../../domain/model/FileTree";
-
-/**
- * Devuelve todas las rutas de archivo reales que aparecen en el FileTree.
- * – Ignora nodos de placeholder (nombre empieza con ‘[ ’)
- */
 export function fileListFromTree(node: FileTree): string[] {
-  if (!node.children?.length) return [];
+  // Uso de Set para evitar duplicados
+  const paths = new Set<string>();
 
-  const out: string[] = [];
-  for (const child of node.children) {
-    if (child.isDirectory) {
-      out.push(...fileListFromTree(child));
-    } else if (!child.name.startsWith("[")) {
-      out.push(child.path); // archivo real
+  // Uso de pila en lugar de recursión para mejorar rendimiento
+  const stack: FileTree[] = [node];
+
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+
+    if (!current.children) continue;
+
+    for (const child of current.children) {
+      // Ignorar placeholders
+      if (child.name.startsWith("[ ")) continue;
+
+      if (!child.isDirectory) {
+        paths.add(child.path);
+      } else if (child.children) {
+        stack.push(child);
+      }
     }
   }
-  return out;
+
+  return Array.from(paths);
 }

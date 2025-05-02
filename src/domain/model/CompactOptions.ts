@@ -25,4 +25,5 @@ export interface CompactOptions {
 
   /** Archivos específicos a incluir (usado solo en modo 'files') */
   specificFiles?: string[];
+  verboseLogging?: boolean; // Nuevo flag para controlar nivel de logging
 }

@@ -18,8 +18,25 @@ import { ContentFormatter } from "../../services/content/ContentFormatter";
 import pLimit from "p-limit";
 import { fileListFromTree } from "../../../shared/utils/fileListFromTree";
 import { toPosix } from "../../../shared/utils/pathUtils";
+import { promises as fs } from "fs";
+import type { Stats } from "fs";
 
 const { TREE_MARKER, INDEX_MARKER, FILE_MARKER } = ContentFormatter;
+
+// ────────────────────────────────────────────────────────────
+// utility: lee sólo si existe y es fichero regular
+async function safeRead(absPath: string): Promise<string> {
+  try {
+    const st = await fs.stat(absPath);
+    if (!st.isFile()) {
+      return ""; // si no es un fichero, devolvemos vacío
+    }
+    return await fs.readFile(absPath, "utf8");
+  } catch {
+    return ""; // ENOENT u otro error → cadena vacía
+  }
+}
+// ────────────────────────────────────────────────────────────
 
 export class CompactProject implements CompactUseCase {
   private readonly contentMinifier = new ContentMinifier();
@@ -49,8 +66,8 @@ export class CompactProject implements CompactUseCase {
       // 2) Generador adecuado
       const treeGen =
         opts.selectionMode === "files"
-          ? new FilesTreeGenerator()
-          : new DirectoryTreeGenerator();
+          ? new FilesTreeGenerator({ maxTotal: 150, maxChildren: 30 })
+          : new DirectoryTreeGenerator({ maxTotal: 150, maxChildren: 30 });
 
       // 3) Ignored patterns
       const ig = ignore().add(await this.getIgnorePatterns(opts));
@@ -67,15 +84,20 @@ export class CompactProject implements CompactUseCase {
         );
       this.progressReporter.endOperation("generateTree");
 
-      // 5) Lista de archivos a leer
+      // 5) Lista de archivos a leer – basándonos SOLO en el árbol pruned
       this.progressReporter.startOperation("prepareFileList");
       const isInside = (p: string) =>
         treeGen.isInsideTruncatedDir(p, truncatedPaths);
-      const filePaths =
-        opts.selectionMode === "files"
-          ? (opts.specificFiles ?? []).filter((p) => !isInside(p))
-          : fileListFromTree(fileTree).filter((p) => !isInside(p));
-      this.progressReporter.log(`📑 A leer: ${filePaths.length}`);
+
+      // 5.1) Extraer todos los ficheros del árbol truncado
+      const allTreeFiles = fileListFromTree(fileTree);
+      // 5.2) Filtrar los que están dentro de un placeholder
+      const filePaths = allTreeFiles.filter((p) => !isInside(p));
+
+      this.progressReporter.log(`📑 A leer: ${filePaths.length} archivos`); // 🔍 LOG
+      this.progressReporter.log(
+        `👀 Primeros 10 paths: ${filePaths.slice(0, 10).join(", ")}`
+      ); // 🔍 LOG
       this.progressReporter.endOperation("prepareFileList");
 
       // 6) Leer y minificar
@@ -84,11 +106,17 @@ export class CompactProject implements CompactUseCase {
       this.progressReporter.log(
         `✅ Leídos ${files.length}/${filePaths.length}`
       );
+      this.progressReporter.log(
+        `🗒 Paths leídos (primeros 10): ${files
+          .map((f) => f.path)
+          .slice(0, 10)
+          .join(", ")}`
+      ); // 🔍 LOG
       this.progressReporter.endOperation("loadFiles");
 
       // 7) Componer salida
       this.progressReporter.startOperation("composeOutput");
-      const combined = this.composeOutput(
+      const combined = await this.composeOutput(
         filePaths,
         files,
         treeText,
@@ -127,34 +155,99 @@ export class CompactProject implements CompactUseCase {
     const limit = pLimit(32);
     let cnt = 0;
     let lastPct = 0;
-    const res = await Promise.all(
+
+    // Validar rutas antes de procesar
+    this.progressReporter.log(`🔍 Verificando rutas: ${paths.length} archivos`);
+
+    const results = await Promise.all(
       paths.map((p) =>
         limit(async () => {
-          const content = await this.fs.readFile(path.join(root, p));
-          cnt++;
-          const pct = Math.floor((cnt / paths.length) * 100);
-          if (pct >= lastPct + 10) {
-            this.progressReporter.log(`📊 ${pct}%`);
-            lastPct = pct;
+          const abs = path.join(root, p);
+
+          // Validación básica para evitar rutas inválidas
+          if (!p) {
+            this.progressReporter.log(`⚠️ Ruta vacía detectada, omitiendo.`);
+            return null;
           }
-          return content ? { path: p, content } : null;
+
+          this.progressReporter.log(`🔍 Stat de: ${abs}`);
+
+          try {
+            const st = await fs.stat(abs);
+            this.progressReporter.log(
+              ` → ${st.isFile() ? "es archivo" : "❗ NO es un archivo regular"}`
+            );
+
+            if (!st.isFile()) {
+              const msg = `No es un archivo regular: ${abs}`;
+              this.progressReporter.error(`❌ ${msg}`);
+              throw new Error(msg);
+            }
+
+            this.progressReporter.log(`📖 Leyendo: ${abs}`);
+            const raw = await this.fs.readFile(abs);
+
+            if (raw == null) {
+              const msg = `Contenido vacío de "${abs}"`;
+              this.progressReporter.error(`❌ ${msg}`);
+              throw new Error(msg);
+            }
+
+            cnt++;
+            const pct = Math.floor((cnt / paths.length) * 100);
+            if (pct >= lastPct + 10) {
+              this.progressReporter.log(`📊 ${pct}%`);
+              lastPct = pct;
+            }
+
+            return { path: p, content: raw };
+          } catch (err: any) {
+            // Solo registrar el error y continuar con los demás archivos
+            this.progressReporter.error(
+              `❌ Error procesando "${abs}": ${err.code || err.message}`,
+              err
+            );
+            return null;
+          }
         })
       )
     );
-    const files = res.filter((x): x is FileEntry => !!x);
-    if (files.length < paths.length) {
-      this.progressReporter.warn(`⚠️ ${paths.length - files.length} fallaron`);
+
+    // Filtrar los resultados nulos (archivos que no se pudieron leer)
+    const validResults = results.filter(
+      (item): item is FileEntry => item !== null
+    );
+
+    this.progressReporter.log(
+      `✅ Leídos ${validResults.length}/${paths.length}`
+    );
+
+    if (validResults.length === 0) {
+      throw new Error("No se pudo leer ningún archivo seleccionado");
     }
-    return files;
+
+    this.progressReporter.log(
+      `🗒 Paths leídos (primeros 10): ${validResults
+        .map((f) => f.path)
+        .slice(0, 10)
+        .join(", ")}`
+    );
+
+    return validResults;
   }
 
-  private composeOutput(
+  private async composeOutput(
     indexPaths: string[],
     files: FileEntry[],
     treeText: string,
     minify: boolean
-  ): string {
-    // 1) Header (marca de árbol, índice y archivos)
+  ): Promise<string> {
+    const t0 = Date.now();
+
+    // Usar un array de strings en lugar de concatenación
+    const parts: string[] = [];
+
+    // 1) Header - sin cambios
     const header = this.formatter.generateHeader(
       TREE_MARKER,
       INDEX_MARKER,
@@ -162,52 +255,70 @@ export class CompactProject implements CompactUseCase {
       minify,
       !!treeText.trim()
     );
+    parts.push(header);
 
-    const parts: string[] = [header];
-
-    // 2) Sección de árbol si hay contenido
+    // 2) Sección de árbol
     if (treeText) {
       parts.push(`${TREE_MARKER}\n${treeText}\n\n`);
     }
 
-    // 3) Índice de rutas
-    parts.push(
-      `${INDEX_MARKER}\n${this.formatter.generateIndex(indexPaths)}\n\n`
-    );
+    // 3) Mapear archivos por path para búsqueda rápida
+    const fileMap = new Map<string, FileEntry>();
+    files.forEach((file) => fileMap.set(file.path, file));
 
-    // 4) Cada archivo, numerado y posiblemente minificado
-    let counter = 1;
+    // 4) Generar índice
+    const indexText = this.formatter.generateIndex(indexPaths);
+    parts.push(`${INDEX_MARKER}\n${indexText}\n\n`);
+
+    // 5) Procesar archivos en chunks para reducir bloqueo del UI
+    const CHUNK_SIZE = 10; // Procesar en grupos de 10 archivos
+
+    // Crear minificador con caché
+    const minifier = new ContentMinifier();
+
     let originalSize = 0;
     let processedSize = 0;
 
-    for (const file of files) {
-      originalSize += file.content.length;
-      const content = minify
-        ? this.contentMinifier.minify(file.content)
-        : file.content;
-      processedSize += content.length;
+    // Procesamiento en paralelo con límite de concurrencia
+    const concurrencyLimit = pLimit(4); // Limitar a 4 procesos concurrentes
 
-      parts.push(
-        this.formatter.formatFileEntry(
-          counter++,
+    // Preparar promesas para trabajar en paralelo
+    const filePromises = files.map((file, index) =>
+      concurrencyLimit(async () => {
+        originalSize += file.content.length;
+
+        // Minificar si es necesario
+        const content = minify ? minifier.minify(file.content) : file.content;
+        processedSize += content.length;
+
+        // Retornar la entrada formateada
+        return this.formatter.formatFileEntry(
+          index + 1,
           file.path,
           content,
           FILE_MARKER
-        ),
-        "\n"
-      );
-    }
+        );
+      })
+    );
 
-    // 5) Informe de ahorro si minificamos
-    if (minify && originalSize > 0) {
-      const savedPct = ((1 - processedSize / originalSize) * 100).toFixed(2);
-      this.progressReporter.log(
-        `📊 Minificado: ${this.formatFileSize(originalSize)} → ` +
-          `${this.formatFileSize(processedSize)} (${savedPct}%)`
-      );
-    }
+    // Ejecutar procesamiento en paralelo y combinar resultados
+    // Ejecutar procesamiento en paralelo y combinar resultados
+    return Promise.all(filePromises).then((fileEntries) => {
+      // Combinar todo
+      parts.push(...fileEntries);
 
-    return parts.join("");
+      // Reporte de ahorro si minificamos
+      if (minify && originalSize > 0) {
+        const savedPct = ((1 - processedSize / originalSize) * 100).toFixed(2);
+        this.progressReporter.log(
+          `📊 Minificado: ${this.formatFileSize(originalSize)} → ` +
+            `${this.formatFileSize(processedSize)} (${savedPct}%)`
+        );
+      }
+
+      // Unir y retornar
+      return parts.join("");
+    });
   }
 
   private async getIgnorePatterns(opts: CompactOptions): Promise<string[]> {

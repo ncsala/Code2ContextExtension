@@ -38,6 +38,12 @@ export interface ProgressReporter {
  * Implementación de ProgressReporter que usa console
  */
 export class ConsoleProgressReporter implements ProgressReporter {
+  private readonly verbose: boolean;
+
+  constructor(verbose: boolean = false) {
+    this.verbose = verbose;
+  }
+
   startOperation(label: string): void {
     console.time(label);
   }
@@ -47,6 +53,14 @@ export class ConsoleProgressReporter implements ProgressReporter {
   }
 
   log(message: string): void {
+    // Solo imprimir mensajes detallados si verbose está activado
+    if (
+      !this.verbose &&
+      message.startsWith("🔍") &&
+      !message.includes("Error")
+    ) {
+      return;
+    }
     console.log(message);
   }
 

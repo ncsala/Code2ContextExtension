@@ -158,7 +158,7 @@ export abstract class BaseTreeGenerator {
     totalDesc: number
   ): [{ node: FileTree; count: number }[], MeasuredEntry[]] {
     const heavyAbsolute = this.limits.maxTotal;
-    const heavyRelative = 0.5; // 50% peso
+    const heavyRelative = 0.8; // 50% peso
     const minRelSize = Math.floor(this.limits.maxTotal * 0.2);
     const heavy: { node: FileTree; count: number }[] = [];
     const rest: MeasuredEntry[] = [];
@@ -295,7 +295,7 @@ export abstract class BaseTreeGenerator {
  */
 export class DirectoryTreeGenerator extends BaseTreeGenerator {
   constructor(l: Partial<TreeLimits> = {}) {
-    super({ maxTotal: l.maxTotal ?? 800, maxChildren: l.maxChildren ?? 80 });
+    super({ maxTotal: l.maxTotal ?? 500, maxChildren: l.maxChildren ?? 40 });
   }
 
   public async build(
