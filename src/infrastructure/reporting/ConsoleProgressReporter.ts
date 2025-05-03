@@ -1,7 +1,4 @@
-// ESTA CLASE LA MOVEREMOS LUEGO A INFRASTRUCTURE
-// (Imaginemos por ahora que sigue en src/application/ports/driven/ProgressReporter.ts)
-
-import { ProgressReporter } from "./ProgressReporter"; // Asegúrate que la importación sea correcta según la ubicación final
+import { ProgressReporter } from "../../application/ports/driven/ProgressReporter";
 
 /**
  * Implementación de ProgressReporter que usa console y puede añadir prefijos de nivel.
@@ -28,7 +25,6 @@ export class ConsoleProgressReporter implements ProgressReporter {
   }
 
   info(message: string): void {
-    // Filtrado verbose original
     if (
       !this.verbose &&
       message.startsWith("🔍") &&

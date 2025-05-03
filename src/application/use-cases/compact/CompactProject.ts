@@ -5,7 +5,7 @@ import { GitPort } from "../../../domain/ports/driven/GitPort";
 import { CompactResult } from "../../../domain/model/CompactResult";
 import { FileEntry } from "../../../domain/model/FileEntry";
 import { ProgressReporter } from "../../ports/driven/ProgressReporter";
-import { ConsoleProgressReporter } from "../../ports/driven/ConsoleProgressReporter";
+import { ConsoleProgressReporter } from "../../../infrastructure/reporting/ConsoleProgressReporter";
 
 import { FilesTreeGenerator } from "../../services/tree/FilesTreeGenerator";
 import { DirectoryTreeGenerator } from "../../services/tree/DirectoryTreeGenerator";

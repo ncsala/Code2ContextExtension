@@ -1,5 +1,3 @@
-// EN: src/application/ports/driven/ProgressReporter.ts
-
 /**
  * Interfaz para reportar progreso y logs durante operaciones.
  */

@@ -11,7 +11,7 @@ import { registerGenerateCommands } from "./commands/generateCommands";
 import { CompactOptions } from "../../../domain/model/CompactOptions";
 import { CompactResult } from "../../../domain/model/CompactResult";
 import { ProgressReporter } from "../../../application/ports/driven/ProgressReporter";
-import { ConsoleProgressReporter } from "../../../application/ports/driven/ConsoleProgressReporter";
+import { ConsoleProgressReporter } from "../../../infrastructure/reporting/ConsoleProgressReporter";
 
 // Variable global para mantener referencia al WebviewProvider principal
 let webviewProvider: WebviewProvider | undefined;
