@@ -19,23 +19,9 @@ import pLimit from "p-limit";
 import { fileListFromTree } from "../../../shared/utils/fileListFromTree";
 import { toPosix } from "../../../shared/utils/pathUtils";
 import { promises as fs } from "fs";
-import type { Stats } from "fs";
 
 const { TREE_MARKER, INDEX_MARKER, FILE_MARKER } = ContentFormatter;
 
-// ────────────────────────────────────────────────────────────
-// utility: lee sólo si existe y es fichero regular
-async function safeRead(absPath: string): Promise<string> {
-  try {
-    const st = await fs.stat(absPath);
-    if (!st.isFile()) {
-      return ""; // si no es un fichero, devolvemos vacío
-    }
-    return await fs.readFile(absPath, "utf8");
-  } catch {
-    return ""; // ENOENT u otro error → cadena vacía
-  }
-}
 // ────────────────────────────────────────────────────────────
 
 export class CompactProject implements CompactUseCase {
@@ -115,11 +101,11 @@ export class CompactProject implements CompactUseCase {
       this.progressReporter.endOperation("loadFiles");
 
       // 7) Componer salida
-      this.progressReporter.startOperation("composeOutput");
+      const treeSection = opts.includeTree ? treeText : "";
       const combined = await this.composeOutput(
         filePaths,
         files,
-        treeText,
+        treeSection,
         opts.minifyContent ?? false
       );
       this.progressReporter.log(`✅ Salida: ${combined.length} bytes`);
@@ -273,9 +259,6 @@ export class CompactProject implements CompactUseCase {
     // 5) Procesar archivos en chunks para reducir bloqueo del UI
     const CHUNK_SIZE = 10; // Procesar en grupos de 10 archivos
 
-    // Crear minificador con caché
-    const minifier = new ContentMinifier();
-
     let originalSize = 0;
     let processedSize = 0;
 
@@ -288,7 +271,9 @@ export class CompactProject implements CompactUseCase {
         originalSize += file.content.length;
 
         // Minificar si es necesario
-        const content = minify ? minifier.minify(file.content) : file.content;
+        const content = minify
+          ? this.contentMinifier.minify(file.content)
+          : file.content;
         processedSize += content.length;
 
         // Retornar la entrada formateada
