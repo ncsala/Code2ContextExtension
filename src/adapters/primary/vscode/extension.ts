@@ -1,7 +1,6 @@
-// src/adapters/primary/vscode/extension.ts
 import * as vscode from "vscode";
 import { WebviewProvider } from "./WebviewProvider";
-import { createContainer } from "./di/dependencyContainer";
+import { Container, createContainer } from "./di/dependencyContainer";
 import { AppState } from "./state/appState";
 import { configureProviders } from "./providers/providerConfiguration";
 import { createGenerateContextCallback } from "./callbacks/documentCallbacks";
@@ -9,23 +8,23 @@ import { registerCommands } from "./services/extensionServices";
 
 // Estado centralizado de la aplicación
 let appState: AppState;
+let container: Container | undefined;
 
 /**
  * Función de activación de la extensión
  * @param context Contexto de la extensión
  */
 export function activate(context: vscode.ExtensionContext) {
-  // Declarar container fuera del try para usarlo en el catch
-  const container = createContainer(false);
+  container = createContainer(false);
   const { logger, selectionService, notificationService } = container;
 
   logger.info("Activando Code2Context extension...");
 
   try {
-    // 2. Inicializar estado centralizado
+    // Inicializar estado centralizado
     appState = new AppState(container.defaultOptions);
 
-    // 3. Configurar proveedores VS Code (ahora con servicios inyectados)
+    // Configurar proveedores VS Code
     const providers = configureProviders(
       context,
       appState,
@@ -34,13 +33,13 @@ export function activate(context: vscode.ExtensionContext) {
       notificationService
     );
 
-    // 4. Crear callback para generación de contexto
+    // Crear callback para generación de contexto
     const generateContextCallback = createGenerateContextCallback(
       container.compactUseCase,
       logger
     );
 
-    // 5. Crear WebviewProvider
+    // Crear WebviewProvider
     const webviewProvider = new WebviewProvider(
       context,
       providers.fileExplorerProvider,
@@ -50,10 +49,10 @@ export function activate(context: vscode.ExtensionContext) {
       logger
     );
 
-    // 6. Almacenar referencia al webviewProvider en el estado
-    appState.webviewProvider = webviewProvider;
+    // Almacenar referencia al webviewProvider en el estado
+    appState.setWebviewProvider(webviewProvider);
 
-    // 7. Registrar comandos
+    // Registrar comandos
     registerCommands(
       context,
       appState,
@@ -66,11 +65,11 @@ export function activate(context: vscode.ExtensionContext) {
       notificationService
     );
 
-    // 8. Marcar inicialización como completa
-    appState.initialized = true;
+    // Marcar inicialización como completa
+    appState.markAsInitialized();
     logger.info("Code2Context extension activated successfully!");
 
-    // 9. Abrir panel automáticamente al inicio
+    // Abrir panel automáticamente al inicio
     setTimeout(() => {
       try {
         logger.info("Intentando abrir el panel automáticamente...");
@@ -87,7 +86,20 @@ export function activate(context: vscode.ExtensionContext) {
       }`
     );
     if (appState) {
-      appState.initialized = false;
+      appState.setInitialized(false);
     }
   }
+}
+
+export function deactivate() {
+  if (container) {
+    // Limpiar servicios
+    container.selectionService.dispose();
+    // Podrías añadir más limpiezas aquí
+
+    // Limpiar referencia al container
+    container = undefined;
+  }
+
+  console.log("Code2Context extension deactivated.");
 }

@@ -153,4 +153,21 @@ export class VSCodeSelectionService implements SelectionPort {
       }
     }
   }
+
+  /**
+   * Limpia todos los recursos y libera memoria.
+   * Se debe llamar cuando la extensión se desactiva.
+   */
+  dispose(): void {
+    // Limpiar listeners
+    this.listeners.length = 0;
+
+    // Limpiar webviewProvider
+    this.webviewProvider = null;
+
+    // Limpiar selección
+    this.selectedFiles = [];
+
+    console.log("SelectionService disposed successfully");
+  }
 }

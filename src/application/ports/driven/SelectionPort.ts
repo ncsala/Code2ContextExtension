@@ -13,4 +13,5 @@ export interface SelectionPort {
   addListener(listener: SelectionChangeListener): void;
   removeListener(listener: SelectionChangeListener): void;
   registerWebviewProvider(provider: SelectionChangeListener): void;
+  dispose(): void;
 }
