@@ -3,7 +3,7 @@ import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProv
 import { FileItem } from "../providers/fileExplorer/FileItem";
 import { notificationService } from "../services/notificationService";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
-import { CompactOptions } from "../../../domain/model/CompactOptions";
+import { CompactOptions } from "../../../../domain/model/CompactOptions";
 
 /**
  * Registra los comandos relacionados con la selección de archivos

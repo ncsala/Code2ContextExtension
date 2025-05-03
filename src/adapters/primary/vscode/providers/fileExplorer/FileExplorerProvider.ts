@@ -5,8 +5,8 @@ import { FileItem } from "./FileItem";
 import { selectionService } from "../../services/selectionService";
 import { notificationService } from "../../services/notificationService";
 import ignore from "ignore";
-import { rel } from "../../../../shared/utils/pathUtils";
-import { defaultIgnorePatterns } from "../../../../shared/utils/ignorePatterns";
+import { rel } from "../../../../../shared/utils/pathUtils";
+import { defaultIgnorePatterns } from "../../../../../shared/utils/ignorePatterns";
 
 /** * Proveedor para el explorador de archivos en el TreeView */
 export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
@@ -69,6 +69,14 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     } else {
       console.error(`Invalid path or path does not exist: ${path}`);
     }
+  }
+
+  /**
+   * Obtiene la ruta raíz actual configurada en el proveedor.
+   * @returns La ruta raíz o undefined si no está establecida.
+   */
+  public getRootPath(): string | undefined {
+    return this.rootPath;
   }
 
   /** * Configura patrones de ignorado * @param patterns Lista de patrones a usar */

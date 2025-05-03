@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { FileEntry } from "../../../domain/model/FileEntry";
 import { FileTree } from "../../../domain/model/FileTree";
-import { FileSystemPort } from "../../../domain/ports/secondary/FileSystemPort";
+import { FileSystemPort } from "../../../domain/ports/driven/FileSystemPort";
 import { toPosix } from "../../../shared/utils/pathUtils";
 import { compareFileTrees } from "../../../shared/utils/sortUtils";
 import pLimit from "p-limit";

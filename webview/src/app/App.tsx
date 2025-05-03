@@ -60,6 +60,7 @@ Include GitIgnore: ${options.includeGitIgnore ? "Yes" : "No"}
   useEffect(() => {
     const handleMessage = (event: MessageEvent<VSCodeMessage>) => {
       const message = event.data;
+      console.log("[WebView App.tsx] Received message:", message);
 
       switch (message.command) {
         case "update":
@@ -116,6 +117,10 @@ Include GitIgnore: ${options.includeGitIgnore ? "Yes" : "No"}
           break;
 
         case "setLoading":
+          console.log(
+            `[WebView App.tsx] Received setLoading command. Payload:`,
+            message
+          );
           setLoading(message.loading);
           break;
 

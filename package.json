@@ -11,7 +11,7 @@
   "categories": [
     "Other"
   ],
-  "main": "out/interface/vscode/index.js",
+  "main": "out/adapters/primary/vscode/extension.js",
   "scripts": {
     "clean": "rimraf ./out ./dist",
     "compile": "tsc --build --clean && tsc -p ./",

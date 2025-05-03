@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { GitPort } from "../../../domain/ports/secondary/GitPort";
+import { GitPort } from "../../../domain/ports/driven/GitPort";
 import * as vscode from "vscode";
 import * as cp from "child_process";
 import { promisify } from "util";
@@ -70,9 +70,7 @@ export class GitAdapter implements GitPort {
   private isIgnoredByCommonPatterns(filePath: string): boolean {
     // Patrones comunes de ignorado
     // TODO revisr estos patrones
-    const commonPatterns = [
-      ".DS_Store",
-    ];
+    const commonPatterns = [".DS_Store"];
 
     // Verificar si el archivo coincide con alguno de los patrones
     for (const pattern of commonPatterns) {

@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
-import { CompactUseCase } from "../../../domain/ports/primary/CompactUseCase";
+import { CompactUseCase } from "../../../../domain/ports/driving/CompactUseCase";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import { notificationService } from "../services/notificationService";
-import { CompactOptions } from "../../../domain/model/CompactOptions";
+import { CompactOptions } from "../../../../domain/model/CompactOptions";
 import { WebviewProvider } from "../WebviewProvider";
 
 /**
@@ -92,15 +92,13 @@ export function registerGenerateCommands(
    */
   async function generateContext(options: CompactOptions) {
     try {
-      // Usar el WebviewProvider para gestionar la carga si está disponible
-      if (webviewProvider) {
-        webviewProvider.setLoading(true);
-      }
-
       // Ejecutar la compactación
       const result = await useCase.execute(options);
 
       if (webviewProvider) {
+        console.log(
+          `--> [extension.ts] generateContext SUCCESS: Attempting setLoading(false)`
+        );
         webviewProvider.setLoading(false);
       }
 
@@ -121,6 +119,9 @@ export function registerGenerateCommands(
       }
     } catch (error) {
       if (webviewProvider) {
+        console.info(
+          `--> [extension.ts] generateContext CATCH: Attempting setLoading(false)`
+        );
         webviewProvider.setLoading(false);
       }
 

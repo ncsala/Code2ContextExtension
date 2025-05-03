@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
-import { CompactOptions } from "../../../domain/model/CompactOptions";
-import { logger } from "../../../infrastructure/logging/ConsoleLogger";
+import { CompactOptions } from "../../../../domain/model/CompactOptions";
+import { logger } from "../../../../infrastructure/logging/ConsoleLogger";
 
 /** * Proveedor para la vista de opciones en el panel lateral */
 export class OptionsViewProvider implements vscode.WebviewViewProvider {

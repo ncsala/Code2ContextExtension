@@ -1,13 +1,13 @@
 import { CompactOptions } from "../../../domain/model/CompactOptions";
-import { CompactUseCase } from "../../../domain/ports/primary/CompactUseCase";
-import { FileSystemPort } from "../../../domain/ports/secondary/FileSystemPort";
-import { GitPort } from "../../../domain/ports/secondary/GitPort";
+import { CompactUseCase } from "../../../domain/ports/driving/CompactUseCase";
+import { FileSystemPort } from "../../../domain/ports/driven/FileSystemPort";
+import { GitPort } from "../../../domain/ports/driven/GitPort";
 import { CompactResult } from "../../../domain/model/CompactResult";
 import { FileEntry } from "../../../domain/model/FileEntry";
 import {
-  ProgressReporter,
   ConsoleProgressReporter,
-} from "../shared/ProgressReporter";
+  ProgressReporter,
+} from "../../ports/driven/ProgressReporter";
 import { FilesTreeGenerator } from "../../services/tree/FilesTreeGenerator";
 import { DirectoryTreeGenerator } from "../../services/tree/DirectoryTreeGenerator";
 import { ContentMinifier } from "../../services/content/ContentMinifier";
@@ -100,6 +100,7 @@ export class CompactProject implements CompactUseCase {
       ); // 🔍 LOG
       this.progressReporter.endOperation("loadFiles");
 
+      this.progressReporter.startOperation("composeOutput");
       // 7) Componer salida
       const treeSection = opts.includeTree ? treeText : "";
       const combined = await this.composeOutput(
@@ -160,9 +161,9 @@ export class CompactProject implements CompactUseCase {
 
           try {
             const st = await fs.stat(abs);
-            this.progressReporter.log(
-              ` → ${st.isFile() ? "es archivo" : "❗ NO es un archivo regular"}`
-            );
+            // this.progressReporter.log(
+            //   ` → ${st.isFile() ? "es archivo" : "❗ NO es un archivo regular"}`
+            // );
 
             if (!st.isFile()) {
               const msg = `No es un archivo regular: ${abs}`;
