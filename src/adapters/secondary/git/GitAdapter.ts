@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { GitPort } from "../../../domain/ports/driven/GitPort";
+import { GitPort } from "../../../application/ports/driven/GitPort";
 import * as vscode from "vscode";
 import * as cp from "child_process";
 import { promisify } from "util";

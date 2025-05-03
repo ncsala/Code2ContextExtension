@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
-import { CompactOptions } from "../../../../domain/model/CompactOptions";
+import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 
 /** * Proveedor para la vista de opciones en el panel lateral */

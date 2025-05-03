@@ -1,6 +1,6 @@
 import ignore from "ignore";
-import { FileEntry } from "../../model/FileEntry";
-import { FileTree } from "../../model/FileTree";
+import { FileEntry } from "../../../domain/model/FileEntry";
+import { FileTree } from "../../../domain/model/FileTree";
 
 /**
  * Puerto secundario para interactuar con el sistema de archivos

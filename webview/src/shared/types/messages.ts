@@ -8,6 +8,7 @@ export interface CompactOptions {
   minifyContent: boolean;
   selectionMode: "directory" | "files";
 }
+
 // Mensajes enviados desde el webview a VSCode
 interface WebviewToVSCodeMessage {
   command: string;
@@ -33,6 +34,7 @@ export interface ChangeSelectionModeMessage extends WebviewToVSCodeMessage {
   command: "changeSelectionMode";
   mode: "directory" | "files";
 }
+
 // Mensajes enviados desde VSCode al webview
 interface VSCodeToWebviewMessage {
   command: string;

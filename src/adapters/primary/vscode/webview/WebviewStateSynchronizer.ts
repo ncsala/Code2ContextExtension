@@ -1,11 +1,12 @@
+// src/adapters/primary/vscode/webview/WebviewStateSynchronizer.ts
 import * as vscode from "vscode";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import {
-  selectionService,
+  SelectionPort,
   SelectionChangeListener,
-} from "../services/selectionService";
+} from "../../../../application/ports/driven/SelectionPort";
 import { WebviewMessageBridge } from "./WebviewMessageBridge";
-import { CompactOptions } from "../../../../domain/model/CompactOptions";
+import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 
 /**
@@ -20,6 +21,7 @@ export class WebviewStateSynchronizer implements SelectionChangeListener {
   constructor(
     private readonly optionsViewProvider: OptionsViewProvider,
     private readonly messageBridge: WebviewMessageBridge,
+    private readonly selectionService: SelectionPort,
     private readonly logger: ProgressReporter
   ) {}
 
@@ -34,7 +36,7 @@ export class WebviewStateSynchronizer implements SelectionChangeListener {
       (options) => this.syncOptions(options)
     );
 
-    selectionService.registerWebviewProvider(this);
+    this.selectionService.registerWebviewProvider(this);
     this.selectionListenerRegistered = true;
   }
 

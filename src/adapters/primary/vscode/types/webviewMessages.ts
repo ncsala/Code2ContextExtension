@@ -1,4 +1,4 @@
-import { CompactOptions } from "../../../../domain/model/CompactOptions";
+import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 
 /**
  * Tipos de mensajes que se envían desde la extensión al webview

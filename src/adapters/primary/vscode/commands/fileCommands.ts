@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
 import { FileItem } from "../providers/fileExplorer/FileItem";
-import { notificationService } from "../services/notificationService";
+import { NotificationPort } from "../../../../application/ports/driven/NotificationPort";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
-import { CompactOptions } from "../../../../domain/model/CompactOptions";
+import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 
 /**
  * Registra los comandos relacionados con la selección de archivos
@@ -12,7 +12,8 @@ export function registerFileCommands(
   context: vscode.ExtensionContext,
   fileExplorerProvider: FileExplorerProvider,
   _optionsViewProvider: OptionsViewProvider,
-  currentOptions: Partial<CompactOptions>
+  currentOptions: Partial<CompactOptions>,
+  notificationService: NotificationPort // Añadido
 ) {
   // Comando para seleccionar/deseleccionar un archivo
   const toggleSelectionCommand = vscode.commands.registerCommand(

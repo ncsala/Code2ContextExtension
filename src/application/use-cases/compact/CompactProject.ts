@@ -1,8 +1,8 @@
-import { CompactOptions } from "../../../domain/model/CompactOptions";
-import { CompactUseCase } from "../../../domain/ports/driving/CompactUseCase";
-import { FileSystemPort } from "../../../domain/ports/driven/FileSystemPort";
-import { GitPort } from "../../../domain/ports/driven/GitPort";
-import { CompactResult } from "../../../domain/model/CompactResult";
+import { CompactOptions } from "../../ports/driving/CompactOptions";
+import { CompactUseCase } from "../../ports/driving/CompactUseCase";
+import { FileSystemPort } from "../../ports/driven/FileSystemPort";
+import { GitPort } from "../../ports/driven/GitPort";
+import { CompactResult } from "../../ports/driving/CompactResult";
 import { FileEntry } from "../../../domain/model/FileEntry";
 import { ProgressReporter } from "../../ports/driven/ProgressReporter";
 import { ConsoleProgressReporter } from "../../../infrastructure/reporting/ConsoleProgressReporter";
@@ -15,7 +15,7 @@ import * as path from "path";
 import ignore from "ignore";
 import { ContentFormatter } from "../../services/content/ContentFormatter";
 import pLimit from "p-limit";
-import { fileListFromTree } from "../../../shared/utils/fileListFromTree";
+import { fileListFromTree } from "../../services/tree/utils/fileListFromTree";
 import { toPosix } from "../../../shared/utils/pathUtils";
 import { promises as fs } from "fs";
 
@@ -138,7 +138,7 @@ export class CompactProject implements CompactUseCase {
   }
 
   private async loadFiles(root: string, paths: string[]): Promise<FileEntry[]> {
-    const limit = pLimit(10);
+    const limit = pLimit(16);
     let cnt = 0;
     let lastPct = 0;
 

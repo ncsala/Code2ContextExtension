@@ -1,9 +1,10 @@
+// src/adapters/primary/vscode/commands/generateCommands.ts
 import * as vscode from "vscode";
-import { CompactUseCase } from "../../../../domain/ports/driving/CompactUseCase";
+import { CompactUseCase } from "../../../../application/ports/driving/CompactUseCase";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
-import { notificationService } from "../services/notificationService";
-import { CompactOptions } from "../../../../domain/model/CompactOptions";
+import { NotificationPort } from "../../../../application/ports/driven/NotificationPort";
+import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 import { WebviewProvider } from "../WebviewProvider";
 
 /**
@@ -15,7 +16,8 @@ export function registerGenerateCommands(
   fileExplorerProvider: FileExplorerProvider,
   optionsViewProvider: OptionsViewProvider,
   currentOptions: Partial<CompactOptions>,
-  webviewProvider?: WebviewProvider
+  webviewProvider?: WebviewProvider,
+  notificationService?: NotificationPort // Añadido
 ) {
   // Comando para generar contexto directamente desde las opciones nativas
   const generateFromOptionsCommand = vscode.commands.registerCommand(
@@ -27,14 +29,12 @@ export function registerGenerateCommands(
       // Determinar modo de selección
       if (currentOptions.selectionMode === "files") {
         const selectedFiles = fileExplorerProvider.getSelectedFiles();
-
         if (selectedFiles.length === 0) {
-          notificationService.showError(
+          notificationService?.showError(
             "No files selected to generate context"
           );
           return;
         }
-
         await generateContext({
           ...currentOptions,
           ...optionsFromPanel,
@@ -56,16 +56,14 @@ export function registerGenerateCommands(
     "code2context.generateFromSelection",
     async () => {
       const selectedFiles = fileExplorerProvider.getSelectedFiles();
-
       if (selectedFiles.length === 0) {
-        notificationService.showError("No files selected to generate context");
+        notificationService?.showError("No files selected to generate context");
         return;
       }
 
       const rootPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
       if (!rootPath) {
-        notificationService.showError("No workspace open");
+        notificationService?.showError("No workspace open");
         return;
       }
 
@@ -94,26 +92,22 @@ export function registerGenerateCommands(
     try {
       // Ejecutar la compactación
       const result = await useCase.execute(options);
-
       if (webviewProvider) {
         console.log(
           `--> [extension.ts] generateContext SUCCESS: Attempting setLoading(false)`
         );
         webviewProvider.setLoading(false);
       }
-
       if (result.ok === true) {
-        notificationService.showInformation(`Context generated successfully`);
-
+        notificationService?.showInformation(`Context generated successfully`);
         // Abrir el resultado en un nuevo editor
         const document = await vscode.workspace.openTextDocument({
           content: result.content,
           language: "plaintext",
         });
-
         await vscode.window.showTextDocument(document);
       } else {
-        notificationService.showError(
+        notificationService?.showError(
           `Error generating context: ${result.error}`
         );
       }
@@ -124,12 +118,10 @@ export function registerGenerateCommands(
         );
         webviewProvider.setLoading(false);
       }
-
       const errorMessage = `Error: ${
         error instanceof Error ? error.message : String(error)
       }`;
-
-      notificationService.showError(errorMessage);
+      notificationService?.showError(errorMessage);
     }
   }
 

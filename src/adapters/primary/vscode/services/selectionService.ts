@@ -1,23 +1,18 @@
-import { notificationService } from "./notificationService";
-
-/**
- * Interfaz para comunicar cambios en la selección
- */
-export interface SelectionChangeListener {
-  /**
-   * Notifica que la selección ha cambiado
-   * @param selectedFiles Lista actualizada de archivos seleccionados
-   */
-  onSelectionChanged(selectedFiles: string[]): void;
-}
+import { NotificationPort } from "../../../../application/ports/driven/NotificationPort";
+import {
+  SelectionChangeListener,
+  SelectionPort,
+} from "../../../../application/ports/driven/SelectionPort";
 
 /**
  * Servicio para manejar la selección de archivos y directorios
  */
-export class SelectionService {
+export class VSCodeSelectionService implements SelectionPort {
   private readonly listeners: SelectionChangeListener[] = [];
   private selectedFiles: string[] = [];
   private webviewProvider: SelectionChangeListener | null = null;
+
+  constructor(private readonly notificationService: NotificationPort) {}
 
   /**
    * Establece la lista de archivos seleccionados
@@ -38,7 +33,6 @@ export class SelectionService {
     if (this.selectedFiles.length !== newFiles.length) {
       return true;
     }
-
     // Verificar si hay diferencias en los archivos
     return (
       newFiles.some((file) => !this.selectedFiles.includes(file)) ||
@@ -120,7 +114,7 @@ export class SelectionService {
     if (this.selectedFiles.length > 0) {
       this.selectedFiles = [];
       this.notifyListeners();
-      notificationService.showInformation("Selection cleared");
+      this.notificationService.showInformation("Selection cleared");
     }
   }
 
@@ -151,7 +145,6 @@ export class SelectionService {
     if (this.webviewProvider) {
       this.webviewProvider.onSelectionChanged([...this.selectedFiles]);
     }
-
     // Luego a los demás listeners
     for (const listener of this.listeners) {
       if (listener !== this.webviewProvider) {
@@ -161,6 +154,3 @@ export class SelectionService {
     }
   }
 }
-
-// Exportar instancia singleton
-export const selectionService = new SelectionService();

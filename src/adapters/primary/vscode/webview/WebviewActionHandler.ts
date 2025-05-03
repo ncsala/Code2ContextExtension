@@ -1,6 +1,6 @@
 // src/adapters/primary/vscode/webview/WebviewActionHandler.ts
 import * as vscode from "vscode";
-import { CompactOptions } from "../../../../domain/model/CompactOptions";
+import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
 import {
@@ -9,7 +9,7 @@ import {
   UpdateIgnorePatternsMessage,
   ChangeSelectionModeMessage,
 } from "../types/webviewMessages";
-import { selectionService } from "../services/selectionService";
+import { SelectionPort } from "../../../../application/ports/driven/SelectionPort";
 import { WebviewMessageBridge } from "./WebviewMessageBridge";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 
@@ -26,6 +26,7 @@ export class WebviewActionHandler {
     private readonly optionsViewProvider: OptionsViewProvider,
     private readonly fileExplorerProvider: FileExplorerProvider,
     private readonly messageBridge: WebviewMessageBridge, // Para enviar respuestas/updates
+    private readonly selectionService: SelectionPort, // Ahora inyectado
     generateContextCallback: (options: CompactOptions) => Promise<void>,
     private readonly logger: ProgressReporter
   ) {
@@ -45,17 +46,12 @@ export class WebviewActionHandler {
     this.logger.info(`WebviewActionHandler received: ${message.command}`);
     switch (message.command) {
       case "compact":
-        // Ya no necesitamos pasar el payload directamente si usamos las opciones del provider?
-        // No, el webview puede tener cambios no aplicados en el OptionsViewProvider nativo.
-        // Es mejor pasar el payload del webview como fuente principal para 'compact'.
         await this.handleCompact(message.payload);
         break;
       case "selectDirectory":
         await this.handleSelectDirectory(message);
         break;
       case "updateIgnorePatterns":
-        // Este mensaje parece obsoleto si las opciones se manejan en OptionsViewProvider
-        // Pero lo mantenemos por si el webview envía actualizaciones directas.
         this.handleUpdateIgnorePatterns(message);
         break;
       case "getSelectedFiles":
@@ -129,7 +125,8 @@ export class WebviewActionHandler {
         "directory", // Prioridad: Webview -> OptionsView -> Default
       specificFiles:
         payloadFromWebview.specificFiles ??
-        this.optionsViewProvider.getOptions().specificFiles, // Prioridad Webview -> OptionsView (aunque se recalcula luego)
+        this.optionsViewProvider.getOptions().specificFiles ??
+        [], // Inicializar como array vacío
       verboseLogging:
         payloadFromWebview.verboseLogging ??
         this.optionsViewProvider.getOptions().verboseLogging ??
@@ -139,8 +136,6 @@ export class WebviewActionHandler {
     this.logger.info("Processed compact options:", options);
 
     // Sincronizar las opciones procesadas de vuelta al provider nativo
-    // para que esté al día si la generación se inició desde el webview.
-    // Esto también notificará al StateSynchronizer para actualizar el webview (si es necesario).
     this.optionsViewProvider.updateOptions(options);
 
     // --- Validaciones ---
@@ -158,8 +153,7 @@ export class WebviewActionHandler {
 
     if (options.selectionMode === "files") {
       // Usar SIEMPRE los archivos del servicio de selección como fuente de verdad para 'specificFiles'
-      // independientemente de lo que viniera en el payload (que podría estar desactualizado).
-      options.specificFiles = selectionService.getSelectedFiles();
+      options.specificFiles = this.selectionService.getSelectedFiles();
       this.logger.info(
         `File selection mode: using ${options.specificFiles.length} files from selectionService.`
       );
@@ -201,9 +195,6 @@ export class WebviewActionHandler {
         "--> [ActionHandler] Caught error explicitly re-thrown from generateContextCallback:",
         error
       );
-      // La notificación de error ya la debería haber mostrado la callback
-      // No es necesario mostrar otra aquí a menos que queramos añadir info.
-      // vscode.window.showErrorMessage(`Context generation task failed.`);
     } finally {
       // *** ESTE BLOQUE SIEMPRE SE EJECUTA ***
       // Asegura que el estado 'loading' se desactive en el webview
@@ -271,7 +262,7 @@ export class WebviewActionHandler {
   }
 
   private handleGetSelectedFiles(): void {
-    const files = selectionService.getSelectedFiles();
+    const files = this.selectionService.getSelectedFiles();
     this.logger.info(
       `Sending selected files to webview: ${files.length} files`
     );

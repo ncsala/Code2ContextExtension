@@ -1,6 +1,4 @@
-// shared/utils/fileListFromTree.ts
-
-import { FileTree } from "../../domain/model/FileTree";
+import { FileTree } from "../../../../domain/model/FileTree";
 export function fileListFromTree(node: FileTree): string[] {
   // Uso de Set para evitar duplicados
   const paths = new Set<string>();

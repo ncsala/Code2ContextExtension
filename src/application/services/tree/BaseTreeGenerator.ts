@@ -13,7 +13,7 @@ import { TreeLimits, MeasuredEntry, PLACEHOLDER } from "./FilesTreeGenerator";
  */
 
 export abstract class BaseTreeGenerator {
-  protected io = pLimit(10);
+  protected io = pLimit(16);
   protected cache = new Map<string, Dirent[]>();
   protected truncated = new Set<string>();
   protected selected = new Set<string>();

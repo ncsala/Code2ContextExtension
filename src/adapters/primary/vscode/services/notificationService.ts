@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
+import { NotificationPort } from "../../../../application/ports/driven/NotificationPort";
 
 /**
  * Servicio para manejar notificaciones en la UI de VSCode
  */
-export class NotificationService {
+export class VSCodeNotificationService implements NotificationPort {
   /**
    * Muestra un mensaje de información
    * @param message Mensaje a mostrar
@@ -40,6 +41,3 @@ export class NotificationService {
     return selected && selected.length > 0 ? selected[0] : undefined;
   }
 }
-
-// Exportar instancia singleton
-export const notificationService = new NotificationService();

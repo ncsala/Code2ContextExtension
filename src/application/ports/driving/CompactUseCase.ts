@@ -1,5 +1,5 @@
-import { CompactResult } from "../../model/CompactResult";
-import { CompactOptions } from "../../model/CompactOptions";
+import { CompactResult } from "./CompactResult";
+import { CompactOptions } from "./CompactOptions";
 
 /**
  * Puerto primario (interfaz) para el caso de uso de compactación

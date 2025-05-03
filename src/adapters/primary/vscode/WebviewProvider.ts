@@ -1,8 +1,7 @@
 import * as vscode from "vscode";
-import { CompactOptions } from "../../../domain/model/CompactOptions";
+import { CompactOptions } from "../../../application/ports/driving/CompactOptions";
 import { FileExplorerProvider } from "./providers/fileExplorer/FileExplorerProvider";
 import { OptionsViewProvider } from "./options/optionsViewProvider";
-import { selectionService } from "./services/selectionService";
 import { VSCodeToWebviewMessage } from "./types/webviewMessages";
 
 // Importar los nuevos componentes del webview
@@ -12,6 +11,7 @@ import { WebviewActionHandler } from "./webview/WebviewActionHandler";
 import { WebviewStateSynchronizer } from "./webview/WebviewStateSynchronizer";
 import { ConsoleLogInterceptor } from "./webview/ConsoleLogInterceptor";
 import { ProgressReporter } from "../../../application/ports/driven/ProgressReporter";
+import { SelectionPort } from "../../../application/ports/driven/SelectionPort";
 
 /**
  * Orquesta la creación, comunicación y lógica del Webview principal de Code2Context.
@@ -37,6 +37,7 @@ export class WebviewProvider {
     fileExplorerProvider: FileExplorerProvider,
     optionsViewProvider: OptionsViewProvider,
     generateContextCallback: (options: CompactOptions) => Promise<void>,
+    private readonly selectionService: SelectionPort,
     private readonly logger: ProgressReporter
   ) {
     this.context = context;
@@ -51,12 +52,14 @@ export class WebviewProvider {
       this.optionsViewProvider,
       this.fileExplorerProvider,
       this.messageBridge,
+      this.selectionService,
       this.generateContextCallback,
       this.logger
     );
     this.stateSynchronizer = new WebviewStateSynchronizer(
       this.optionsViewProvider,
       this.messageBridge,
+      this.selectionService,
       this.logger
     );
     this.consoleLogInterceptor = new ConsoleLogInterceptor();
@@ -131,7 +134,7 @@ export class WebviewProvider {
       options: this.optionsViewProvider.getOptions(), // Enviar opciones actuales
     });
     // Enviar selección inicial
-    const currentSelection = selectionService.getSelectedFiles();
+    const currentSelection = this.selectionService.getSelectedFiles(); // Usar this.selectionService
     this.messageBridge.postMessage({
       command: "selectedFiles",
       files: currentSelection,
