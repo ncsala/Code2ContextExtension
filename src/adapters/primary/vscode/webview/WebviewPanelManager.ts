@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
-import { logger } from "../../../../infrastructure/logging/ConsoleLogger";
+import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 
 /**
  * Administra el ciclo de vida y contenido del WebviewPanel de Code2Context.
@@ -10,9 +10,12 @@ export class WebviewPanelManager {
   private panel: vscode.WebviewPanel | undefined;
   private readonly viewType = "code2context";
   private readonly viewTitle = "Code2Context Generator";
-  private readonly webviewDistDir = "webview-dist"; // Nombre del directorio de build del webview
+  private readonly webviewDistDir = "webview-dist";
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly logger: ProgressReporter
+  ) {}
 
   /**
    * Obtiene la instancia actual del panel, si existe.
@@ -34,7 +37,7 @@ export class WebviewPanelManager {
 
     if (this.panel) {
       this.panel.reveal(column || vscode.ViewColumn.One);
-      logger.info("Webview panel revealed.");
+      this.logger.info("Webview panel revealed.");
       return this.panel;
     }
 
@@ -54,7 +57,7 @@ export class WebviewPanelManager {
     );
 
     this.panel = panel;
-    logger.info("Webview panel created.");
+    this.logger.info("Webview panel created.");
 
     // Escuchar cuando el panel es cerrado por el usuario
     panel.onDidDispose(() => this.dispose(), null, this.context.subscriptions);
@@ -76,7 +79,7 @@ export class WebviewPanelManager {
     const htmlFilePath = path.join(webviewDistPath, "index.html");
 
     if (!fs.existsSync(htmlFilePath)) {
-      logger.error(`Webview build file not found: ${htmlFilePath}`);
+      this.logger.error(`Webview build file not found: ${htmlFilePath}`);
       panel.webview.html = this.getFallbackHtml();
       return;
     }
@@ -93,9 +96,9 @@ export class WebviewPanelManager {
           return `${attr}="${panel.webview.asWebviewUri(resourceUri)}"`;
         }
       );
-      logger.info("Webview HTML content set.");
+      this.logger.info("Webview HTML content set.");
     } catch (error) {
-      logger.error("Error reading or processing webview HTML:", error);
+      this.logger.error("Error reading or processing webview HTML:", error);
       panel.webview.html = this.getFallbackHtml(
         "Error loading webview content."
       );
@@ -118,7 +121,7 @@ export class WebviewPanelManager {
    * Limpia la referencia al panel. Se llama típicamente cuando el panel se cierra.
    */
   public dispose(): void {
-    logger.info("Disposing WebviewPanelManager resources.");
+    this.logger.info("Disposing WebviewPanelManager resources.");
     this.panel?.dispose(); // Asegura que el panel de VS Code se cierre si aún no lo está
     this.panel = undefined;
   }

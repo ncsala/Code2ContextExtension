@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import { CompactOptions } from "../../../domain/model/CompactOptions";
-import { logger } from "../../../infrastructure/logging/ConsoleLogger";
 import { FileExplorerProvider } from "./providers/fileExplorer/FileExplorerProvider";
 import { OptionsViewProvider } from "./options/optionsViewProvider";
 import { selectionService } from "./services/selectionService";
@@ -12,6 +11,7 @@ import { WebviewMessageBridge } from "./webview/WebviewMessageBridge";
 import { WebviewActionHandler } from "./webview/WebviewActionHandler";
 import { WebviewStateSynchronizer } from "./webview/WebviewStateSynchronizer";
 import { ConsoleLogInterceptor } from "./webview/ConsoleLogInterceptor";
+import { ProgressReporter } from "../../../application/ports/driven/ProgressReporter";
 
 /**
  * Orquesta la creación, comunicación y lógica del Webview principal de Code2Context.
@@ -36,36 +36,35 @@ export class WebviewProvider {
     context: vscode.ExtensionContext,
     fileExplorerProvider: FileExplorerProvider,
     optionsViewProvider: OptionsViewProvider,
-    generateContextCallback: (options: CompactOptions) => Promise<void>
+    generateContextCallback: (options: CompactOptions) => Promise<void>,
+    private readonly logger: ProgressReporter
   ) {
     this.context = context;
     this.fileExplorerProvider = fileExplorerProvider;
     this.optionsViewProvider = optionsViewProvider;
-    this.generateContextCallback = generateContextCallback; // Callback inicial
+    this.generateContextCallback = generateContextCallback;
 
     // --- Inyección de Dependencias ---
-    // Crear instancias de los nuevos componentes
-    this.panelManager = new WebviewPanelManager(context);
-    this.messageBridge = new WebviewMessageBridge();
-    // El ActionHandler necesita el MessageBridge para enviar respuestas
+    this.panelManager = new WebviewPanelManager(context, this.logger);
+    this.messageBridge = new WebviewMessageBridge(this.logger);
     this.actionHandler = new WebviewActionHandler(
       this.optionsViewProvider,
       this.fileExplorerProvider,
       this.messageBridge,
-      this.generateContextCallback // Pasar el callback inicial
+      this.generateContextCallback,
+      this.logger
     );
     this.stateSynchronizer = new WebviewStateSynchronizer(
       this.optionsViewProvider,
-      this.messageBridge
+      this.messageBridge,
+      this.logger
     );
     this.consoleLogInterceptor = new ConsoleLogInterceptor();
 
-    logger.info("WebviewProvider initialized with specialized components.");
-
-    // Podríamos escuchar aquí si el generateContextCallback cambia externamente,
-    // pero por ahora, lo actualizamos con el método `updateGenerateCallback`.
+    this.logger.info(
+      "WebviewProvider initialized with specialized components."
+    );
   }
-
   /**
    * Actualiza la función de callback utilizada para generar el contexto.
    * Esto también actualiza el callback dentro del ActionHandler.
@@ -76,7 +75,7 @@ export class WebviewProvider {
   ): void {
     this.generateContextCallback = callback;
     this.actionHandler.updateGenerateCallback(callback); // Asegurar que el handler también tenga la última versión
-    logger.info(
+    this.logger.info(
       "Generate context callback updated in WebviewProvider and ActionHandler."
     );
   }
@@ -89,7 +88,7 @@ export class WebviewProvider {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!root) {
       vscode.window.showErrorMessage("Please open a workspace folder first.");
-      logger.error("Cannot open webview panel: No workspace folder open.");
+      this.logger.error("Cannot open webview panel: No workspace folder open.");
       return;
     }
 
@@ -112,7 +111,11 @@ export class WebviewProvider {
     this.stateSynchronizer.initialize();
 
     // 5. Iniciar el ConsoleLogInterceptor
-    this.consoleLogInterceptor.start(this.messageBridge, this.panelManager);
+    this.consoleLogInterceptor.start(
+      this.messageBridge,
+      this.panelManager,
+      this.logger
+    );
 
     // 6. Registrar el manejador principal para mensajes del Webview en el MessageBridge
     // Usamos bind para asegurar que el 'this' dentro de handleIncomingMessage sea el actionHandler
@@ -121,7 +124,7 @@ export class WebviewProvider {
     );
 
     // 7. Enviar estado inicial al Webview ahora que todo está listo
-    logger.info("Sending initial state to webview...");
+    this.logger.info("Sending initial state to webview...");
     this.messageBridge.postMessage({
       command: "initialize",
       rootPath: root,
@@ -136,16 +139,14 @@ export class WebviewProvider {
 
     // 8. Configurar limpieza cuando el panel se cierra
     this.panelManager.onDidDispose(() => {
-      logger.info("Webview panel disposed. Cleaning up resources...");
+      this.logger.info("Webview panel disposed. Cleaning up resources...");
       this.consoleLogInterceptor.stop();
       this.stateSynchronizer.dispose();
       this.messageBridge.detach();
-      // El panelManager se limpia a sí mismo internamente al detectar el dispose del panel
-      // No es necesario llamar a this.panelManager.dispose() aquí explícitamente.
-      logger.info("WebviewProvider cleanup complete.");
+      this.logger.info("WebviewProvider cleanup complete.");
     });
 
-    logger.info("Webview panel setup complete.");
+    this.logger.info("Webview panel setup complete.");
   }
 
   /**

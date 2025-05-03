@@ -3,16 +3,15 @@ import * as vscode from "vscode";
 import { CompactOptions } from "../../../../domain/model/CompactOptions";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
-import { logger } from "../../../../infrastructure/logging/ConsoleLogger";
 import {
   WebviewToVSCodeMessageType,
-  CompactMessage,
   SelectDirectoryMessage,
   UpdateIgnorePatternsMessage,
   ChangeSelectionModeMessage,
 } from "../types/webviewMessages";
 import { selectionService } from "../services/selectionService";
 import { WebviewMessageBridge } from "./WebviewMessageBridge";
+import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 
 /**
  * Contiene la lógica para manejar las acciones iniciadas desde el Webview.
@@ -20,17 +19,19 @@ import { WebviewMessageBridge } from "./WebviewMessageBridge";
  * interactuando con otros servicios y APIs de VS Code.
  */
 export class WebviewActionHandler {
+  private readonly workspaceRoot: string | undefined;
   private generateContextCallback: (options: CompactOptions) => Promise<void>;
-  private workspaceRoot: string | undefined; // Guardar la raíz del workspace
 
   constructor(
     private readonly optionsViewProvider: OptionsViewProvider,
     private readonly fileExplorerProvider: FileExplorerProvider,
     private readonly messageBridge: WebviewMessageBridge, // Para enviar respuestas/updates
-    generateContextCallback: (options: CompactOptions) => Promise<void>
+    generateContextCallback: (options: CompactOptions) => Promise<void>,
+    private readonly logger: ProgressReporter
   ) {
     this.generateContextCallback = generateContextCallback;
     this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    this.logger.debug("WebviewActionHandler instance created");
   }
 
   /**
@@ -41,7 +42,7 @@ export class WebviewActionHandler {
   public async handleIncomingMessage(
     message: WebviewToVSCodeMessageType
   ): Promise<void> {
-    logger.info(`WebviewActionHandler received: ${message.command}`);
+    this.logger.info(`WebviewActionHandler received: ${message.command}`);
     switch (message.command) {
       case "compact":
         // Ya no necesitamos pasar el payload directamente si usamos las opciones del provider?
@@ -70,7 +71,7 @@ export class WebviewActionHandler {
         this.handleChangeSelectionMode(message);
         break;
       default:
-        logger.warn(
+        this.logger.warn(
           `Received unknown command from webview: ${(message as any)?.command}`
         );
     }
@@ -84,7 +85,9 @@ export class WebviewActionHandler {
     callback: (options: CompactOptions) => Promise<void>
   ): void {
     this.generateContextCallback = callback;
-    logger.info("Generate context callback updated in WebviewActionHandler");
+    this.logger.info(
+      "Generate context callback updated in WebviewActionHandler"
+    );
   }
 
   // --- Métodos de manejo específicos ---
@@ -92,7 +95,10 @@ export class WebviewActionHandler {
   private async handleCompact(
     payloadFromWebview: CompactOptions
   ): Promise<void> {
-    logger.info("Compact options received from webview:", payloadFromWebview);
+    this.logger.info(
+      "Compact options received from webview:",
+      payloadFromWebview
+    );
 
     // Combinar opciones: empezar con las del provider nativo,
     // luego sobrescribir con las del payload del webview (que pueden ser más recientes),
@@ -130,7 +136,7 @@ export class WebviewActionHandler {
         false,
     };
 
-    logger.info("Processed compact options:", options);
+    this.logger.info("Processed compact options:", options);
 
     // Sincronizar las opciones procesadas de vuelta al provider nativo
     // para que esté al día si la generación se inició desde el webview.
@@ -139,7 +145,9 @@ export class WebviewActionHandler {
 
     // --- Validaciones ---
     if (!options.rootPath) {
-      logger.error("Root path is missing in compact options after processing.");
+      this.logger.error(
+        "Root path is missing in compact options after processing."
+      );
       vscode.window.showErrorMessage(
         "Cannot generate context: Root path is not defined."
       );
@@ -152,7 +160,7 @@ export class WebviewActionHandler {
       // Usar SIEMPRE los archivos del servicio de selección como fuente de verdad para 'specificFiles'
       // independientemente de lo que viniera en el payload (que podría estar desactualizado).
       options.specificFiles = selectionService.getSelectedFiles();
-      logger.info(
+      this.logger.info(
         `File selection mode: using ${options.specificFiles.length} files from selectionService.`
       );
       if (options.specificFiles.length === 0) {
@@ -169,23 +177,27 @@ export class WebviewActionHandler {
     } else {
       // Asegurarse de que specificFiles esté vacío en modo directorio
       options.specificFiles = [];
-      logger.info("Directory selection mode: processing entire root path.");
+      this.logger.info(
+        "Directory selection mode: processing entire root path."
+      );
     }
 
     // --- Ejecución y Manejo de Loading ---
     let success = false;
     try {
-      logger.info("--> [ActionHandler] Calling generateContextCallback...");
+      this.logger.info(
+        "--> [ActionHandler] Calling generateContextCallback..."
+      );
       await this.generateContextCallback(options); // Llamar a la función de extension.ts
       // Si no hubo error relanzado desde la callback, consideramos éxito a este nivel
       success = true;
-      logger.info(
+      this.logger.info(
         "--> [ActionHandler] generateContextCallback finished (or handled errors internally)."
       );
     } catch (error) {
       // Se activa si la callback (generateContextCallbackForWebview) relanza un error
       success = false;
-      logger.error(
+      this.logger.error(
         "--> [ActionHandler] Caught error explicitly re-thrown from generateContextCallback:",
         error
       );
@@ -195,7 +207,7 @@ export class WebviewActionHandler {
     } finally {
       // *** ESTE BLOQUE SIEMPRE SE EJECUTA ***
       // Asegura que el estado 'loading' se desactive en el webview
-      logger.info(
+      this.logger.info(
         `--> [ActionHandler] FINALLY block (Callback Success/Handled: ${success}). Posting setLoading: false.`
       );
       this.messageBridge.postMessage({ command: "setLoading", loading: false });
@@ -226,7 +238,7 @@ export class WebviewActionHandler {
 
     if (selectedFolders && selectedFolders.length > 0) {
       const newRootPath = selectedFolders[0].fsPath;
-      logger.info(`Directory selected: ${newRootPath}`);
+      this.logger.info(`Directory selected: ${newRootPath}`);
 
       // Actualizar directorio raíz en el explorador de archivos de VS Code
       this.fileExplorerProvider.setRootPath(newRootPath);
@@ -241,7 +253,7 @@ export class WebviewActionHandler {
         path: newRootPath,
       });
     } else {
-      logger.info("Directory selection cancelled.");
+      this.logger.info("Directory selection cancelled.");
     }
   }
 
@@ -249,7 +261,7 @@ export class WebviewActionHandler {
     message: UpdateIgnorePatternsMessage
   ): void {
     const patterns = message.patterns || [];
-    logger.info("Updating ignore patterns from webview:", patterns);
+    this.logger.info("Updating ignore patterns from webview:", patterns);
 
     // Actualizar opciones en el provider nativo Y notificar
     this.optionsViewProvider.updateOptions({ customIgnorePatterns: patterns });
@@ -260,7 +272,9 @@ export class WebviewActionHandler {
 
   private handleGetSelectedFiles(): void {
     const files = selectionService.getSelectedFiles();
-    logger.info(`Sending selected files to webview: ${files.length} files`);
+    this.logger.info(
+      `Sending selected files to webview: ${files.length} files`
+    );
     this.messageBridge.postMessage({
       command: "selectedFiles",
       files: files,
@@ -268,7 +282,7 @@ export class WebviewActionHandler {
   }
 
   private handleOpenNativeFileExplorer(): void {
-    logger.info(
+    this.logger.info(
       "Executing command: workbench.view.extension.code2context-explorer"
     );
     vscode.commands.executeCommand(
@@ -277,7 +291,7 @@ export class WebviewActionHandler {
   }
 
   private handleShowOptions(): void {
-    logger.info("Executing command: code2context.showOptions");
+    this.logger.info("Executing command: code2context.showOptions");
     vscode.commands.executeCommand("code2context.showOptions");
   }
 
@@ -286,13 +300,13 @@ export class WebviewActionHandler {
       message.mode &&
       (message.mode === "directory" || message.mode === "files")
     ) {
-      logger.info(`Changing selection mode to: ${message.mode}`);
+      this.logger.info(`Changing selection mode to: ${message.mode}`);
       // Actualizar opciones en el provider nativo Y notificar
       this.optionsViewProvider.updateOptions({ selectionMode: message.mode });
       // Nota: No es necesario actualizar explícitamente el FileExplorerProvider aquí
       // El modo de selección afecta principalmente a cómo se *usa* la selección, no a la UI del explorador.
     } else {
-      logger.warn(`Invalid selection mode received: ${message.mode}`);
+      this.logger.warn(`Invalid selection mode received: ${message.mode}`);
     }
   }
 }

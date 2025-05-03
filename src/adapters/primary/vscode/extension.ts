@@ -8,22 +8,21 @@ import { FileExplorerProvider } from "./providers/fileExplorer/FileExplorerProvi
 import { WebviewProvider } from "./WebviewProvider";
 import { registerFileCommands } from "./commands/fileCommands";
 import { registerGenerateCommands } from "./commands/generateCommands";
-import { ConsoleProgressReporter } from "../../../application/ports/driven/ProgressReporter";
-import { logger } from "../../../infrastructure/logging/ConsoleLogger";
 import { CompactOptions } from "../../../domain/model/CompactOptions";
-import { CompactResult } from "../../../domain/model/CompactResult"; // Importar CompactResult
+import { CompactResult } from "../../../domain/model/CompactResult";
+import { ProgressReporter } from "../../../application/ports/driven/ProgressReporter";
+import { ConsoleProgressReporter } from "../../../application/ports/driven/ConsoleProgressReporter";
 
 // Variable global para mantener referencia al WebviewProvider principal
 let webviewProvider: WebviewProvider | undefined;
 let initialized = false;
+const logger: ProgressReporter = new ConsoleProgressReporter(true, true);
 
 /**
  * Función de activación de la extensión
  * @param context Contexto de la extensión
  */
 export function activate(context: vscode.ExtensionContext) {
-  // Log simple para saber que se inicia
-  console.log("CODE2CONTEXT: Activación iniciada (v4 - IIAFE Fix)");
   logger.info("Activando Code2Context extension...");
 
   try {
@@ -77,13 +76,14 @@ export function activate(context: vscode.ExtensionContext) {
 
     const fsAdapter = new FsAdapter();
     const gitAdapter = new GitAdapter();
-    const progressReporter = new ConsoleProgressReporter(
-      currentOptions.verboseLogging
+    const progressReporterForUseCase = new ConsoleProgressReporter(
+      currentOptions.verboseLogging ?? false,
+      false
     );
     const compactUseCase = new CompactProject(
       fsAdapter,
       gitAdapter,
-      progressReporter
+      progressReporterForUseCase
     );
 
     // --- Proveedores Nativos de VS Code ---
@@ -97,7 +97,8 @@ export function activate(context: vscode.ExtensionContext) {
             optionsUpdate.customIgnorePatterns
           );
         }
-      }
+      },
+      logger
     );
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
@@ -245,7 +246,8 @@ export function activate(context: vscode.ExtensionContext) {
       context,
       fileExplorerProvider,
       optionsViewProvider,
-      generateContextCallbackForWebview // Pasa la callback corregida
+      generateContextCallbackForWebview,
+      logger
     );
 
     // --- Registrar Comandos ---

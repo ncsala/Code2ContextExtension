@@ -1,74 +1,24 @@
+// EN: src/application/ports/driven/ProgressReporter.ts
+
 /**
- * Interfaz para reportar progreso durante operaciones largas
+ * Interfaz para reportar progreso y logs durante operaciones.
  */
 export interface ProgressReporter {
-  /**
-   * Inicia una operación con temporizador
-   * @param label Etiqueta para identificar la operación
-   */
+  /** Inicia una operación con temporizador */
   startOperation(label: string): void;
 
-  /**
-   * Finaliza una operación con temporizador
-   * @param label Etiqueta para identificar la operación
-   */
+  /** Finaliza una operación con temporizador */
   endOperation(label: string): void;
 
-  /**
-   * Reporta un mensaje de progreso
-   * @param message Mensaje a reportar
-   */
-  log(message: string): void;
+  /** Reporta un mensaje de progreso o informativo */
+  info(message: string, ...optionalParams: unknown[]): void;
 
-  /**
-   * Reporta un mensaje de advertencia
-   * @param message Mensaje de advertencia
-   */
-  warn(message: string): void;
+  /** Reporta un mensaje de advertencia */
+  warn(message: string, ...optionalParams: unknown[]): void;
 
-  /**
-   * Reporta un mensaje de error
-   * @param message Mensaje de error
-   * @param error Objeto de error opcional
-   */
+  /** Reporta un mensaje de error */
   error(message: string, error?: unknown): void;
-}
 
-/**
- * Implementación de ProgressReporter que usa console
- */
-export class ConsoleProgressReporter implements ProgressReporter {
-  private readonly verbose: boolean;
-
-  constructor(verbose: boolean = false) {
-    this.verbose = verbose;
-  }
-
-  startOperation(label: string): void {
-    console.time(label);
-  }
-
-  endOperation(label: string): void {
-    console.timeEnd(label);
-  }
-
-  log(message: string): void {
-    // Solo imprimir mensajes detallados si verbose está activado
-    if (
-      !this.verbose &&
-      message.startsWith("🔍") &&
-      !message.includes("Error")
-    ) {
-      return;
-    }
-    console.log(message);
-  }
-
-  warn(message: string): void {
-    console.warn(message);
-  }
-
-  error(message: string, error?: unknown): void {
-    console.error(message, error || "");
-  }
+  /** Reporta un mensaje de depuración (solo si verbose está activo) */
+  debug(message: string, ...optionalParams: unknown[]): void;
 }

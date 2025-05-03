@@ -3,7 +3,7 @@ import {
   VSCodeToWebviewMessage,
   WebviewToVSCodeMessageType,
 } from "../types/webviewMessages";
-import { logger } from "../../../../infrastructure/logging/ConsoleLogger";
+import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 
 /**
  * Facilita la comunicación bidireccional tipada entre VS Code y el Webview.
@@ -16,13 +16,17 @@ export class WebviewMessageBridge {
     | ((message: WebviewToVSCodeMessageType) => void)
     | undefined;
 
+  constructor(private readonly logger: ProgressReporter) {
+    this.logger.debug("WebviewMessageBridge initialized");
+  }
+
   /**
    * Asocia este puente a un webview específico para empezar a escuchar mensajes.
    * @param webview La instancia del webview a la que adjuntarse.
    */
   public attach(webview: vscode.Webview): void {
     if (this.webview) {
-      logger.warn(
+      this.logger.warn(
         "WebviewMessageBridge already attached. Detaching previous listener."
       );
       this.detach();
@@ -34,11 +38,7 @@ export class WebviewMessageBridge {
           try {
             this.messageHandler(message);
           } catch (error) {
-            logger.error(
-              "Error handling message from webview:",
-              error,
-              message
-            );
+            this.logger.error("Error handling message from webview:", error);
             // Opcional: Enviar un mensaje de error de vuelta al webview
             this.postMessage({
               command: "error",
@@ -48,7 +48,7 @@ export class WebviewMessageBridge {
             });
           }
         } else {
-          logger.warn(
+          this.logger.warn(
             "Message received from webview, but no handler is registered:",
             message
           );
@@ -57,7 +57,7 @@ export class WebviewMessageBridge {
       null // undefined thisArgs
       // No añadir a context.subscriptions aquí, se maneja en detach/dispose
     );
-    logger.info("WebviewMessageBridge attached.");
+    this.logger.info("WebviewMessageBridge attached.");
   }
 
   /**
@@ -66,14 +66,13 @@ export class WebviewMessageBridge {
    */
   public postMessage(message: VSCodeToWebviewMessage): void {
     if (!this.webview) {
-      logger.warn(
+      this.logger.warn(
         "Attempted to post message, but webview is not attached:",
         message.command
       );
       return;
     }
     this.webview.postMessage(message);
-    // logger.debug(`Posted message to webview: ${message.command}`); // Puede ser muy verboso
   }
 
   /**
@@ -84,22 +83,22 @@ export class WebviewMessageBridge {
     handler: (message: WebviewToVSCodeMessageType) => void
   ): void {
     if (this.messageHandler) {
-      logger.warn(
+      this.logger.warn(
         "Overwriting existing message handler in WebviewMessageBridge."
       );
     }
     this.messageHandler = handler;
-    logger.info("Message handler registered for webview messages.");
+    this.logger.info("Message handler registered for webview messages.");
   }
 
   /**
    * Desvincula el puente del webview, eliminando el listener de mensajes.
    */
   public detach(): void {
-    logger.info("Detaching WebviewMessageBridge.");
+    this.logger.info("Detaching WebviewMessageBridge.");
     this.messageListenerDisposable?.dispose();
     this.messageListenerDisposable = undefined;
     this.webview = undefined;
-    this.messageHandler = undefined; // Limpiar handler también
+    this.messageHandler = undefined;
   }
 }

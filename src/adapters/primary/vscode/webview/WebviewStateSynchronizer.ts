@@ -3,10 +3,10 @@ import { OptionsViewProvider } from "../options/optionsViewProvider";
 import {
   selectionService,
   SelectionChangeListener,
-} from "../services/selectionService"; // Importar interfaz
+} from "../services/selectionService";
 import { WebviewMessageBridge } from "./WebviewMessageBridge";
 import { CompactOptions } from "../../../../domain/model/CompactOptions";
-import { logger } from "../../../../infrastructure/logging/ConsoleLogger";
+import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 
 /**
  * Escucha cambios en el estado de VS Code (opciones, selección de archivos)
@@ -19,29 +19,23 @@ export class WebviewStateSynchronizer implements SelectionChangeListener {
 
   constructor(
     private readonly optionsViewProvider: OptionsViewProvider,
-    // selectionService es un singleton, no necesita inyección normalmente, pero lo usamos para registrar/desregistrar
-    private readonly messageBridge: WebviewMessageBridge
+    private readonly messageBridge: WebviewMessageBridge,
+    private readonly logger: ProgressReporter
   ) {}
 
   /**
    * Comienza a escuchar los cambios relevantes y a sincronizar con el Webview.
    */
   public initialize(): void {
-    logger.info("Initializing WebviewStateSynchronizer.");
+    this.logger.info("Initializing WebviewStateSynchronizer.");
 
     // Escuchar cambios en las opciones
     this.optionsDisposable = this.optionsViewProvider.onOptionsChanged(
       (options) => this.syncOptions(options)
     );
 
-    // Registrarse como listener de cambios de selección
-    // Usamos el método del servicio que parece diseñado para un solo webview provider
     selectionService.registerWebviewProvider(this);
     this.selectionListenerRegistered = true;
-
-    // Enviar estado inicial (opcionalmente, aunque WebviewProvider puede hacerlo)
-    // this.syncOptions(this.optionsViewProvider.getOptions());
-    // this.onSelectionChanged(selectionService.getSelectedFiles());
   }
 
   /**
@@ -50,7 +44,7 @@ export class WebviewStateSynchronizer implements SelectionChangeListener {
    * @param selectedFiles Lista actualizada de rutas de archivos seleccionados (relativas).
    */
   onSelectionChanged(selectedFiles: string[]): void {
-    logger.info(
+    this.logger.info(
       `StateSynchronizer: Selection changed, sending ${selectedFiles.length} files to webview.`
     );
     this.messageBridge.postMessage({
@@ -64,12 +58,11 @@ export class WebviewStateSynchronizer implements SelectionChangeListener {
    * @param options Las opciones actualizadas.
    */
   private syncOptions(options: Partial<CompactOptions>): void {
-    // Asegurarse de que las opciones enviadas sean completas si es necesario
     const fullOptions = {
       ...this.optionsViewProvider.getOptions(),
       ...options,
     };
-    logger.info(
+    this.logger.info(
       "StateSynchronizer: Options changed, sending update to webview."
     );
     this.messageBridge.postMessage({
@@ -82,7 +75,7 @@ export class WebviewStateSynchronizer implements SelectionChangeListener {
    * Deja de escuchar los cambios y limpia los recursos.
    */
   public dispose(): void {
-    logger.info("Disposing WebviewStateSynchronizer resources.");
+    this.logger.info("Disposing WebviewStateSynchronizer resources.");
     this.optionsDisposable?.dispose();
     this.optionsDisposable = undefined;
 
@@ -90,7 +83,7 @@ export class WebviewStateSynchronizer implements SelectionChangeListener {
     // Si selectionService se limpia al desactivar, podría ser suficiente.
     // Por ahora, solo marcamos como no registrado.
     if (this.selectionListenerRegistered) {
-      logger.warn(
+      this.logger.warn(
         "WebviewStateSynchronizer: No public method to unregister from selectionService. Listener might persist until deactivation."
       );
       // Idealmente, selectionService.unregisterWebviewProvider(this);

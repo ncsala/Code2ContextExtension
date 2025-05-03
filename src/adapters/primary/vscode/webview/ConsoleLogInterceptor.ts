@@ -1,7 +1,7 @@
-import * as vscode from "vscode"; // Necesario para ThemeIcon, etc. si se usara
+import * as vscode from "vscode";
 import { WebviewMessageBridge } from "./WebviewMessageBridge";
-import { logger } from "../../../../infrastructure/logging/ConsoleLogger";
-import { WebviewPanelManager } from "./WebviewPanelManager"; // Necesario para verificar visibilidad
+import { WebviewPanelManager } from "./WebviewPanelManager";
+import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 
 /**
  * Intercepta console.log para reenviar mensajes al Webview como mensajes de 'debug',
@@ -12,6 +12,7 @@ export class ConsoleLogInterceptor {
   private messageBridge: WebviewMessageBridge | undefined;
   private panelManager: WebviewPanelManager | undefined;
   private isIntercepting = false;
+  private logger?: ProgressReporter;
 
   /**
    * Comienza a interceptar console.log.
@@ -20,7 +21,8 @@ export class ConsoleLogInterceptor {
    */
   public start(
     messageBridge: WebviewMessageBridge,
-    panelManager: WebviewPanelManager
+    panelManager: WebviewPanelManager,
+    logger: ProgressReporter
   ): void {
     if (this.isIntercepting) {
       logger.warn("ConsoleLogInterceptor already started.");
@@ -68,10 +70,13 @@ export class ConsoleLogInterceptor {
     if (!this.isIntercepting) {
       return;
     }
-    console.log = this.originalConsoleLog; // Restaurar
+    console.log = this.originalConsoleLog; // Restaura
     this.isIntercepting = false;
+    // Usa la instancia guardada
+    this.logger?.info("Console.log interceptor stopped.");
+    // Limpia referencias
     this.messageBridge = undefined;
     this.panelManager = undefined;
-    logger.info("Console.log interceptor stopped.");
+    this.logger = undefined;
   }
 }

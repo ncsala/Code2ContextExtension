@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import { CompactOptions } from "../../../../domain/model/CompactOptions";
-import { logger } from "../../../../infrastructure/logging/ConsoleLogger";
+import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 
 /** * Proveedor para la vista de opciones en el panel lateral */
 export class OptionsViewProvider implements vscode.WebviewViewProvider {
@@ -28,7 +28,8 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
     private readonly _extensionUri: vscode.Uri,
     private readonly _onOptionsChanged: (
       options: Partial<CompactOptions>
-    ) => void
+    ) => void,
+    private readonly logger: ProgressReporter
   ) {
     // Inicializar con workspace actual si existe
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -54,7 +55,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
     // Manejar mensajes desde el webview
     webviewView.webview.onDidReceiveMessage((message) => {
       if (message.command === "optionsChanged") {
-        logger.info("Options changed from view:", message);
+        this.logger.info("Options changed from view:", message);
         this._ignorePatterns = message.ignorePatterns || this._ignorePatterns;
         this._includeGitIgnore =
           message.includeGitIgnore ?? this._includeGitIgnore;
@@ -77,7 +78,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
         this._onOptionsChangedEmitter.fire(updatedOptions);
         this._onOptionsChanged(updatedOptions);
 
-        logger.info("Options emitted after change:", updatedOptions);
+        this.logger.info("Options emitted after change:", updatedOptions);
       }
     });
   }
@@ -138,7 +139,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
       };
 
       this._onOptionsChangedEmitter.fire(updatedOptions);
-      logger.info("Options updated and emitted:", updatedOptions);
+      this.logger.info("Options updated and emitted:", updatedOptions);
     }
   }
 

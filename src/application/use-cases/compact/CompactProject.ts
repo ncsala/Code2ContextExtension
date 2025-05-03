@@ -4,10 +4,9 @@ import { FileSystemPort } from "../../../domain/ports/driven/FileSystemPort";
 import { GitPort } from "../../../domain/ports/driven/GitPort";
 import { CompactResult } from "../../../domain/model/CompactResult";
 import { FileEntry } from "../../../domain/model/FileEntry";
-import {
-  ConsoleProgressReporter,
-  ProgressReporter,
-} from "../../ports/driven/ProgressReporter";
+import { ProgressReporter } from "../../ports/driven/ProgressReporter";
+import { ConsoleProgressReporter } from "../../ports/driven/ConsoleProgressReporter";
+
 import { FilesTreeGenerator } from "../../services/tree/FilesTreeGenerator";
 import { DirectoryTreeGenerator } from "../../services/tree/DirectoryTreeGenerator";
 import { ContentMinifier } from "../../services/content/ContentMinifier";
@@ -42,8 +41,8 @@ export class CompactProject implements CompactUseCase {
     opts: CompactOptions & { truncateTree?: boolean }
   ): Promise<CompactResult> {
     this.progressReporter.startOperation("CompactProject.execute");
-    this.progressReporter.log(`🚀 Compact en: ${opts.rootPath}`);
-    this.progressReporter.log(`📋 Selección: ${opts.selectionMode}`);
+    this.progressReporter.info(`🚀 Compact en: ${opts.rootPath}`);
+    this.progressReporter.info(`📋 Selección: ${opts.selectionMode}`);
 
     try {
       // 1) Verificar root
@@ -80,24 +79,24 @@ export class CompactProject implements CompactUseCase {
       // 5.2) Filtrar los que están dentro de un placeholder
       const filePaths = allTreeFiles.filter((p) => !isInside(p));
 
-      this.progressReporter.log(`📑 A leer: ${filePaths.length} archivos`); // 🔍 LOG
-      this.progressReporter.log(
+      this.progressReporter.info(`📑 A leer: ${filePaths.length} archivos`); // 🔍 info
+      this.progressReporter.info(
         `👀 Primeros 10 paths: ${filePaths.slice(0, 10).join(", ")}`
-      ); // 🔍 LOG
+      ); // 🔍 info
       this.progressReporter.endOperation("prepareFileList");
 
       // 6) Leer y minificar
       this.progressReporter.startOperation("loadFiles");
       const files = await this.loadFiles(opts.rootPath, filePaths);
-      this.progressReporter.log(
+      this.progressReporter.info(
         `✅ Leídos ${files.length}/${filePaths.length}`
       );
-      this.progressReporter.log(
+      this.progressReporter.info(
         `🗒 Paths leídos (primeros 10): ${files
           .map((f) => f.path)
           .slice(0, 10)
           .join(", ")}`
-      ); // 🔍 LOG
+      ); // 🔍 info
       this.progressReporter.endOperation("loadFiles");
 
       this.progressReporter.startOperation("composeOutput");
@@ -109,18 +108,18 @@ export class CompactProject implements CompactUseCase {
         treeSection,
         opts.minifyContent ?? false
       );
-      this.progressReporter.log(`✅ Salida: ${combined.length} bytes`);
+      this.progressReporter.info(`✅ Salida: ${combined.length} bytes`);
       this.progressReporter.endOperation("composeOutput");
 
       // 8) Escribir si es necesario
       if (opts.outputPath) {
         this.progressReporter.startOperation("writeOutput");
         await this.fs.writeFile(opts.outputPath, combined);
-        this.progressReporter.log("✅ Escrito");
+        this.progressReporter.info("✅ Escrito");
         this.progressReporter.endOperation("writeOutput");
       }
 
-      this.progressReporter.log("🎉 Completado");
+      this.progressReporter.info("🎉 Completado");
       this.progressReporter.endOperation("CompactProject.execute");
       return { ok: true, content: combined };
     } catch (e: any) {
@@ -131,20 +130,22 @@ export class CompactProject implements CompactUseCase {
   }
 
   private async ensureRootExists(root: string) {
-    this.progressReporter.log(`🔍 Verificando: ${root}`);
+    this.progressReporter.info(`🔍 Verificando: ${root}`);
     if (!(await this.fs.exists(root))) {
       throw new Error(`No existe: ${root}`);
     }
-    this.progressReporter.log(`✅ Encontrado`);
+    this.progressReporter.info(`✅ Encontrado`);
   }
 
   private async loadFiles(root: string, paths: string[]): Promise<FileEntry[]> {
-    const limit = pLimit(32);
+    const limit = pLimit(10);
     let cnt = 0;
     let lastPct = 0;
 
     // Validar rutas antes de procesar
-    this.progressReporter.log(`🔍 Verificando rutas: ${paths.length} archivos`);
+    this.progressReporter.info(
+      `🔍 Verificando rutas: ${paths.length} archivos`
+    );
 
     const results = await Promise.all(
       paths.map((p) =>
@@ -153,15 +154,15 @@ export class CompactProject implements CompactUseCase {
 
           // Validación básica para evitar rutas inválidas
           if (!p) {
-            this.progressReporter.log(`⚠️ Ruta vacía detectada, omitiendo.`);
+            this.progressReporter.info(`⚠️ Ruta vacía detectada, omitiendo.`);
             return null;
           }
 
-          this.progressReporter.log(`🔍 Stat de: ${abs}`);
+          this.progressReporter.info(`🔍 Stat de: ${abs}`);
 
           try {
             const st = await fs.stat(abs);
-            // this.progressReporter.log(
+            // this.progressReporter.info(
             //   ` → ${st.isFile() ? "es archivo" : "❗ NO es un archivo regular"}`
             // );
 
@@ -171,7 +172,7 @@ export class CompactProject implements CompactUseCase {
               throw new Error(msg);
             }
 
-            this.progressReporter.log(`📖 Leyendo: ${abs}`);
+            this.progressReporter.info(`📖 Leyendo: ${abs}`);
             const raw = await this.fs.readFile(abs);
 
             if (raw == null) {
@@ -183,7 +184,7 @@ export class CompactProject implements CompactUseCase {
             cnt++;
             const pct = Math.floor((cnt / paths.length) * 100);
             if (pct >= lastPct + 10) {
-              this.progressReporter.log(`📊 ${pct}%`);
+              this.progressReporter.info(`📊 ${pct}%`);
               lastPct = pct;
             }
 
@@ -205,7 +206,7 @@ export class CompactProject implements CompactUseCase {
       (item): item is FileEntry => item !== null
     );
 
-    this.progressReporter.log(
+    this.progressReporter.info(
       `✅ Leídos ${validResults.length}/${paths.length}`
     );
 
@@ -213,7 +214,7 @@ export class CompactProject implements CompactUseCase {
       throw new Error("No se pudo leer ningún archivo seleccionado");
     }
 
-    this.progressReporter.log(
+    this.progressReporter.info(
       `🗒 Paths leídos (primeros 10): ${validResults
         .map((f) => f.path)
         .slice(0, 10)
@@ -296,7 +297,7 @@ export class CompactProject implements CompactUseCase {
       // Reporte de ahorro si minificamos
       if (minify && originalSize > 0) {
         const savedPct = ((1 - processedSize / originalSize) * 100).toFixed(2);
-        this.progressReporter.log(
+        this.progressReporter.info(
           `📊 Minificado: ${this.formatFileSize(originalSize)} → ` +
             `${this.formatFileSize(processedSize)} (${savedPct}%)`
         );
