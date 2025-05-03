@@ -1,12 +1,15 @@
 import React from "react";
-import styles from "./DebugPanel.module.css";
+import styles from "./DebugOutputPanel.module.css";
 
-interface DebugPanelProps {
+interface DebugOutputPanelProps {
   debugOutput: string;
   onClear: () => void;
 }
 
-const DebugPanel: React.FC<DebugPanelProps> = ({ debugOutput, onClear }) => {
+const DebugOutputPanel: React.FC<DebugOutputPanelProps> = ({
+  debugOutput,
+  onClear,
+}) => {
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
@@ -27,4 +30,4 @@ const DebugPanel: React.FC<DebugPanelProps> = ({ debugOutput, onClear }) => {
   );
 };
 
-export default DebugPanel;
+export default DebugOutputPanel;

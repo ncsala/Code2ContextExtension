@@ -1,5 +1,5 @@
 import React from "react";
-import styles from "./GeneratorPanel.module.css";
+import styles from "./ContextGeneratorPanel.module.css";
 
 interface GeneratorPanelProps {
   options: {
@@ -16,7 +16,7 @@ interface GeneratorPanelProps {
   onOpenFileExplorer?: () => void;
 }
 
-const GeneratorPanel: React.FC<GeneratorPanelProps> = ({
+const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
   options,
   loading,
   error,
@@ -132,4 +132,4 @@ const GeneratorPanel: React.FC<GeneratorPanelProps> = ({
   );
 };
 
-export default GeneratorPanel;
+export default ContextGeneratorPanel;

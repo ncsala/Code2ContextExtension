@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./App.module.css";
-import GeneratorPanel from "./components/GeneratorPanel/GeneratorPanel";
-import DebugPanel from "./components/DebugPanel/DebugPanel";
-import { CompactOptions, VSCodeMessage } from "./types/messages";
+import GeneratorPanel from "../features/generator/components/ContextGenerator/ContextGeneratorPanel";
+import DebugPanel from "../features/debug/components/Debug/DebugOutputPanel";
+import { CompactOptions, VSCodeMessage } from "../shared/types/messages";
 import {
-  initVSCodeAPI,
   sendGetSelectedFiles,
   sendSelectDirectory,
   sendShowOptions,
   sendOpenNativeFileExplorer,
   sendChangeSelectionMode,
   sendCompact,
-} from "./utils/messageUtils";
+} from "../shared/utils/messageBuilders";
+import { initVSCodeAPI } from "../shared/utils/vscodeApi";
 
-// Inicializar la API de VSCode (solo una vez)
+// Inicializar la API de VSCode
 initVSCodeAPI(window.acquireVsCodeApi());
 
 const App: React.FC = () => {
@@ -39,7 +39,6 @@ const App: React.FC = () => {
   const updateDebugInfo = useCallback(() => {
     const fileInfo = `Selected files: ${selectedFiles.length}`;
 
-    // Versión simplificada: mostrar solo la información esencial para mejor rendimiento
     const optionsInfo = `
 Root Path: ${options.rootPath}
 Output Path: ${options.outputPath}
