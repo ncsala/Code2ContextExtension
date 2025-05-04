@@ -4,8 +4,16 @@
   "description": "Generate compact code context for LLMs",
   "version": "0.1.0",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.99.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ncsala/Code2ContextExtension"
+  },
+  "bugs": {
+    "url": "https://github.com/ncsala/code2context/issues"
+  },
+  "homepage": "https://github.com/ncsala/code2context#readme",
   "publisher": "Nicolas Caceres Sala",
   "license": "GPL-3.0",
   "author": {
