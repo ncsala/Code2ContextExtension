@@ -31,6 +31,7 @@ export function createContainer(verboseLogging: boolean = false): Container {
     includeGitIgnore: true,
     includeTree: true,
     minifyContent: true,
+    promptPreset: "deepContextV1",
     selectionMode: "directory",
     verboseLogging: verboseLogging,
   };

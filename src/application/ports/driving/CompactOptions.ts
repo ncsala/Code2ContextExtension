@@ -2,28 +2,35 @@
  * Opciones globales de la aplicación
  */
 export interface CompactOptions {
-  /** Ruta raíz del proyecto */
-  rootPath: string;
-
-  /** Ruta de salida para el archivo compactado */
-  outputPath: string;
+  /** Archivos específicos a incluir (usado solo en modo 'files') */
+  specificFiles?: string[];
 
   /** Patrones de ignorado personalizados */
   customIgnorePatterns: string[];
 
-  /** Incluir patrones de .gitignore */
-  includeGitIgnore: boolean;
-
-  /** Incluir estructura de árbol */
+  /** Incluir estructura de árbol del proyecto en la salida */
   includeTree: boolean;
 
-  /** Minificar contenido de archivos */
+  /** Incluir patrones de ignorado desde .gitignore */
+  includeGitIgnore: boolean;
+
+  // /** Incluir un prompt predefinido para LLMs al inicio del archivo */
+  promptPreset?:
+    | "none"
+    | import("../../../shared/prompts/proPromptPresets").PromptKey;
+
+  /** Minificar el contenido de los archivos (remueve espacios innecesarios) */
   minifyContent: boolean;
 
-  /** Modo de selección */
+  /** Ruta de salida donde se generará el archivo compactado */
+  outputPath: string;
+
+  /** Ruta raíz del proyecto que se va a compactar */
+  rootPath: string;
+
+  /** Modo de selección: por directorio o por archivos individuales */
   selectionMode: "directory" | "files";
 
-  /** Archivos específicos a incluir (usado solo en modo 'files') */
-  specificFiles?: string[];
-  verboseLogging?: boolean; // Nuevo flag para controlar nivel de logging
+  /** Habilita logs detallados durante la ejecución */
+  verboseLogging?: boolean;
 }

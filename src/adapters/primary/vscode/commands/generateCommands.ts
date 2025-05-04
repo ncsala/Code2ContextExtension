@@ -1,4 +1,3 @@
-// src/adapters/primary/vscode/commands/generateCommands.ts
 import * as vscode from "vscode";
 import { CompactUseCase } from "../../../../application/ports/driving/CompactUseCase";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
@@ -6,6 +5,8 @@ import { OptionsViewProvider } from "../options/optionsViewProvider";
 import { NotificationPort } from "../../../../application/ports/driven/NotificationPort";
 import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 import { WebviewProvider } from "../WebviewProvider";
+import { handleLargeContent } from "../../../../shared/utils/largeFileHandler";
+import * as path from "path";
 
 /**
  * Registra los comandos relacionados con la generación de contexto
@@ -17,7 +18,7 @@ export function registerGenerateCommands(
   optionsViewProvider: OptionsViewProvider,
   currentOptions: Partial<CompactOptions>,
   webviewProvider?: WebviewProvider,
-  notificationService?: NotificationPort // Añadido
+  notificationService?: NotificationPort
 ) {
   // Comando para generar contexto directamente desde las opciones nativas
   const generateFromOptionsCommand = vscode.commands.registerCommand(
@@ -99,8 +100,17 @@ export function registerGenerateCommands(
         webviewProvider.setLoading(false);
       }
       if (result.ok === true) {
-        notificationService?.showInformation(`Context generated successfully`);
-        // Abrir el resultado en un nuevo editor
+        notificationService?.showInformation("Context generated successfully");
+
+        /* ── Gestor de archivos grandes ─────────────────────────────── */
+        const handled = await handleLargeContent(result.content!, {
+          rootPath: options.rootPath,
+          suggestedName: path.basename(options.outputPath || "combined.txt"),
+        });
+        if (handled) return;
+        /* ───────────────────────────────────────────────────────────── */
+
+        // Tamaño <10 MB  →  abrimos normalmente
         const document = await vscode.workspace.openTextDocument({
           content: result.content,
           language: "plaintext",

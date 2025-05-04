@@ -3,6 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { FileItem } from "../FileItem";
 import { FileItemCache } from "./FileItemCache";
+import { IgnorePatternManager } from "./IgnorePatternManager";
 
 /**
  * Construye el árbol de archivos para el TreeView
@@ -12,6 +13,7 @@ export class FileTreeBuilder {
 
   constructor(
     private readonly cache: FileItemCache,
+    private readonly ignoreManager: IgnorePatternManager,
     rootPath: string | undefined
   ) {
     this._rootPath = rootPath;
@@ -58,6 +60,9 @@ export class FileTreeBuilder {
 
       for (const entry of entries) {
         const filePath = path.join(dirPath, entry.name);
+        if (this.ignoreManager.shouldHideInView(filePath)) {
+          continue;
+        }
         const isDirectory = entry.isDirectory();
         const isSelected = this.cache.isSelected(filePath);
 

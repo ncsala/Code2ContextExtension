@@ -87,6 +87,10 @@ export function configureProviders(
       fileExplorerProvider.setIgnorePatterns(options.customIgnorePatterns);
     }
 
+    if (options.includeGitIgnore !== undefined) {
+      fileExplorerProvider.setIncludeGitIgnore(options.includeGitIgnore);
+    }
+
     if (
       options.rootPath &&
       options.rootPath !== fileExplorerProvider.getRootPath()
