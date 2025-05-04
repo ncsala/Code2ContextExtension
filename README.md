@@ -1,148 +1,160 @@
-A grandes rasgos, éste es el flujo de nuestro TreeGenerator con truncado “inteligente”:
+# Code2Context
 
-Listar y filtrar
-— Leemos sólo las entradas (archivos o subdirectorios) relevantes de la carpeta actual, descartando symlinks e ignorados.
-— Si el usuario ha seleccionado rutas, sólo incluimos directorios cuyo path sea prefijo de alguna selección, o archivos que estén explicitados.
+Generate compact code context for AI/LLMs with just a few clicks.
 
-Medir cada hijo
-Para cada entrada calculamos, con un barrido rápido (quickCountDescendants), cuántos nodos (archivos+dirs) tiene ese subárbol, pero sólo hasta maxTotal+1.
-Esto es rápido (O(límite) en vez de O(tamaño real)) y nos da un “peso” aproximado de cada hijo.
+Code2Context is a Visual Studio Code extension that helps you quickly create comprehensive project summaries for AI language models. Perfect for code reviews, documentation, and getting AI assistance on your entire codebase.
 
-Ordenar de menor a mayor
-Con esa estimación ordenamos los hijos de más “pequeño” a más “grande”.
-De esta forma siempre pintamos primero lo que cabe entero con seguridad, y dejamos al final lo demasiado volumin­oso.
+## ✨ Features
 
-Procesar en orden, truncando paso a paso
-Recorremos esa lista ordenada, acumulando un contador total de nodos ya incluidos:
+- **Smart File Selection**: Choose specific files or entire directories
+- **Tree Structure Generation**: Includes project directory structure
+- **Content Minification**: Reduces file size while maintaining readability
+- **Customizable Ignores**: Support for .gitignore patterns and custom exclusions
+- **Language Prompts**: Built-in professional prompts for different AI tasks
+- **Large File Handling**: Gracefully manages projects of any size
 
-Si la entrada es directorio
+![Code2Context Main Panel](images/main-panel.png)
 
-Si su peso estimado count > maxTotal y no contiene archivos seleccionados dentro, la truncamos localmente:
+## 🚀 Getting Started
 
-makefile
-Copiar
-Editar
-node.children.push(
-  PLACEHOLDER(subdir, count)
-);  
-total += count;  
-(añadimos sólo un nodo “placeholder” y no descendemos)
+### Installation
 
-Sino, entramos recursivamente en ese subdirectorio.
+1. Open Visual Studio Code
+2. Press `Ctrl+P` (or `Cmd+P` on Mac) to open Quick Open
+3. Type `ext install code2context`
+4. Click Install
 
-Si la entrada es archivo, lo añadimos y total += 1.
+### Basic Usage
 
-Después de cada hijo procesado:
+1. **Open the Generator Panel**: Click on the Code2Context icon in the Activity Bar
+2. **Select Directory**: Click "Browse..." to choose your project directory
+3. **Choose Mode**: Select between "Entire Directory" or "Specific Files"
+4. **Configure Options**: Expand the Options panel to customize output
+5. **Generate**: Click "Generate Context" button
 
-Si total > maxTotal en este directorio (y no es la raíz), truncamos globalmente el resto con un único placeholder y salimos.
+## 📋 Available Commands
 
-Si llevamos ya maxChildren hijos procesados (aunque cada uno sea pequeño), truncamos proactivamente para no iterar docenas de miles de subdirectorios pequeñitos.
+| Command | Description |
+|---------|-------------|
+| `Code2Context: Open Generator Panel` | Opens the main generation interface |
+| `Code2Context: Select All Files` | Selects all files in the explorer |
+| `Code2Context: Deselect All Files` | Clears current selection |
+| `Code2Context: Generate from Selection` | Creates context from selected files |
+| `Code2Context: Generate from Options` | Uses options panel configuration |
 
-Dibujar ASCII
-Finalmente, convertimos el árbol resultante (con placeholders) a la representación |-- ….
+## ⚙️ Configuration Options
 
-Ejemplos de “dibujitos”
-A) Carpeta con un subdir enorme
-Parámetros:
+### Ignore Patterns
 
-ini
-Copiar
-Editar
-maxTotal = 100  
-maxChildren = 50  
-Estructura real:
+Configure which files to exclude:
 
-Copiar
-Editar
-webview/
-  ├─ small1/         (5 nodos)
-  ├─ small2/         (3 nodos)
-  ├─ node_modules/   (300 nodos)
-  └─ other/          (10 nodos)
-Paso a paso:
+- Default binary file patterns (images, videos, compiled files)
+- Custom patterns
+- .gitignore integration
 
-Medimos: small2(3), small1(5), other(10), node_modules(300)
+### Selection Modes
 
-Procesamos en ese orden:
+- **Directory Mode**: Include entire directory structure
+- **Files Mode**: Select specific files using the file explorer
 
-small2 → cabe, lo recorremos y pintamos todo. total=3
+### Output Options
 
-small1 → cabe, pintamos. total=8
+- **Include Tree Structure**: Shows project hierarchy
+- **Minify Content**: Reduces file size
+- **Prompt Presets**: Professional prompts for various AI tasks
+  - Deep Context V1
+  - Architecture Review
+  - Bug Hunter
+  - Documentation Generator
+  - Refactor Guide
 
-other → cabe, pintamos. total=18
+## 🛠️ Use Cases
 
-node_modules → como 300>maxTotal y no hay selección dentro, truncamos:
+1. **Code Reviews**: Generate comprehensive context for AI-assisted reviews
+2. **Documentation**: Create context for AI to generate documentation
+3. **Bug Fixing**: Help AI understand your codebase for debugging
+4. **Architecture Analysis**: Get AI insights on project structure
+5. **Refactoring**: Plan large-scale code improvements
 
-lua
-Copiar
-Editar
-webview
-|-- small2
-|-- small1
-|-- other
-`-- [ node_modules: folder truncated with 300 entries ]
-B) Carpeta con muchos subdirs pequeños
-Imaginemos un proyecto “monorepo”:
+## 📝 Example Output
 
-Copiar
-Editar
-packages/
-  ├─ pkg1/   (1 nodo)
-  ├─ pkg2/   (1 nodo)
-  ├─ …
-  ├─ pkg100/(1 nodo)
-Con maxTotal = 50 y maxChildren = 50, el conteo de cada pkgX es 1, así que no supera maxTotal.
-Pero al procesar el hijo número 51, como ya llegamos a processedChildren == maxChildren, proactivamente truncamos el resto:
+```
+// Conventions used in this document:
+// @Tree: project directory structure.
+// @Index: table of contents with all the files included.
+// @F: file index | path | minified content.
 
-lua
-Copiar
-Editar
-packages
-|-- pkg1
-|-- pkg2
-|   …
-|-- pkg50
-`-- [ packages: folder truncated with 100 entries ]
-C) Selección de archivos
-Si el usuario pide sólo webview/src/index.ts:
+@Tree:
+|-- src
+|   |-- main.ts
+|   |-- utils
+|   |   |-- helpers.ts
+...
 
-Al filtrar, sólo incluimos ese archivo y sus ancestros:
+@Index:
+1|src/main.ts
+2|src/utils/helpers.ts
+...
 
-css
-Copiar
-Editar
-webview/
-└─ src/
-   └─ index.ts
-Luego aplicamos el mismo proceso: medimos, ordenamos (aquí sólo hay un hijo), entramos en src, volvemos a medir… y si algún subdirectorio fuera muy grande, lo truncaríamos aún en modo “files”.
+@F:|1|src/main.ts|console.log("Hello World");
+```
 
-Pero nuestra comprobación hasSelectionInside(path) impide truncar cualquier carpeta que contenga un archivo explictamente seleccionado, garantizando que el usuario pueda ver la ruta completa.
+## 🤖 AI Integration Tips
 
-Recapitulando qué hace y cuándo
-Filtro inicial: sólo paths relevantes según selección y .gitignore.
+- **Context Windows**: Output is optimized for LLM context limits
+- **Clear Structure**: Uses standardized markers for easy parsing
+- **Focused Content**: Automatically excludes irrelevant files
 
-Medida rápida: estimar tamaño de cada hijo sin recorrerlo del todo.
+## 📚 Requirements
 
-Orden: procesar primero lo ligero, luego lo pesado.
+- Visual Studio Code ^1.85.0
+- Node.js (for development)
 
-Truncados:
+## 🔄 Release Notes
 
-Local: cada subdirectorio con count > maxTotal se reemplaza por placeholder.
+See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
-Global: si el acumulado total supera maxTotal, cortamos todo lo que quede.
+## 📜 License
 
-Proactivo: si hay más de maxChildren hijos procesados, cortamos para no tardar eternamente.
+Copyright (C) 2025 Nicolas Caceres Sala
 
-Recursión: dentro de cada hijo “aceptado” volvemos a aplicar el mismo algoritmo.
+This program is free software: you can redistribute it and/or modify it under the terms of the [GNU General Public License v3.0](LICENSE).
 
-ASCII: pintamos el árbol con |-- y \--`.
+### Why GPL v3?
 
-Con esta combinación cubrimos:
+Code2Context is licensed under GPL v3 to ensure:
 
-Subárboles enormes (p. ej. node_modules).
+- The software remains free and open source forever
+- Any derivative works must also be open source
+- No one can create a proprietary version
+- Community contributions benefit everyone
 
-Directorios con centenares de subdirs pequeños (monorepos).
+**You can:**
 
-Selección de archivos sin perder la ruta completa de los seleccionados.
+- ✅ Use commercially
+- ✅ Modify and distribute
+- ✅ Sell support services
+- ✅ Patent use (with conditions)
 
-Balance entre profundidad (“entrar donde importa”) y anchura (“truncar donde no hay nada relevante”).
+**You must:**
+
+- Share source code of any modifications
+- Keep the same license for derivatives  
+- State changes you make
+- Disclose source code
+
+For the complete license text, see [LICENSE](LICENSE).
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+By contributing to Code2Context, you agree that your contributions will be licensed under the GPL v3.
+
+## 👏 Acknowledgments
+
+Built with ❤️ by [Nicolas Caceres Sala](https://github.com/your-username)
+
+---
+
+**Enjoy coding with AI assistance!** ⚡️

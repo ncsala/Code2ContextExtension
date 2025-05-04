@@ -7,10 +7,32 @@
     "vscode": "^1.85.0"
   },
   "publisher": "Nicolas Caceres Sala",
-  "license": "MIT",
-  "categories": [
-    "Other"
+  "license": "GPL-3.0",
+  "author": {
+    "name": "Nicolas Caceres Sala",
+    "email": "ncsala@gmail.com"
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "context",
+    "code-summary",
+    "file-concatenation",
+    "project-context",
+    "gpt",
+    "claude",
+    "copilot",
+    "gpl-3.0",
+    "open-source"
   ],
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Snippets",
+    "Education"
+  ],
+  "preview": false,
+  "qna": "marketplace",
   "main": "out/adapters/primary/vscode/extension.js",
   "scripts": {
     "clean": "rimraf ./out ./dist",
