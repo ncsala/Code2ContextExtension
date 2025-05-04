@@ -8,7 +8,6 @@ import { FileSystemPort } from "../../../ports/driven/FileSystemPort";
 import { ProgressReporter } from "../../../ports/driven/ProgressReporter";
 import { CompactOptions } from "../../../ports/driving/CompactOptions";
 import { once } from "events";
-import { PROFESSIONAL_PROMPT } from "../../../../shared/utils/proPrompt";
 import { getPrompt } from "../../../../shared/prompts/proPromptPresets";
 
 const { TREE_MARKER, INDEX_MARKER, FILE_MARKER } = ContentFormatter;
@@ -47,9 +46,10 @@ export class OutputComposer {
     // --- modo stream ---------------------------------------------------------
     if (opts.outputPath) {
       const out = createWriteStream(opts.outputPath, "utf8");
-      const pro = opts.includePrompt
-        ? getPrompt(opts.promptPreset ?? "none") + "\n\n"
-        : "";
+      const pro =
+        opts.promptPreset && opts.promptPreset !== "none"
+          ? getPrompt(opts.promptPreset) + "\n\n"
+          : "";
 
       // 1) header, árbol e índice
       await this.writeChunk(
@@ -89,6 +89,11 @@ export class OutputComposer {
 
     // --- modo string en memoria ---------------------------------------------
     const parts: string[] = [header];
+
+    // prompt al inicio (si no es "none")
+    if (opts.promptPreset && opts.promptPreset !== "none") {
+      parts.unshift(getPrompt(opts.promptPreset) + "\n\n");
+    }
 
     if (opts.includeTree && treeText) {
       parts.push(`${TREE_MARKER}\n${treeText}\n\n`);

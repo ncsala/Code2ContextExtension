@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
 import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
-import { PromptKey } from "../../../../shared/prompts/proPromptPresets";
+import {
+  PROMPT_PRESETS,
+  PromptKey,
+} from "../../../../shared/prompts/proPromptPresets";
 
 /** * Proveedor para la vista de opciones en el panel lateral */
 export class OptionsViewProvider implements vscode.WebviewViewProvider {
@@ -95,9 +98,6 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
       if (options.outputPath !== undefined) {
         this._outputPath = options.outputPath;
       }
-      if (options.includePrompt !== undefined) {
-        this._includePrompt = options.includePrompt;
-      }
       if (options.promptPreset !== undefined) {
         this._promptPreset = options.promptPreset;
       }
@@ -139,7 +139,6 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
       const updatedOptions = {
         rootPath: this._rootPath,
         outputPath: this._outputPath,
-        includePrompt: this._includePrompt,
         promptPreset: this._promptPreset,
         customIgnorePatterns: this._ignorePatterns,
         includeGitIgnore: this._includeGitIgnore,
@@ -159,7 +158,6 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
     return {
       rootPath: this._rootPath,
       outputPath: this._outputPath,
-      includePrompt: this._includePrompt,
       promptPreset: this._promptPreset,
       customIgnorePatterns: this._ignorePatterns,
       includeGitIgnore: this._includeGitIgnore,
@@ -173,6 +171,20 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   private _getHtmlForWebview() {
     // Convertir los patrones de ignorado a texto
     const ignorePatterns = this._ignorePatterns.join("\n");
+    // ─── opciones de prompt dinámicas ───────────────────────────
+    const presetKeys: ("none" | PromptKey)[] = [
+      "none",
+      ...(Object.keys(PROMPT_PRESETS) as PromptKey[]),
+    ];
+    const optionsHtml = presetKeys
+      .map(
+        (k) =>
+          `<option value="${k}" ${
+            this._promptPreset === k ? "selected" : ""
+          }>${k}</option>`
+      )
+      .join("\n");
+    // ─────────────────────────────────────────────────────────────
 
     // Generar html para la vista
     return `<!DOCTYPE html>
@@ -259,20 +271,9 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                 <label for="includeGitIgnore">Include .gitignore patterns</label>
             </div>
 
-            <div class="checkbox-label">
-              <input type="checkbox" id="includePrompt" ${
-                this._includePrompt ? "checked" : ""
-              } />
-              <label for="includePrompt">Prepend professional prompt</label>
-            </div>
-
-            <select id="promptPreset">
-              <option value="deepContextV1" ${
-                this._promptPreset === "deepContextV1" ? "selected" : ""
-              }>Deep&nbsp;Context&nbsp;v1</option>
-              <option value="none"          ${
-                this._promptPreset === "none" ? "selected" : ""
-              }>None&nbsp;(disabled)</option>
+            <label for="promptPreset">Prompt preset:</label>
+              <select id="promptPreset">
+              ${optionsHtml}
             </select>
 
             
@@ -305,7 +306,6 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
             
             // Referencias a elementos del DOM
             const outputPathInput = document.getElementById('outputPath');
-            const includePromptCheckbox    = document.getElementById('includePrompt');
             const promptPresetSelect       = document.getElementById('promptPreset');
             const ignorePatternsTextarea   = document.getElementById('ignorePatterns');
             const includeGitIgnoreCheckbox = document.getElementById('includeGitIgnore');
@@ -317,7 +317,6 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
             applyBtn.addEventListener('click', () => {
                 // Obtener valores actuales
                 const outputPath = outputPathInput.value.trim();
-                const includePrompt = includePromptCheckbox.checked;
                 const selectedPreset = promptPresetSelect.value;
                 const ignorePatterns = ignorePatternsTextarea.value
                     .split('\\n')
@@ -330,7 +329,6 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                 // Enviar mensaje con los nuevos valores
                 vscode.postMessage({
                     command: 'optionsChanged',
-                    includePrompt,
                     promptPreset: selectedPreset,
                     outputPath,
                     ignorePatterns,
@@ -339,12 +337,6 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                     minifyContent
                 });
             });
-
-            // Sincroniza el enabled/disabled del selector con el checkbox
-            includePromptCheckbox.addEventListener('change', () => {
-              promptPresetSelect.disabled = !includePromptCheckbox.checked;
-            });
-            promptPresetSelect.disabled = !includePromptCheckbox.checked;
             
             // Escuchar mensajes de la extensión
             window.addEventListener('message', event => {
@@ -355,10 +347,6 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                     // Actualizar la interfaz con los nuevos valores
                     if (options.outputPath) {
                         outputPathInput.value = options.outputPath;
-                    }
-
-                    if (options.includePrompt !== undefined) {
-                      includePromptCheckbox.checked = options.includePrompt;
                     }
 
                     if (options.promptPreset !== undefined) {
