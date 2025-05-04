@@ -1,0 +1,171 @@
+.panel {
+  background-color: var(--vscode-editor-background);
+  border-radius: 4px;
+  padding: 20px;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: var(--vscode-foreground);
+}
+
+.formGroup {
+  margin-bottom: 16px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.inputGroup {
+  display: flex;
+  gap: 8px;
+}
+
+.input {
+  flex: 1;
+  padding: 6px 8px;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 2px;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.select {
+  width: 100%;
+  padding: 6px 8px;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 2px;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.selectionModeContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.selectionModeContainer .select {
+  flex: 1;
+  min-width: 200px;
+}
+
+.fileSelectionActions {
+  display: flex;
+  gap: 8px;
+}
+
+.refreshButton {
+  background-color: var(--info-color);
+}
+
+.refreshButton:hover {
+  background-color: #3b82f6;
+}
+
+.fileListContainer {
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 2px;
+  padding: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.fileList {
+  list-style-type: disc;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.fileItem {
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.noFilesMessage {
+  font-style: italic;
+  color: var(--vscode-input-placeholderForeground, #888);
+  font-size: 0.9rem;
+}
+
+.button {
+  padding: 6px 12px;
+  color: white;
+  background-color: #3b82f6;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.button:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.primaryButton {
+  padding: 8px 16px;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.primaryButton:hover:not(:disabled) {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.actions .primaryButton {
+  flex: 1;
+}
+
+.note {
+  background-color: rgba(96, 165, 250, 0.1);
+  border-left: 3px solid #60a5fa;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  border-radius: 2px;
+  font-size: 0.9rem;
+}
+
+.noteLabel {
+  font-weight: 600;
+}
+
+.error {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-left: 3px solid #ef4444;
+  padding: 8px 12px;
+  margin-top: 16px;
+  border-radius: 2px;
+}
+
+.error p {
+  margin: 0;
+  color: #ef4444;
+}

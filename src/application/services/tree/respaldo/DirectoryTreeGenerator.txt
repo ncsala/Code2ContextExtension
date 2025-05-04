@@ -1,0 +1,112 @@
+// src/application/services/tree/DirectoryTreeGenerator.ts
+import * as path from "path";
+import { Ignore } from "ignore";
+import { toPosix } from "../../../shared/utils/pathUtils";
+import { FileTree } from "../../../domain/model/FileTree";
+import { BaseTreeGenerator } from "./BaseTreeGenerator";
+import { TreeLimits, MeasuredEntry } from "./common";
+
+export class DirectoryTreeGenerator extends BaseTreeGenerator {
+  constructor(l: Partial<TreeLimits> = {}) {
+    super({ maxTotal: l.maxTotal ?? 150, maxChildren: l.maxChildren ?? 30 });
+  }
+
+  /* ──────────────────────────────────────────────── */
+  public async build(
+    dirFs: string,
+    ig: Ignore,
+    root: string
+  ): Promise<{ node: FileTree; count: number }> {
+    const rel = toPosix(path.relative(root, dirFs));
+    const isRoot = rel === "";
+
+    /* 1️⃣  medir entradas */
+    const measured = await this.measure(dirFs, ig, root);
+
+    /* 2️⃣  bypass si corresponde */
+    if (
+      this.shouldExpandCompletely(
+        isRoot,
+        measured.totalDesc,
+        measured.entries.length
+      )
+    ) {
+      return this.expandAll(rel, measured.entries, ig, root, isRoot);
+    }
+
+    /* 3️⃣  truncado + ensamblado */
+    return this.assemble(rel, measured.entries, measured.totalDesc, ig, root);
+  }
+
+  /* ───────── helpers privados ───────── */
+
+  private async measure(dirFs: string, ig: Ignore, root: string) {
+    const entries = await this.listRelevantEntries(dirFs, ig, root);
+    const measured = await this.measureEntries(entries, dirFs, ig, root);
+    const totalDesc = measured.reduce((s, e) => s + e.cnt, 0);
+    return { entries: measured, totalDesc };
+  }
+
+  private shouldExpandCompletely(
+    isRoot: boolean,
+    totalDesc: number,
+    children: number
+  ): boolean {
+    return (
+      isRoot ||
+      (children <= this.limits.maxChildren && totalDesc <= this.limits.maxTotal)
+    );
+  }
+
+  private async assemble(
+    rel: string,
+    measured: MeasuredEntry[],
+    totalDesc: number,
+    ig: Ignore,
+    root: string
+  ): Promise<{ node: FileTree; count: number }> {
+    const [heavy, rest] = this.applyHeavyTruncation(measured, totalDesc);
+    const [small, middle, large] = this.applySmartTruncation(rest, totalDesc);
+
+    const children: FileTree[] = [];
+    let count = 0;
+
+    const push = (n: FileTree, cnt: number) => {
+      children.push(n);
+      count += cnt;
+    };
+
+    heavy.forEach((h) => push(h.node, h.count));
+
+    for (const s of small) {
+      if (s.entry.isDirectory()) {
+        const sub = await this.build(s.abs, ig, root);
+        push(sub.node, sub.count);
+      } else push({ name: s.entry.name, path: s.rel, isDirectory: false }, 1);
+    }
+
+    if (middle.length) {
+      push(
+        this.middlePlaceholder(middle),
+        middle.reduce((a, m) => a + m.cnt, 0)
+      );
+    }
+
+    for (const l of large) {
+      if (l.entry.isDirectory()) {
+        const sub = await this.build(l.abs, ig, root);
+        push(sub.node, sub.count);
+      } else push({ name: l.entry.name, path: l.rel, isDirectory: false }, 1);
+    }
+
+    return {
+      node: {
+        name: path.basename(rel || root),
+        path: rel,
+        isDirectory: true,
+        children,
+      },
+      count,
+    };
+  }
+}

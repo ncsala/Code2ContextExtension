@@ -6,22 +6,47 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "publisher": "yourname",
-  "license": "MIT",
-  "categories": [
-    "Other"
+  "publisher": "Nicolas Caceres Sala",
+  "license": "GPL-3.0",
+  "author": {
+    "name": "Nicolas Caceres Sala",
+    "email": "ncsala@gmail.com"
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "context",
+    "code-summary",
+    "file-concatenation",
+    "project-context",
+    "gpt",
+    "claude",
+    "copilot",
+    "gpl-3.0",
+    "open-source"
   ],
-  "main": "./out/index.js",
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Snippets",
+    "Education"
+  ],
+  "preview": false,
+  "qna": "marketplace",
+  "main": "out/adapters/primary/vscode/extension.js",
   "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "tsc -p ./",
+    "clean": "rimraf ./out ./dist",
+    "compile": "tsc --build --clean && tsc -p ./",
+    "compile:clean": "npm run clean && npm run compile",
     "watch": "tsc -watch -p ./",
     "build-webview": "cd webview && npm run build",
-    "pretest": "npm run compile && npm run lint",
+    "build-all": "npm run compile && npm run build-webview",
+    "build-all:clean": "rimraf ./out ./dist ./webview-dist && npm run build-all",
+    "pretest": "npm run compile:clean && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "vscode-test",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "package": "npm run compile:clean && vsce package",
+    "publish": "npm run compile:clean && vsce publish"
   },
   "contributes": {
     "commands": [
@@ -54,16 +79,6 @@
         "command": "code2context.generateFromOptions",
         "title": "Generate Context from Current Options",
         "icon": "$(zap)"
-      },
-      {
-        "command": "code2context.selectDirectoryMode",
-        "title": "Switch to Directory Selection Mode",
-        "icon": "$(folder)"
-      },
-      {
-        "command": "code2context.selectFilesMode",
-        "title": "Switch to Files Selection Mode",
-        "icon": "$(file)"
       },
       {
         "command": "code2context.selectDirectory",
@@ -117,16 +132,6 @@
           "group": "navigation"
         },
         {
-          "command": "code2context.selectDirectoryMode",
-          "when": "view == code2contextOptions",
-          "group": "navigation"
-        },
-        {
-          "command": "code2context.selectFilesMode",
-          "when": "view == code2contextOptions",
-          "group": "navigation"
-        },
-        {
           "command": "code2context.generateFromOptions",
           "when": "view == code2contextOptions",
           "group": "navigation"
@@ -152,17 +157,19 @@
     "onCommand:code2context.openPanel"
   ],
   "dependencies": {
-    "ignore": "^5.2.4"
+    "ignore": "5.3.0",
+    "p-limit": "3.1.0"
   },
   "devDependencies": {
-    "@types/node": "^18.x",
-    "@types/vscode": "^1.85.0",
-    "@typescript-eslint/eslint-plugin": "^6.9.0",
-    "@typescript-eslint/parser": "^6.9.0",
-    "@vscode/test-cli": "^0.0.6",
-    "@vscode/test-electron": "^2.3.8",
-    "eslint": "^8.52.0",
-    "typescript": "^5.2.2",
-    "vsce": "^2.15.0"
+    "rimraf": "6.0.1",
+    "@types/node": "18.19.86",
+    "@types/vscode": "1.99.1",
+    "@typescript-eslint/eslint-plugin": "6.21.0",
+    "@typescript-eslint/parser": "6.21.0",
+    "@vscode/test-cli": "0.0.6",
+    "@vscode/test-electron": "2.5.2",
+    "eslint": "8.57.1",
+    "typescript": "5.8.3",
+    "vsce": "2.15.0"
   }
 }

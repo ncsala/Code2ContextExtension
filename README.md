@@ -1,60 +1,160 @@
 # Code2Context
 
-A Visual Studio Code extension that helps compact your code files into a single document, making it easier to provide context to Large Language Models (LLMs).
+Generate compact code context for AI/LLMs with just a few clicks.
 
-## Features
+Code2Context is a Visual Studio Code extension that helps you quickly create comprehensive project summaries for AI language models. Perfect for code reviews, documentation, and getting AI assistance on your entire codebase.
 
-- Creates a compact representation of your project structure
-- Generates a combined file with all code and directory structure
-- Supports ignoring files by pattern or via .gitignore
-- Configurable output format
-- Easy to use UI interface
+## ✨ Features
 
-## How to Use
+- **Smart File Selection**: Choose specific files or entire directories
+- **Tree Structure Generation**: Includes project directory structure
+- **Content Minification**: Reduces file size while maintaining readability
+- **Customizable Ignores**: Support for .gitignore patterns and custom exclusions
+- **Language Prompts**: Built-in professional prompts for different AI tasks
+- **Large File Handling**: Gracefully manages projects of any size
 
-1. Install the extension
-2. Open a workspace/project in VS Code
-3. Open the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac)
-4. Type and select: `Code2Context: Open Generator Panel`
-5. In the panel that opens:
-   - The root directory defaults to your workspace root
-   - Customize output options as needed
-   - Click "Generate context" to create the compacted view
-   - Copy the result to your clipboard with the "Copy" button
-   - Optionally, save to a file by specifying the output path
+![Code2Context Main Panel](images/main-panel.png)
 
-## Output Format
+## 🚀 Getting Started
 
-The generated output follows this format:
+### Installation
+
+1. Open Visual Studio Code
+2. Press `Ctrl+P` (or `Cmd+P` on Mac) to open Quick Open
+3. Type `ext install code2context`
+4. Click Install
+
+### Basic Usage
+
+1. **Open the Generator Panel**: Click on the Code2Context icon in the Activity Bar
+2. **Select Directory**: Click "Browse..." to choose your project directory
+3. **Choose Mode**: Select between "Entire Directory" or "Specific Files"
+4. **Configure Options**: Expand the Options panel to customize output
+5. **Generate**: Click "Generate Context" button
+
+## 📋 Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `Code2Context: Open Generator Panel` | Opens the main generation interface |
+| `Code2Context: Select All Files` | Selects all files in the explorer |
+| `Code2Context: Deselect All Files` | Clears current selection |
+| `Code2Context: Generate from Selection` | Creates context from selected files |
+| `Code2Context: Generate from Options` | Uses options panel configuration |
+
+## ⚙️ Configuration Options
+
+### Ignore Patterns
+
+Configure which files to exclude:
+
+- Default binary file patterns (images, videos, compiled files)
+- Custom patterns
+- .gitignore integration
+
+### Selection Modes
+
+- **Directory Mode**: Include entire directory structure
+- **Files Mode**: Select specific files using the file explorer
+
+### Output Options
+
+- **Include Tree Structure**: Shows project hierarchy
+- **Minify Content**: Reduces file size
+- **Prompt Presets**: Professional prompts for various AI tasks
+  - Deep Context V1
+  - Architecture Review
+  - Bug Hunter
+  - Documentation Generator
+  - Refactor Guide
+
+## 🛠️ Use Cases
+
+1. **Code Reviews**: Generate comprehensive context for AI-assisted reviews
+2. **Documentation**: Create context for AI to generate documentation
+3. **Bug Fixing**: Help AI understand your codebase for debugging
+4. **Architecture Analysis**: Get AI insights on project structure
+5. **Refactoring**: Plan large-scale code improvements
+
+## 📝 Example Output
 
 ```
-// @Tree: Shows directory structure
-// @Index: List all files with indices
-// @F: File content in format @F:|index|path|minified-content
+// Conventions used in this document:
+// @Tree: project directory structure.
+// @Index: table of contents with all the files included.
+// @F: file index | path | minified content.
+
+@Tree:
+|-- src
+|   |-- main.ts
+|   |-- utils
+|   |   |-- helpers.ts
+...
+
+@Index:
+1|src/main.ts
+2|src/utils/helpers.ts
+...
+
+@F:|1|src/main.ts|console.log("Hello World");
 ```
 
-This format is optimized for providing code context to LLMs while maintaining information about the project structure.
+## 🤖 AI Integration Tips
 
-## Development
+- **Context Windows**: Output is optimized for LLM context limits
+- **Clear Structure**: Uses standardized markers for easy parsing
+- **Focused Content**: Automatically excludes irrelevant files
 
-### Prerequisites
+## 📚 Requirements
 
-- Node.js & npm
-- Visual Studio Code
+- Visual Studio Code ^1.85.0
+- Node.js (for development)
 
-### Setup
+## 🔄 Release Notes
 
-1. Clone the repository
-2. Run `npm install` in the root directory
-3. Run `cd webview && npm install` to install webview dependencies
-4. Run `npm run compile` to build the extension
+See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
-### Testing the Extension
+## 📜 License
 
-1. Press `F5` to start debugging
-2. In the Extension Development Host window, open the command palette
-3. Run the `Code2Context: Open Generator Panel` command
+Copyright (C) 2025 Nicolas Caceres Sala
 
-## License
+This program is free software: you can redistribute it and/or modify it under the terms of the [GNU General Public License v3.0](LICENSE).
 
-MIT
+### Why GPL v3?
+
+Code2Context is licensed under GPL v3 to ensure:
+
+- The software remains free and open source forever
+- Any derivative works must also be open source
+- No one can create a proprietary version
+- Community contributions benefit everyone
+
+**You can:**
+
+- ✅ Use commercially
+- ✅ Modify and distribute
+- ✅ Sell support services
+- ✅ Patent use (with conditions)
+
+**You must:**
+
+- Share source code of any modifications
+- Keep the same license for derivatives  
+- State changes you make
+- Disclose source code
+
+For the complete license text, see [LICENSE](LICENSE).
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+By contributing to Code2Context, you agree that your contributions will be licensed under the GPL v3.
+
+## 👏 Acknowledgments
+
+Built with ❤️ by [Nicolas Caceres Sala](https://github.com/your-username)
+
+---
+
+**Enjoy coding with AI assistance!** ⚡️
