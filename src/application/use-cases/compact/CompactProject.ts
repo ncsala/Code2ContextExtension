@@ -27,7 +27,7 @@ export class CompactProject implements CompactUseCase {
     const factory = new DefaultTreeGeneratorFactory();
     this.treeSvc = new TreeService(this.logger, factory);
     this.loader = new FileLoaderService(this.fs, this.logger);
-    this.composer = new OutputComposer(this.fs, this.logger);
+    this.composer = new OutputComposer(this.logger);
   }
 
   // ────────── ENTRYPOINT ──────────

@@ -6,14 +6,35 @@ import { FileEntry } from "../../../../domain/model/FileEntry";
 import { ProgressReporter } from "../../../ports/driven/ProgressReporter";
 import { withTimeout } from "../../../../shared/utils/withTimeout";
 
+/**
+ * Servicio encargado de cargar múltiples archivos de disco de forma concurrente
+ * y segura, con timeout para cada lectura individual.
+ */
 export class FileLoaderService {
+  /** Límite máximo de lecturas concurrentes. */
   private readonly limit = pLimit(16);
 
+  /**
+   * Crea una nueva instancia de FileLoaderService.
+   *
+   * @param {FileSystemPort} fsPort - Puerto para leer archivos (in-memory o FS real).
+   * @param {ProgressReporter} logger - Reportero de progreso para logging de operaciones.
+   */
   constructor(
     private readonly fsPort: FileSystemPort,
     private readonly logger: ProgressReporter
   ) {}
 
+  /**
+   * Carga un conjunto de archivos relativos a partir de un directorio raíz.
+   *
+   * Aplica un timeout a cada lectura y filtra entradas no válidas.
+   *
+   * @param {string} rootPath       - Ruta absoluta o relativa del directorio raíz.
+   * @param {string[]} relPaths     - Lista de rutas relativas de los archivos a cargar.
+   * @returns {Promise<FileEntry[]>} - Promesa con los FileEntry válidos cargados.
+   * @throws {Error}                 - Si ningún archivo pudo ser procesado con éxito.
+   */
   async load(rootPath: string, relPaths: string[]): Promise<FileEntry[]> {
     this.logger.startOperation("loadFiles");
 
@@ -36,7 +57,18 @@ export class FileLoaderService {
     return files;
   }
 
-  // ────────── helpers ──────────
+  /**
+   * Lee un único archivo y lo convierte a FileEntry.
+   *
+   * - Verifica que la ruta corresponda a un archivo.
+   * - Usa el puerto fsPort para la lectura real.
+   * - Devuelve `null` y registra un error si hay fallo o contenido vacío.
+   *
+   * @param {string} root - Directorio base donde resolver la ruta.
+   * @param {string} rel  - Ruta relativa del archivo a leer.
+   * @returns {Promise<FileEntry|null>} - FileEntry si tuvo éxito, o `null` en caso contrario.
+   */
+
   private async readOne(root: string, rel: string): Promise<FileEntry | null> {
     const abs = path.join(root, rel);
     try {
