@@ -1,30 +1,10 @@
-import { Dirent } from "fs";
 import * as path from "path";
 import { Ignore } from "ignore";
 import { toPosix } from "../../../shared/utils/pathUtils";
 import { FileTree } from "../../../domain/model/FileTree";
 import { DirectoryTreeGenerator } from "./DirectoryTreeGenerator";
 import { BaseTreeGenerator } from "./BaseTreeGenerator";
-
-/** Límites de truncado */
-export interface TreeLimits {
-  maxTotal: number; // máximo nodos recursivos antes de truncar
-  maxChildren: number; // máximo hijos a procesar antes de truncar
-}
-
-export interface MeasuredEntry {
-  entry: Dirent;
-  abs: string;
-  rel: string;
-  cnt: number;
-}
-
-/** Nodo placeholder para carpetas truncadas */
-export const PLACEHOLDER = (dir: string, total: number): FileTree => ({
-  name: `[ ${path.basename(dir)}: folder truncated with ${total} entries ]`,
-  path: dir,
-  isDirectory: false,
-});
+import { TreeLimits, MeasuredEntry } from "./common";
 
 /**
  * Generador para modo "files": sólo expande ramas que

@@ -1,7 +1,6 @@
-// Optimizar ContentMinifier.ts
 export class ContentMinifier {
   // Cache para evitar minificar el mismo contenido más de una vez
-  private minifyCache = new Map<string, string>();
+  private readonly minifyCache = new Map<string, string>();
 
   minify(txt: string): string {
     // Usar caché para contenidos largos y repetidos
