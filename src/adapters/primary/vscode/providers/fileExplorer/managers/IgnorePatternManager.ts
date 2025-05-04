@@ -64,7 +64,6 @@ export class IgnorePatternManager {
     /* ---------- handler para el COMBINADO ---------- */
     this.ignoreHandler = ignore();
     this.ignoreHandler.add(this.getDefaultBinaryPatterns()); // ① binarios
-    this.ignoreHandler.add(this.getVSCodeExcludes()); // ② VS Code
     if (this.includeGitIgnore) {
       // ③ .gitignore
       this.ignoreHandler.add(this.getGitIgnorePatterns());
@@ -120,7 +119,7 @@ export class IgnorePatternManager {
 
   /**
    * Solo para el árbol del File Selection.
-   * Aplica únicamente files.exclude + search.exclude de VS Code.
+   * Aplica únicamente files.exclude de VS Code.
    */
   public shouldHideInView(filePath: string): boolean {
     if (!this.viewIgnoreHandler || !this.rootPath) return false;
