@@ -44,8 +44,11 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       this.selectionService,
       this.rootPath
     );
-    this.treeBuilder = new FileTreeBuilder(this.itemCache, this.rootPath);
-
+    this.treeBuilder = new FileTreeBuilder(
+      this.itemCache,
+      this.ignoreManager,
+      this.rootPath
+    );
     if (this.rootPath) {
       this.initialized = true;
     }
@@ -167,5 +170,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     }
 
     return this.treeBuilder.buildChildren(element);
+  }
+
+  public setIncludeGitIgnore(enabled: boolean): void {
+    this.ignoreManager.setIncludeGitIgnore(enabled);
   }
 }

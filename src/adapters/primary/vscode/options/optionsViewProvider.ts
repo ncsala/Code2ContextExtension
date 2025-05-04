@@ -12,7 +12,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   // Opciones por defecto
   private _rootPath: string = "";
   private _outputPath: string = "combined.txt";
-  private _ignorePatterns: string[] = ["out"];
+  private _ignorePatterns: string[] = [];
   private _includeGitIgnore: boolean = true;
   private _includeTree: boolean = true;
   private _minifyContent: boolean = true;
