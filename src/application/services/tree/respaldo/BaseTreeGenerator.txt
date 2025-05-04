@@ -1,0 +1,284 @@
+// src/application/services/tree/BaseTreeGenerator.ts
+import { promises as fs, Dirent } from "fs";
+import { Ignore } from "ignore";
+import pLimit from "p-limit";
+import * as path from "path";
+import { FileTree } from "../../../domain/model/FileTree";
+import { toPosix } from "../../../shared/utils/pathUtils";
+import { PrefixSet } from "../../../shared/utils/PrefixSet";
+import { TreeLimits, MeasuredEntry, placeholder } from "./common";
+
+export abstract class BaseTreeGenerator {
+  /* ──────── configurables ──────── */
+  private static readonly IO_CONCURRENCY = 16;
+
+  /* ──────── estado por ejecución ──────── */
+  protected io = pLimit(BaseTreeGenerator.IO_CONCURRENCY);
+  protected cache = new Map<string, Dirent[]>();
+  protected truncated = new Set<string>();
+  protected selected = new Set<string>();
+  protected prefixes!: PrefixSet;
+
+  protected constructor(protected limits: TreeLimits) {}
+
+  /* ────────────────────────────────────────
+   *  📌  Punto de entrada: devuelve árbol, texto ASCII y paths truncados
+   * ──────────────────────────────────────── */
+  async generatePrunedTreeText(
+    root: string,
+    ig: Ignore,
+    selectedPaths: string[]
+  ) {
+    this.selected = new Set(selectedPaths.map(toPosix));
+    this.prefixes = new PrefixSet(
+      [...this.selected].flatMap((p) =>
+        p.split("/").map((_, i, arr) => arr.slice(0, i + 1).join("/"))
+      )
+    );
+    this.truncated.clear();
+
+    const { node } = await this.build(root, ig, root);
+    const treeText = this.ascii(node, "");
+
+    /* Limpieza de caché para no retener dirents entre ejecuciones */
+    this.cache.clear();
+
+    return {
+      treeText,
+      fileTree: node,
+      truncatedPaths: new Set(this.truncated),
+    };
+  }
+
+  /* ────── Hook principal que implementan Directory/Files generator ────── */
+  protected abstract build(
+    dirFs: string,
+    ig: Ignore,
+    root: string
+  ): Promise<{ node: FileTree; count: number }>;
+
+  /* ───────────────────────── helpers COMUNES ───────────────────────── */
+
+  /** Conteo rápido de ficheros bajo un directorio hasta `limit`. */
+  protected async countDescendantFiles(
+    dirFs: string,
+    ig: Ignore,
+    root: string,
+    limit = this.limits.maxTotal + 1
+  ): Promise<number> {
+    let files = 0;
+    const stack = [dirFs];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      for (const e of await this.getDirents(cur)) {
+        const abs = path.join(cur, e.name);
+        const rel = toPosix(path.relative(root, abs));
+        if (this.isLinkOrIgnored(e, rel, ig)) continue;
+        if (e.isDirectory()) stack.push(abs);
+        else if (++files >= limit) return files;
+      }
+    }
+    return files;
+  }
+
+  /** Lista Dirents relevantes (filtros ignore + selección). */
+  protected async listRelevantEntries(
+    dirFs: string,
+    ig: Ignore,
+    root: string
+  ): Promise<Dirent[]> {
+    const all = await this.getDirents(dirFs);
+    return all.filter((d) => {
+      const abs = path.join(dirFs, d.name);
+      const rel = toPosix(path.relative(root, abs));
+      if (this.isLinkOrIgnored(d, rel, ig)) return false;
+      if (this.selected.size === 0) return true;
+      return d.isDirectory() ? this.prefixes.has(rel) : this.selected.has(rel);
+    });
+  }
+
+  /** Mide nodos de cada entrada (hasta `maxTotal`+1). */
+  protected async measureEntries(
+    entries: Dirent[],
+    dirFs: string,
+    ig: Ignore,
+    root: string
+  ): Promise<MeasuredEntry[]> {
+    const arr = await Promise.all(
+      entries.map(async (entry) => {
+        const abs = path.join(dirFs, entry.name);
+        const rel = toPosix(path.relative(root, abs));
+        const cnt = entry.isDirectory()
+          ? await this.countDescendantFiles(abs, ig, root)
+          : 1;
+        return { entry, abs, rel, cnt };
+      })
+    );
+    return arr.sort((a, b) => a.cnt - b.cnt);
+  }
+
+  /** Expansión completa sin truncado (se usa como *bypass*). */
+  protected async expandAll(
+    rel: string,
+    measured: MeasuredEntry[],
+    ig: Ignore,
+    root: string,
+    isRoot: boolean,
+    filterForFilesMode = false
+  ): Promise<{ node: FileTree; count: number }> {
+    /* en modo “files” filtramos lo que no esté seleccionado */
+    if (filterForFilesMode && !isRoot) {
+      measured = measured.filter(({ entry, rel: r }) =>
+        entry.isDirectory() ? this.hasSelectionInside(r) : this.selected.has(r)
+      );
+    }
+
+    const children: FileTree[] = [];
+    let count = 0;
+
+    for (const e of measured) {
+      if (e.entry.isDirectory()) {
+        const sub = await this.build(e.abs, ig, root);
+        children.push(sub.node);
+        count += sub.count;
+      } else {
+        children.push({ name: e.entry.name, path: e.rel, isDirectory: false });
+        count++;
+      }
+    }
+
+    return {
+      node: {
+        name: path.basename(rel || root),
+        path: rel,
+        isDirectory: true,
+        children,
+      },
+      count,
+    };
+  }
+
+  /** Placeholder específico para middle */
+  protected middlePlaceholder(middle: MeasuredEntry[]): FileTree {
+    if (middle.length === 1) {
+      const m = middle[0];
+      this.truncated.add(m.rel);
+      return placeholder(m.rel, m.cnt);
+    }
+    const skippedTotal = middle.reduce((s, m) => s + m.cnt, 0);
+    return {
+      name: `[ … ${middle.length} items truncated with ${skippedTotal} entries ]`,
+      path: "",
+      isDirectory: false,
+    };
+  }
+
+  /*  … applyHeavyTruncation, applySmartTruncation, middlePlaceholder
+  /** Smart‐truncate: conservamos primer y último bloque, middle placeholder */
+  protected applySmartTruncation(
+    rest: MeasuredEntry[],
+    totalDesc: number
+  ): [MeasuredEntry[], MeasuredEntry[], MeasuredEntry[]] {
+    const ratio = totalDesc / this.limits.maxTotal;
+    let localMax = this.limits.maxChildren;
+    if (ratio > 1) {
+      localMax = Math.max(
+        Math.floor(this.limits.maxChildren / ratio),
+        1,
+        Math.floor(this.limits.maxChildren * 0.1)
+      );
+    }
+    const half = Math.min(
+      Math.floor(localMax / 2),
+      Math.floor(rest.length / 2)
+    );
+    const small = rest.slice(0, half);
+    const large = rest.slice(rest.length - half);
+    const middle = rest.slice(half, rest.length - half);
+    return [small, middle, large];
+  }
+
+  /** Trunca carpetas muy grandes (absolute/relative) */
+  protected applyHeavyTruncation(
+    measured: MeasuredEntry[],
+    totalDesc: number
+  ): [{ node: FileTree; count: number }[], MeasuredEntry[]] {
+    const heavyAbsolute = this.limits.maxTotal;
+    const heavyRelative = 0.8;
+    const minRelSize = Math.floor(this.limits.maxTotal * 0.2);
+    const heavy: { node: FileTree; count: number }[] = [];
+    const rest: MeasuredEntry[] = [];
+
+    for (const e of measured) {
+      const w = e.cnt / totalDesc;
+      const noSelInside = !this.hasSelectionInside(e.rel);
+      if (
+        e.entry.isDirectory() &&
+        noSelInside &&
+        (e.cnt > heavyAbsolute || (e.cnt >= minRelSize && w > heavyRelative))
+      ) {
+        heavy.push({ node: placeholder(e.rel, e.cnt), count: e.cnt });
+        this.truncated.add(e.rel);
+      } else {
+        rest.push(e);
+      }
+    }
+    return [heavy, rest];
+  }
+
+  /** Hay algo seleccionado dentro de este rel? */
+  protected hasSelectionInside(rel: string): boolean {
+    if (!this.selected.size) return false;
+    if (this.selected.has(rel)) return true;
+    return [...this.selected].some((s) => s.startsWith(rel + "/"));
+  }
+
+  /** Symlink o ignorado? */
+  protected isLinkOrIgnored(entry: Dirent, rel: string, ig: Ignore): boolean {
+    return (
+      entry.isSymbolicLink() ||
+      ig.ignores(rel + (entry.isDirectory() ? "/" : ""))
+    );
+  }
+
+  public isInsideTruncatedDir(file: string, trunc: Set<string>): boolean {
+    const f = toPosix(file);
+    for (const d of trunc) {
+      if (f === d || f.startsWith(d + "/")) return true;
+    }
+    return false;
+  }
+
+  /* ───────────── utilidades privadas ───────────── */
+
+  private async getDirents(dir: string): Promise<Dirent[]> {
+    const c = this.cache.get(dir);
+    if (c) return c;
+    const arr = await this.io(() => fs.readdir(dir, { withFileTypes: true }));
+    this.cache.set(dir, arr);
+    return arr;
+  }
+
+  private ascii(n: FileTree, p: string): string {
+    if (!n.children?.length) return "";
+    return n.children
+      .map((c, i) => {
+        const last = i === n.children!.length - 1;
+        const line = `${p}${last ? "`-- " : "|-- "}${c.name}\n`;
+        return (
+          line +
+          (c.isDirectory ? this.ascii(c, p + (last ? "    " : "|   ")) : "")
+        );
+      })
+      .join("");
+  }
+
+  /** Cuenta los nodos de un FileTree (carpetas + archivos). */
+  protected countTree(node: FileTree): number {
+    let total = 1; // el propio nodo
+    if (node.children) {
+      for (const c of node.children) total += this.countTree(c);
+    }
+    return total;
+  }
+}
