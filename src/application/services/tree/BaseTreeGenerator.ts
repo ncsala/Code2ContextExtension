@@ -6,11 +6,11 @@ import { FileTree } from "../../../domain/model/FileTree";
 import { toPosix } from "../../../shared/utils/pathUtils";
 import { PrefixSet } from "../../../shared/utils/PrefixSet";
 import { TreeLimits, MeasuredEntry, placeholder } from "./common";
+
 /**
  * Clase base con toda la lógica común de medición, truncado y ASCII.
  * Los subclasses solo implementan `build()` para cada modo.
  */
-
 export abstract class BaseTreeGenerator {
   protected io = pLimit(16);
   protected cache = new Map<string, Dirent[]>();
@@ -64,9 +64,6 @@ export abstract class BaseTreeGenerator {
     return cnt;
   }
 
-  // ────────────────────────────────────────────────────────────────
-  // Métodos COMUNES
-  // ────────────────────────────────────────────────────────────────
   /** Filtra entradas ignoradas y fuera de selección */
   protected async listRelevantEntries(
     dirFs: string,

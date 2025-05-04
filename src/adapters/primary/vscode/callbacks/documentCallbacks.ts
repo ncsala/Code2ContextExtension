@@ -1,9 +1,10 @@
-// src/adapters/primary/vscode/callbacks/documentCallbacks.ts
 import * as vscode from "vscode";
+import * as path from "path";
 import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 import { CompactResult } from "../../../../application/ports/driving/CompactResult";
 import { CompactUseCase } from "../../../../application/ports/driving/CompactUseCase";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
+import { handleLargeContent } from "../../../../shared/utils/largeFileHandler";
 
 export function createGenerateContextCallback(
   compactUseCase: CompactUseCase,
@@ -32,6 +33,18 @@ export function createGenerateContextCallback(
         );
 
         const contentToOpen = result.content;
+
+        const handled = await handleLargeContent(contentToOpen, {
+          rootPath:
+            options.rootPath || // del panel
+            vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ||
+            "",
+          suggestedName: path.basename(options.outputPath || "combined.txt"),
+        });
+        if (handled) {
+          return;
+        }
+        /* ────────────────────────────────────────────────────────────── */
 
         // --- Usar IIAFE para abrir el documento de forma no bloqueante ---
         (async () => {
@@ -81,7 +94,6 @@ export function createGenerateContextCallback(
         throw new Error(result.error || "Context generation failed");
       }
     } catch (error) {
-      // Handle errors from useCase.execute itself
       logger.error(
         "generateContextCallbackForWebview: Caught unexpected error during use case execution",
         error
