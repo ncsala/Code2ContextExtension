@@ -1,8 +1,7 @@
 import * as vscode from "vscode";
-import * as path from "path";
-import * as fs from "fs";
 import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
+import { PromptKey } from "../../../../shared/prompts/proPromptPresets";
 
 /** * Proveedor para la vista de opciones en el panel lateral */
 export class OptionsViewProvider implements vscode.WebviewViewProvider {
@@ -12,6 +11,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   // Opciones por defecto
   private _rootPath: string = "";
   private _outputPath: string = "combined.txt";
+  private _promptPreset: "none" | PromptKey = "deepContextV1";
   private _ignorePatterns: string[] = [];
   private _includeGitIgnore: boolean = true;
   private _includeTree: boolean = true;
@@ -56,6 +56,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage((message) => {
       if (message.command === "optionsChanged") {
         this.logger.info("Options changed from view:", message);
+        this._promptPreset = message.promptPreset ?? this._promptPreset;
         this._ignorePatterns = message.ignorePatterns || this._ignorePatterns;
         this._includeGitIgnore =
           message.includeGitIgnore ?? this._includeGitIgnore;
@@ -67,6 +68,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
         const updatedOptions = {
           rootPath: this._rootPath,
           outputPath: this._outputPath,
+          promptPreset: this._promptPreset,
           customIgnorePatterns: this._ignorePatterns,
           includeGitIgnore: this._includeGitIgnore,
           includeTree: this._includeTree,
@@ -93,6 +95,12 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
       if (options.outputPath !== undefined) {
         this._outputPath = options.outputPath;
       }
+      if (options.includePrompt !== undefined) {
+        this._includePrompt = options.includePrompt;
+      }
+      if (options.promptPreset !== undefined) {
+        this._promptPreset = options.promptPreset;
+      }
       if (options.customIgnorePatterns !== undefined) {
         this._ignorePatterns = options.customIgnorePatterns;
       }
@@ -118,6 +126,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
         options: {
           rootPath: this._rootPath,
           outputPath: this._outputPath,
+          promptPreset: this._promptPreset,
           ignorePatterns: this._ignorePatterns,
           includeGitIgnore: this._includeGitIgnore,
           includeTree: this._includeTree,
@@ -130,6 +139,8 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
       const updatedOptions = {
         rootPath: this._rootPath,
         outputPath: this._outputPath,
+        includePrompt: this._includePrompt,
+        promptPreset: this._promptPreset,
         customIgnorePatterns: this._ignorePatterns,
         includeGitIgnore: this._includeGitIgnore,
         includeTree: this._includeTree,
@@ -148,6 +159,8 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
     return {
       rootPath: this._rootPath,
       outputPath: this._outputPath,
+      includePrompt: this._includePrompt,
+      promptPreset: this._promptPreset,
       customIgnorePatterns: this._ignorePatterns,
       includeGitIgnore: this._includeGitIgnore,
       includeTree: this._includeTree,
@@ -245,6 +258,23 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                 } />
                 <label for="includeGitIgnore">Include .gitignore patterns</label>
             </div>
+
+            <div class="checkbox-label">
+              <input type="checkbox" id="includePrompt" ${
+                this._includePrompt ? "checked" : ""
+              } />
+              <label for="includePrompt">Prepend professional prompt</label>
+            </div>
+
+            <select id="promptPreset">
+              <option value="deepContextV1" ${
+                this._promptPreset === "deepContextV1" ? "selected" : ""
+              }>Deep&nbsp;Context&nbsp;v1</option>
+              <option value="none"          ${
+                this._promptPreset === "none" ? "selected" : ""
+              }>None&nbsp;(disabled)</option>
+            </select>
+
             
             <div class="checkbox-label">
                 <input type="checkbox" id="includeTree" ${
@@ -274,9 +304,10 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
             const vscode = acquireVsCodeApi();
             
             // Referencias a elementos del DOM
-            const form = document.getElementById('optionsForm');
             const outputPathInput = document.getElementById('outputPath');
-            const ignorePatternsTextarea = document.getElementById('ignorePatterns');
+            const includePromptCheckbox    = document.getElementById('includePrompt');
+            const promptPresetSelect       = document.getElementById('promptPreset');
+            const ignorePatternsTextarea   = document.getElementById('ignorePatterns');
             const includeGitIgnoreCheckbox = document.getElementById('includeGitIgnore');
             const includeTreeCheckbox = document.getElementById('includeTree');
             const minifyContentCheckbox = document.getElementById('minifyContent');
@@ -286,6 +317,8 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
             applyBtn.addEventListener('click', () => {
                 // Obtener valores actuales
                 const outputPath = outputPathInput.value.trim();
+                const includePrompt = includePromptCheckbox.checked;
+                const selectedPreset = promptPresetSelect.value;
                 const ignorePatterns = ignorePatternsTextarea.value
                     .split('\\n')
                     .map(line => line.trim())
@@ -297,6 +330,8 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                 // Enviar mensaje con los nuevos valores
                 vscode.postMessage({
                     command: 'optionsChanged',
+                    includePrompt,
+                    promptPreset: selectedPreset,
                     outputPath,
                     ignorePatterns,
                     includeGitIgnore,
@@ -304,6 +339,12 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                     minifyContent
                 });
             });
+
+            // Sincroniza el enabled/disabled del selector con el checkbox
+            includePromptCheckbox.addEventListener('change', () => {
+              promptPresetSelect.disabled = !includePromptCheckbox.checked;
+            });
+            promptPresetSelect.disabled = !includePromptCheckbox.checked;
             
             // Escuchar mensajes de la extensión
             window.addEventListener('message', event => {
@@ -314,6 +355,14 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                     // Actualizar la interfaz con los nuevos valores
                     if (options.outputPath) {
                         outputPathInput.value = options.outputPath;
+                    }
+
+                    if (options.includePrompt !== undefined) {
+                      includePromptCheckbox.checked = options.includePrompt;
+                    }
+
+                    if (options.promptPreset !== undefined) {
+                      promptPresetSelect.value = options.promptPreset;
                     }
                     
                     if (options.ignorePatterns) {

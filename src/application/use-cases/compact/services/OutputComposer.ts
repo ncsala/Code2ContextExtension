@@ -8,6 +8,8 @@ import { FileSystemPort } from "../../../ports/driven/FileSystemPort";
 import { ProgressReporter } from "../../../ports/driven/ProgressReporter";
 import { CompactOptions } from "../../../ports/driving/CompactOptions";
 import { once } from "events";
+import { PROFESSIONAL_PROMPT } from "../../../../shared/utils/proPrompt";
+import { getPrompt } from "../../../../shared/prompts/proPromptPresets";
 
 const { TREE_MARKER, INDEX_MARKER, FILE_MARKER } = ContentFormatter;
 const CONCURRENCY = 4;
@@ -45,11 +47,15 @@ export class OutputComposer {
     // --- modo stream ---------------------------------------------------------
     if (opts.outputPath) {
       const out = createWriteStream(opts.outputPath, "utf8");
+      const pro = opts.includePrompt
+        ? getPrompt(opts.promptPreset ?? "none") + "\n\n"
+        : "";
 
       // 1) header, árbol e índice
       await this.writeChunk(
         out,
-        header +
+        pro +
+          header +
           (opts.includeTree && treeText
             ? `${TREE_MARKER}\n${treeText}\n\n`
             : "") +
