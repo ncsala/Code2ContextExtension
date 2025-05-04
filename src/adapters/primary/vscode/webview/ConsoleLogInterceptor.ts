@@ -72,8 +72,6 @@ export class ConsoleLogInterceptor {
     }
     console.log = this.originalConsoleLog; // Restaura
     this.isIntercepting = false;
-    // Usa la instancia guardada
-    this.logger?.info("Console.log interceptor stopped.");
     // Limpia referencias
     this.messageBridge = undefined;
     this.panelManager = undefined;

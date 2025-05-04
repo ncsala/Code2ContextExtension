@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
+import { USER_MESSAGES } from "../../adapters/primary/vscode/constants";
 
+// TODO Dejar así “hard‑codeado”; más adelante podremos leerlo de la config.
 const LARGE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
-// Dejar así “hard‑codeado”; más adelante podremos leerlo de la config.
 
 export async function handleLargeContent(
   content: string,
@@ -25,13 +26,14 @@ export async function handleLargeContent(
   if (dest) {
     await fs.promises.writeFile(dest.fsPath, content, "utf8");
     vscode.window.showInformationMessage(
-      `Archivo guardado en ${dest.fsPath} (${(sizeBytes / 1_048_576).toFixed(
-        1
-      )} MB).`
+      USER_MESSAGES.INFO.FILE_SAVED(
+        dest.fsPath,
+        (sizeBytes / 1_048_576).toFixed(1)
+      )
     );
   } else {
     vscode.window.showWarningMessage(
-      "Generación completada, pero se canceló el guardado del archivo."
+      USER_MESSAGES.WARNINGS.FILE_SAVE_CANCELLED
     );
   }
 

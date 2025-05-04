@@ -13,7 +13,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
 
   // Opciones por defecto
   private _rootPath: string = "";
-  private _outputPath: string = "combined.txt";
+  private _outputPath: string = "code-context.txt";
   private _promptPreset: "none" | PromptKey = "deepContextV1";
   private _ignorePatterns: string[] = [];
   private _includeGitIgnore: boolean = true;
@@ -171,7 +171,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   private _getHtmlForWebview() {
     // Convertir los patrones de ignorado a texto
     const ignorePatterns = this._ignorePatterns.join("\n");
-    // ─── opciones de prompt dinámicas ───────────────────────────
+    // Opciones de prompt dinámicas
     const presetKeys: ("none" | PromptKey)[] = [
       "none",
       ...(Object.keys(PROMPT_PRESETS) as PromptKey[]),
@@ -184,7 +184,6 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
           }>${k}</option>`
       )
       .join("\n");
-    // ─────────────────────────────────────────────────────────────
 
     // Generar html para la vista
     return `<!DOCTYPE html>
@@ -255,7 +254,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
             <label for="outputPath">Output File:</label>
             <input type="text" id="outputPath" value="${
               this._outputPath
-            }" placeholder="combined.txt" />
+            }" placeholder="code-context.txt" />
         </div>
         
         <div class="form-group">

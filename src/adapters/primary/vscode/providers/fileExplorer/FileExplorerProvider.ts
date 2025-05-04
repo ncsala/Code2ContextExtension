@@ -72,8 +72,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       // Actualizar UI
       this._onDidChangeTreeData.fire();
 
-      console.log(`Root path set to: ${path}`);
-
       // Limpiar selección
       this.selectionService.clearSelection();
       this.initialized = true;

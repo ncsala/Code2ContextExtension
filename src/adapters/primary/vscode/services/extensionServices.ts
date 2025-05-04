@@ -1,11 +1,10 @@
-// src/adapters/primary/vscode/services/extensionServices.ts
 import * as vscode from "vscode";
 import { WebviewProvider } from "../WebviewProvider";
 import { AppState } from "../state/appState";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 import { CompactUseCase } from "../../../../application/ports/driving/CompactUseCase";
-import { SelectionPort } from "../../../../application/ports/driven/SelectionPort";
 import { NotificationPort } from "../../../../application/ports/driven/NotificationPort";
+import { USER_MESSAGES } from "../constants";
 
 export function registerCommands(
   context: vscode.ExtensionContext,
@@ -23,7 +22,6 @@ export function registerCommands(
   const openPanelCommand = vscode.commands.registerCommand(
     "code2context.openPanel",
     async () => {
-      logger.info("Ejecutando comando openPanel");
       if (!appState.initialized) {
         logger.warn(
           "La extensión no ha terminado de inicializarse, esperando..."
@@ -39,21 +37,20 @@ export function registerCommands(
             "WebviewProvider no está inicializado al intentar abrir el panel."
           );
           vscode.window.showErrorMessage(
-            "Error interno: WebviewProvider no está disponible"
+            USER_MESSAGES.ERRORS.UNABLE_TO_OPEN_PANEL
           );
         }
       } catch (err) {
         logger.error("Error al abrir el panel:", err);
         vscode.window.showErrorMessage(
-          `Error al abrir panel: ${
+          USER_MESSAGES.ERRORS.PANEL_ERROR(
             err instanceof Error ? err.message : String(err)
-          }`
+          )
         );
       }
     }
   );
   context.subscriptions.push(openPanelCommand);
-  logger.info("Comando openPanel registrado");
 
   // Registrar comandos específicos
   const { fileExplorerProvider, optionsViewProvider } = providers;
@@ -68,7 +65,7 @@ export function registerCommands(
     fileExplorerProvider,
     optionsViewProvider,
     appState.currentOptions,
-    notificationService // Pasamos el servicio de notificación
+    notificationService
   );
 
   registerGenerateCommands(
@@ -78,7 +75,7 @@ export function registerCommands(
     optionsViewProvider,
     appState.currentOptions,
     providers.webviewProvider,
-    notificationService // Pasamos el servicio de notificación
+    notificationService
   );
 
   // Comando para mostrar opciones

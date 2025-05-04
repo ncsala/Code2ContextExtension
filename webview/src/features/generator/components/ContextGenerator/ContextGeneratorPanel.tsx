@@ -1,5 +1,6 @@
 import React from "react";
 import styles from "./ContextGeneratorPanel.module.css";
+import { ERROR_MESSAGES, UI_MESSAGES } from "../../../../shared/constants";
 
 interface GeneratorPanelProps {
   options: {
@@ -29,24 +30,24 @@ const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
 }) => {
   return (
     <div className={styles.panel}>
-      <h1 className={styles.title}>Code2Context Generator</h1>
+      <h1 className={styles.title}>{UI_MESSAGES.PANEL.TITLE}r</h1>
 
       {/* Root Directory Selector */}
       <div className={styles.formGroup}>
         <label htmlFor="rootPath" className={styles.label}>
-          Root Directory:
+          {UI_MESSAGES.LABELS.ROOT_DIRECTORY}
         </label>
         <div className={styles.inputGroup}>
           <input
             id="rootPath"
             type="text"
             value={options.rootPath}
-            placeholder="Select a directory..."
+            placeholder={UI_MESSAGES.PLACEHOLDERS.SELECT_DIRECTORY}
             readOnly
             className={styles.input}
           />
           <button onClick={onSelectDirectory} className={styles.button}>
-            Browse...
+            {UI_MESSAGES.BUTTONS.BROWSE}
           </button>
         </div>
       </div>
@@ -54,7 +55,7 @@ const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
       {/* Selection Mode */}
       <div className={styles.formGroup}>
         <label htmlFor="selectionMode" className={styles.label}>
-          Selection Mode:
+          {UI_MESSAGES.LABELS.SELECTION_MODE}
         </label>
         <div className={styles.selectionModeContainer}>
           <select
@@ -63,15 +64,19 @@ const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
             onChange={onSelectionModeChange}
             className={styles.select}
           >
-            <option value="directory">Entire Directory</option>
-            <option value="files">Specific Files</option>
+            <option value="directory">
+              {UI_MESSAGES.SELECTION_MODE.ENTIRE_DIRECTORY}
+            </option>
+            <option value="files">
+              {UI_MESSAGES.SELECTION_MODE.SPECIFIC_FILES}
+            </option>
           </select>
 
           {/* Botón adicional para el modo "files" */}
           {options.selectionMode === "files" && (
             <div className={styles.fileSelectionActions}>
               <button onClick={onOpenFileExplorer} className={styles.button}>
-                Select Files
+                {UI_MESSAGES.BUTTONS.SELECT_FILES}
               </button>
             </div>
           )}
@@ -82,7 +87,7 @@ const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
       {options.selectionMode === "files" && (
         <div className={styles.formGroup}>
           <label className={styles.label}>
-            Selected Files: {selectedFiles.length}
+            {UI_MESSAGES.LABELS.SELECTED_FILES} {selectedFiles.length}
           </label>
           <div className={styles.fileListContainer}>
             {selectedFiles.length > 0 ? (
@@ -95,7 +100,7 @@ const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
               </ul>
             ) : (
               <div className={styles.noFilesMessage}>
-                No files selected. Use the file explorer to select files.
+                {ERROR_MESSAGES.FILE_OPERATIONS.NO_FILES_MESSAGE}
               </div>
             )}
           </div>
@@ -109,17 +114,19 @@ const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
           disabled={loading}
           className={`${styles.button} ${styles.primaryButton}`}
         >
-          {loading ? "Generating..." : "Generate Context"}
+          {loading
+            ? UI_MESSAGES.PANEL.GENERATING
+            : UI_MESSAGES.PANEL.GENERATE_CONTEXT}
         </button>
         <button onClick={onShowOptions} className={styles.button}>
-          Show Options
+          {UI_MESSAGES.PANEL.SHOW_OPTIONS}
         </button>
       </div>
 
       {/* Info Note */}
       <div className={styles.note}>
-        <span className={styles.noteLabel}>Note:</span> Configure ignore
-        patterns and other options in the "Options" panel in the sidebar.
+        <span className={styles.noteLabel}>Note:</span>{" "}
+        {UI_MESSAGES.NOTES.CONFIGURE_OPTIONS}
       </div>
 
       {/* Error Message */}

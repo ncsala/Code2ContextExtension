@@ -4,6 +4,7 @@ import { FileItem } from "../providers/fileExplorer/FileItem";
 import { NotificationPort } from "../../../../application/ports/driven/NotificationPort";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
+import { USER_MESSAGES } from "../constants";
 
 /**
  * Registra los comandos relacionados con la selección de archivos
@@ -30,7 +31,7 @@ export function registerFileCommands(
     "code2context.selectAll",
     () => {
       fileExplorerProvider.selectAll();
-      notificationService.showInformation("All files selected");
+      notificationService.showInformation(`${USER_MESSAGES.INFO.ALL_FILES_SELECTED}`);
     }
   );
 

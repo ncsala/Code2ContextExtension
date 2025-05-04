@@ -12,6 +12,7 @@ import { WebviewStateSynchronizer } from "./webview/WebviewStateSynchronizer";
 import { ConsoleLogInterceptor } from "./webview/ConsoleLogInterceptor";
 import { ProgressReporter } from "../../../application/ports/driven/ProgressReporter";
 import { SelectionPort } from "../../../application/ports/driven/SelectionPort";
+import { USER_MESSAGES } from "./constants";
 
 /**
  * Orquesta la creación, comunicación y lógica del Webview principal de Code2Context.
@@ -63,11 +64,8 @@ export class WebviewProvider {
       this.logger
     );
     this.consoleLogInterceptor = new ConsoleLogInterceptor();
-
-    this.logger.info(
-      "WebviewProvider initialized with specialized components."
-    );
   }
+
   /**
    * Actualiza la función de callback utilizada para generar el contexto.
    * Esto también actualiza el callback dentro del ActionHandler.
@@ -77,10 +75,7 @@ export class WebviewProvider {
     callback: (options: CompactOptions) => Promise<void>
   ): void {
     this.generateContextCallback = callback;
-    this.actionHandler.updateGenerateCallback(callback); // Asegurar que el handler también tenga la última versión
-    this.logger.info(
-      "Generate context callback updated in WebviewProvider and ActionHandler."
-    );
+    this.actionHandler.updateGenerateCallback(callback);
   }
 
   /**
@@ -90,66 +85,55 @@ export class WebviewProvider {
   public async openPanel(): Promise<void> {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!root) {
-      vscode.window.showErrorMessage("Please open a workspace folder first.");
-      this.logger.error("Cannot open webview panel: No workspace folder open.");
+      vscode.window.showErrorMessage(USER_MESSAGES.ERRORS.NO_WORKSPACE);
       return;
     }
 
     // Asegurarse de que el explorador de archivos nativo use el workspace actual
-    // (Puede que ya esté hecho, pero es bueno asegurar)
     this.fileExplorerProvider.setRootPath(root);
 
-    // 1. Crear o mostrar el panel usando el PanelManager
+    // Crear o mostrar el panel usando el PanelManager
     const panel = this.panelManager.createOrShow();
 
-    // 2. Establecer el contenido HTML usando el PanelManager
+    // Establecer el contenido HTML usando el PanelManager
     this.panelManager.setHtmlContent(panel);
 
-    // --- Configurar Comunicación y Sincronización ---
-
-    // 3. Adjuntar el MessageBridge al webview del panel
+    // Adjuntar el MessageBridge al webview del panel
     this.messageBridge.attach(panel.webview);
 
-    // 4. Inicializar el StateSynchronizer (empezará a escuchar y enviar updates)
+    // Inicializar el StateSynchronizer (empezará a escuchar y enviar updates)
     this.stateSynchronizer.initialize();
 
-    // 5. Iniciar el ConsoleLogInterceptor
     this.consoleLogInterceptor.start(
       this.messageBridge,
       this.panelManager,
       this.logger
     );
 
-    // 6. Registrar el manejador principal para mensajes del Webview en el MessageBridge
-    // Usamos bind para asegurar que el 'this' dentro de handleIncomingMessage sea el actionHandler
+    // Registrar el manejador principal para mensajes del Webview en el MessageBridge
     this.messageBridge.onMessage(
       this.actionHandler.handleIncomingMessage.bind(this.actionHandler)
     );
 
-    // 7. Enviar estado inicial al Webview ahora que todo está listo
-    this.logger.info("Sending initial state to webview...");
+    // Enviar estado inicial al Webview ahora que todo está listo
     this.messageBridge.postMessage({
       command: "initialize",
       rootPath: root,
       options: this.optionsViewProvider.getOptions(), // Enviar opciones actuales
     });
     // Enviar selección inicial
-    const currentSelection = this.selectionService.getSelectedFiles(); // Usar this.selectionService
+    const currentSelection = this.selectionService.getSelectedFiles();
     this.messageBridge.postMessage({
       command: "selectedFiles",
       files: currentSelection,
     });
 
-    // 8. Configurar limpieza cuando el panel se cierra
+    // Configurar limpieza cuando el panel se cierra
     this.panelManager.onDidDispose(() => {
-      this.logger.info("Webview panel disposed. Cleaning up resources...");
       this.consoleLogInterceptor.stop();
       this.stateSynchronizer.dispose();
       this.messageBridge.detach();
-      this.logger.info("WebviewProvider cleanup complete.");
     });
-
-    this.logger.info("Webview panel setup complete.");
   }
 
   /**

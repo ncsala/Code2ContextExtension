@@ -1,5 +1,6 @@
 import React from "react";
 import styles from "./DebugOutputPanel.module.css";
+import { ERROR_MESSAGES, UI_MESSAGES } from "../../../../shared/constants";
 
 interface DebugOutputPanelProps {
   debugOutput: string;
@@ -15,14 +16,13 @@ const DebugOutputPanel: React.FC<DebugOutputPanelProps> = ({
       <div className={styles.header}>
         <h2 className={styles.title}>Debug Output</h2>
         <button className={styles.clearButton} onClick={onClear}>
-          Clear
+          {UI_MESSAGES.BUTTONS.CLEAR}
         </button>
       </div>
       <pre className={styles.content}>
         {debugOutput || (
           <div className={styles.emptyState}>
-            No debug information available. Select files or change options to
-            see updates here.
+            {ERROR_MESSAGES.DEBUG.EMPTY_STATE}
           </div>
         )}
       </pre>
