@@ -3,6 +3,7 @@ import {
   SelectionChangeListener,
   SelectionPort,
 } from "../../../../application/ports/driven/SelectionPort";
+import { USER_MESSAGES } from "../constants";
 
 /**
  * Servicio para manejar la selección de archivos y directorios
@@ -46,7 +47,6 @@ export class VSCodeSelectionService implements SelectionPort {
    */
   registerWebviewProvider(provider: SelectionChangeListener): void {
     this.webviewProvider = provider;
-    console.log("WebviewProvider registered for selection updates");
   }
 
   /**
@@ -114,7 +114,7 @@ export class VSCodeSelectionService implements SelectionPort {
     if (this.selectedFiles.length > 0) {
       this.selectedFiles = [];
       this.notifyListeners();
-      this.notificationService.showInformation("Selection cleared");
+      this.notificationService.showInformation(USER_MESSAGES.INFO.SELECTION_CLEARED);
     }
   }
 
@@ -167,7 +167,5 @@ export class VSCodeSelectionService implements SelectionPort {
 
     // Limpiar selección
     this.selectedFiles = [];
-
-    console.log("SelectionService disposed successfully");
   }
 }

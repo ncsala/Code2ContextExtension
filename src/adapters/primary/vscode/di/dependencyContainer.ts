@@ -26,8 +26,9 @@ export interface Container {
 export function createContainer(verboseLogging: boolean = false): Container {
   const defaultOptions: CompactOptions = {
     rootPath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "",
-    outputPath: "combined.txt",
+    outputPath: "code-context.txt",
     customIgnorePatterns: [],
+    includeDefaultPatterns: true,
     includeGitIgnore: true,
     includeTree: true,
     minifyContent: true,

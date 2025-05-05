@@ -13,9 +13,10 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
 
   // Opciones por defecto
   private _rootPath: string = "";
-  private _outputPath: string = "combined.txt";
+  private _outputPath: string = "code-context.txt";
   private _promptPreset: "none" | PromptKey = "deepContextV1";
   private _ignorePatterns: string[] = [];
+  private _includeDefaultPatterns = true;
   private _includeGitIgnore: boolean = true;
   private _includeTree: boolean = true;
   private _minifyContent: boolean = true;
@@ -61,6 +62,8 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
         this.logger.info("Options changed from view:", message);
         this._promptPreset = message.promptPreset ?? this._promptPreset;
         this._ignorePatterns = message.ignorePatterns || this._ignorePatterns;
+        this._includeDefaultPatterns =
+          message.includeDefaultPatterns ?? this._includeDefaultPatterns;
         this._includeGitIgnore =
           message.includeGitIgnore ?? this._includeGitIgnore;
         this._includeTree = message.includeTree ?? this._includeTree;
@@ -101,6 +104,9 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
       if (options.promptPreset !== undefined) {
         this._promptPreset = options.promptPreset;
       }
+      if (options.includeDefaultPatterns !== undefined) {
+        this._includeDefaultPatterns = options.includeDefaultPatterns;
+      }
       if (options.customIgnorePatterns !== undefined) {
         this._ignorePatterns = options.customIgnorePatterns;
       }
@@ -131,6 +137,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
           includeGitIgnore: this._includeGitIgnore,
           includeTree: this._includeTree,
           minifyContent: this._minifyContent,
+          includeDefaultPatterns: this._includeDefaultPatterns,
           selectionMode: this._selectionMode,
         },
       });
@@ -140,6 +147,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
         rootPath: this._rootPath,
         outputPath: this._outputPath,
         promptPreset: this._promptPreset,
+        includeDefaultPatterns: this._includeDefaultPatterns,
         customIgnorePatterns: this._ignorePatterns,
         includeGitIgnore: this._includeGitIgnore,
         includeTree: this._includeTree,
@@ -159,6 +167,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
       rootPath: this._rootPath,
       outputPath: this._outputPath,
       promptPreset: this._promptPreset,
+      includeDefaultPatterns: this._includeDefaultPatterns,
       customIgnorePatterns: this._ignorePatterns,
       includeGitIgnore: this._includeGitIgnore,
       includeTree: this._includeTree,
@@ -171,7 +180,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   private _getHtmlForWebview() {
     // Convertir los patrones de ignorado a texto
     const ignorePatterns = this._ignorePatterns.join("\n");
-    // ─── opciones de prompt dinámicas ───────────────────────────
+    // Opciones de prompt dinámicas
     const presetKeys: ("none" | PromptKey)[] = [
       "none",
       ...(Object.keys(PROMPT_PRESETS) as PromptKey[]),
@@ -184,7 +193,6 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
           }>${k}</option>`
       )
       .join("\n");
-    // ─────────────────────────────────────────────────────────────
 
     // Generar html para la vista
     return `<!DOCTYPE html>
@@ -195,57 +203,112 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
     <title>Code2Context Options</title>
     <style>
         body {
-            padding: 10px;
-            color: var(--vscode-foreground);
-            font-family: var(--vscode-font-family);
-            font-size: var(--vscode-font-size);
+          padding: 10px;
+          color: var(--vscode-foreground);
+          font-family: var(--vscode-font-family);
+          font-size: var(--vscode-font-size);
         }
         .form-group {
             margin-bottom: 15px;
         }
         label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
+          display: block;
+          margin-bottom: 5px;
+          font-weight: 500;
         }
         input[type="text"], textarea {
-            width: 100%;
-            padding: 6px 8px;
-            background-color: var(--vscode-input-background);
-            color: var(--vscode-input-foreground);
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 2px;
+          width: 100%;
+          padding: 6px 8px;
+          background-color: var(--vscode-input-background);
+          color: var(--vscode-input-foreground);
+          border: 1px solid var(--vscode-input-border);
+          border-radius: 2px;
         }
         textarea {
-            min-height: 80px;
-            font-family: monospace;
-            resize: vertical;
+          min-height: 80px;
+          font-family: monospace;
+          resize: vertical;
         }
         .checkbox-label {
-            display: flex;
-            align-items: center;
-            margin-bottom: 5px;
+          display: flex;
+          align-items: center;
+          margin-bottom: 5px;
+        }
+        .checkbox-group {
+          margin-bottom: 8px;
+        }
+        .checkbox-group .checkbox-label {
+          margin-bottom: 0;
+        }
+        .checkbox-group .note {
+          margin-left: 28px;
+          margin-top: 4px;
+          margin-bottom: 12px;
+          padding: 8px;
+          font-size: 0.9em;
+          background-color: var(--vscode-inputValidation-infoBackground);
+          color: var(--vscode-foreground);
+          border-left: 3px solid var(--vscode-inputValidation-infoBorder);
+        }
+        .inline-field {
+          display: flex;
+          align-items: center;
+          margin-bottom: 8px;
+        }
+        .inline-field label {
+          margin-right: 8px;
         }
         .checkbox-label input {
-            margin-right: 6px;
+          margin-right: 6px;
         }
         button {
-            padding: 6px 14px;
-            color: var(--vscode-button-foreground);
-            background-color: var(--vscode-button-background);
-            border: none;
-            border-radius: 2px;
-            cursor: pointer;
+          padding: 6px 14px;
+          color: var(--vscode-button-foreground);
+          background-color: var(--vscode-button-background);
+          border: none;
+          border-radius: 2px;
+          cursor: pointer;
         }
         button:hover {
-            background-color: var(--vscode-button-hoverBackground);
+          background-color: var(--vscode-button-hoverBackground);
         }
         .note {
-            font-size: 0.9em;
-            margin-top: 15px;
-            padding: 8px;
-            background-color: var(--vscode-inputValidation-infoBackground);
-            border-left: 3px solid var(--vscode-inputValidation-infoBorder);
+          font-size: 0.9em;
+          margin-top: 4px;
+          margin-bottom: 12px;
+          padding: 8px;
+          background-color: var(--vscode-inputValidation-infoBackground);
+          border-left: 3px solid var(--vscode-inputValidation-infoBorder);
+        }
+        .checkbox-group .checkbox-label {
+            margin-bottom: 0;
+        }
+        select {
+          padding: 4px 8px;
+          background-color: var(--vscode-input-background);
+          color: var(--vscode-input-foreground);
+          border: 1px solid var(--vscode-input-border);
+          border-radius: 4px;
+          font-size: 1em;
+          transition: all 0.2s ease;
+        }
+        select:focus {
+          outline: none;
+          border-color: var(--vscode-focusBorder);
+          box-shadow: 0 0 0 1px var(--vscode-focusBorder);
+        }
+        button {
+          padding: 6px 14px;
+          color: white;
+          background-color: #9b59b6;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-weight: bold;
+          transition: background-color 0.2s ease;
+        }
+        button:hover {
+          background-color: #8e44ad;
         }
     </style>
 </head>
@@ -255,27 +318,28 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
             <label for="outputPath">Output File:</label>
             <input type="text" id="outputPath" value="${
               this._outputPath
-            }" placeholder="combined.txt" />
+            }" placeholder="code-context.txt" />
         </div>
         
         <div class="form-group">
-            <label for="ignorePatterns">Ignore Patterns (one per line):</label>
-            <textarea id="ignorePatterns" placeholder="node_modules&#10;.git&#10;dist">${ignorePatterns}</textarea>
-        </div>
-        
-        <div class="form-group">
+          <label for="ignorePatterns">Ignore Patterns (one per line):</label>
+            <textarea id="ignorePatterns" placeholder="node_modules&#10;.git&#10;dist">${ignorePatterns}
+            </textarea>
+
+          </div>
+            <div class="inline-field">
+              <label for="promptPreset">Prompt preset:</label>
+              <select id="promptPreset">
+                ${optionsHtml}
+              </select>
+            </div>
+
             <div class="checkbox-label">
                 <input type="checkbox" id="includeGitIgnore" ${
                   this._includeGitIgnore ? "checked" : ""
                 } />
                 <label for="includeGitIgnore">Include .gitignore patterns</label>
             </div>
-
-            <label for="promptPreset">Prompt preset:</label>
-              <select id="promptPreset">
-              ${optionsHtml}
-            </select>
-
             
             <div class="checkbox-label">
                 <input type="checkbox" id="includeTree" ${
@@ -290,13 +354,21 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                 } />
                 <label for="minifyContent">Minify content</label>
             </div>
+
+            <div class="checkbox-group">
+              <div class="checkbox-label">
+                <input type="checkbox" id="includeDefaultPatterns"
+                       ${this._includeDefaultPatterns ? "checked" : ""}/>
+                <label for="includeDefaultPatterns">
+                  Include default ignore patterns
+                </label>
+            </div>
+            <div class="note">
+              ⚠️ If you disable this, large binaries (images, videos, docs), logs, caches, etc. will be      included and may significantly slow down processing.
+            </div>
         </div>
         
         <button type="button" id="applyBtn">Apply Settings</button>
-        
-        <div class="note">
-            Binary files like images, documents, and Git files are automatically excluded.
-        </div>
     </form>
 
     <script>
@@ -307,6 +379,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
             // Referencias a elementos del DOM
             const outputPathInput = document.getElementById('outputPath');
             const promptPresetSelect       = document.getElementById('promptPreset');
+            const includeDefaultPatternsCheckbox = document.getElementById('includeDefaultPatterns');
             const ignorePatternsTextarea   = document.getElementById('ignorePatterns');
             const includeGitIgnoreCheckbox = document.getElementById('includeGitIgnore');
             const includeTreeCheckbox = document.getElementById('includeTree');
@@ -322,6 +395,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                     .split('\\n')
                     .map(line => line.trim())
                     .filter(line => line.length > 0);
+                const includeDefaultPatterns = includeDefaultPatternsCheckbox.checked;
                 const includeGitIgnore = includeGitIgnoreCheckbox.checked;
                 const includeTree = includeTreeCheckbox.checked;
                 const minifyContent = minifyContentCheckbox.checked;
@@ -331,6 +405,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                     command: 'optionsChanged',
                     promptPreset: selectedPreset,
                     outputPath,
+                    includeDefaultPatterns,
                     ignorePatterns,
                     includeGitIgnore,
                     includeTree,

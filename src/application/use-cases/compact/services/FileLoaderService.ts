@@ -83,8 +83,12 @@ export class FileLoaderService {
         return null;
       }
       return { path: rel, content };
-    } catch (err: any) {
-      this.logger.error(`File error ${abs}: ${err.code || err.message}`);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        this.logger.error(`File error ${abs}: ${err.message}`);
+      } else {
+        this.logger.error(`File error ${abs}: ${String(err)}`);
+      }
       return null;
     }
   }

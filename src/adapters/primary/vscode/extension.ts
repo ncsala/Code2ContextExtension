@@ -5,6 +5,7 @@ import { AppState } from "./state/appState";
 import { configureProviders } from "./providers/providerConfiguration";
 import { createGenerateContextCallback } from "./callbacks/documentCallbacks";
 import { registerCommands } from "./services/extensionServices";
+import { USER_MESSAGES } from "./constants";
 
 // Estado centralizado de la aplicación
 let appState: AppState;
@@ -81,9 +82,9 @@ export function activate(context: vscode.ExtensionContext) {
   } catch (error) {
     logger.error("ERROR CRÍTICO durante la activación:", error);
     vscode.window.showErrorMessage(
-      `Error crítico al activar Code2Context: ${
+      USER_MESSAGES.ERRORS.CRITICAL_ACTIVATION(
         error instanceof Error ? error.message : String(error)
-      }`
+      )
     );
     if (appState) {
       appState.setInitialized(false);
@@ -95,11 +96,7 @@ export function deactivate() {
   if (container) {
     // Limpiar servicios
     container.selectionService.dispose();
-    // Podrías añadir más limpiezas aquí
-
     // Limpiar referencia al container
     container = undefined;
   }
-
-  console.log("Code2Context extension deactivated.");
 }

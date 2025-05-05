@@ -72,8 +72,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
       // Actualizar UI
       this._onDidChangeTreeData.fire();
 
-      console.log(`Root path set to: ${path}`);
-
       // Limpiar selección
       this.selectionService.clearSelection();
       this.initialized = true;
@@ -151,8 +149,6 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     );
   }
 
-  // --- Implementación de vscode.TreeDataProvider ---
-
   getTreeItem(element: FileItem): vscode.TreeItem {
     return element;
   }
@@ -174,5 +170,11 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
 
   public setIncludeGitIgnore(enabled: boolean): void {
     this.ignoreManager.setIncludeGitIgnore(enabled);
+  }
+
+  public setIncludeDefaultPatterns(v: boolean): void {
+    this.ignoreManager.setIncludeDefaultPatterns(v);
+    this.itemCache.clear();
+    this._onDidChangeTreeData.fire();
   }
 }

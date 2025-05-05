@@ -1,5 +1,5 @@
-// src/adapters/primary/vscode/providers/providerConfiguration.ts
 import * as vscode from "vscode";
+import { FileItem } from "../providers/fileExplorer/FileItem"; 
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
@@ -10,7 +10,7 @@ import { SelectionPort } from "../../../../application/ports/driven/SelectionPor
 export interface ConfiguredProviders {
   optionsViewProvider: OptionsViewProvider;
   fileExplorerProvider: FileExplorerProvider;
-  treeView: vscode.TreeView<any>;
+  treeView: vscode.TreeView<FileItem>;
 }
 
 export function configureProviders(
@@ -20,11 +20,9 @@ export function configureProviders(
   selectionService: SelectionPort,
   notificationService: NotificationPort
 ): ConfiguredProviders {
-  // Options View Provider
   const optionsViewProvider = new OptionsViewProvider(
     context.extensionUri,
     (optionsUpdate) => {
-      logger.info("Opciones cambiadas desde OptionsView:", optionsUpdate);
       appState.updateOptions(optionsUpdate);
 
       if (optionsUpdate.customIgnorePatterns && fileExplorerProvider) {
@@ -44,7 +42,6 @@ export function configureProviders(
     )
   );
 
-  // File Explorer Provider con servicios inyectados
   const fileExplorerProvider = new FileExplorerProvider(
     selectionService,
     notificationService
@@ -76,15 +73,17 @@ export function configureProviders(
 
   context.subscriptions.push(treeView);
 
-  // Configure options change listener
   optionsViewProvider.onOptionsChanged((options) => {
-    logger.info(
-      "Options changed, potentially updating FileExplorerProvider state..."
-    );
     appState.updateOptions(options);
 
     if (options.customIgnorePatterns) {
       fileExplorerProvider.setIgnorePatterns(options.customIgnorePatterns);
+    }
+
+    if (options.includeDefaultPatterns !== undefined) {
+      fileExplorerProvider.setIncludeDefaultPatterns(
+        options.includeDefaultPatterns
+      );
     }
 
     if (options.includeGitIgnore !== undefined) {

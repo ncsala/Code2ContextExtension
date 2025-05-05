@@ -97,7 +97,7 @@ export class WebviewPanelManager {
         }
       );
       this.logger.info("Webview HTML content set.");
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error("Error reading or processing webview HTML:", error);
       panel.webview.html = this.getFallbackHtml(
         "Error loading webview content."
@@ -110,8 +110,8 @@ export class WebviewPanelManager {
    * @returns El evento onDidDispose o undefined.
    */
   public onDidDispose(
-    listener: () => any,
-    thisArgs?: any,
+    listener: () => unknown,
+    thisArgs?: unknown,
     disposables?: vscode.Disposable[]
   ): vscode.Disposable | undefined {
     return this.panel?.onDidDispose(listener, thisArgs, disposables);

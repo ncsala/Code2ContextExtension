@@ -7,6 +7,7 @@ import { CompactOptions } from "../../../../application/ports/driving/CompactOpt
 import { WebviewProvider } from "../WebviewProvider";
 import { handleLargeContent } from "../../../../shared/utils/largeFileHandler";
 import * as path from "path";
+import { USER_MESSAGES } from "../constants/userMessages";
 
 /**
  * Registra los comandos relacionados con la generación de contexto
@@ -32,7 +33,7 @@ export function registerGenerateCommands(
         const selectedFiles = fileExplorerProvider.getSelectedFiles();
         if (selectedFiles.length === 0) {
           notificationService?.showError(
-            "No files selected to generate context"
+            USER_MESSAGES.ERRORS.NO_FILES_SELECTED
           );
           return;
         }
@@ -58,13 +59,13 @@ export function registerGenerateCommands(
     async () => {
       const selectedFiles = fileExplorerProvider.getSelectedFiles();
       if (selectedFiles.length === 0) {
-        notificationService?.showError("No files selected to generate context");
+        notificationService?.showError(USER_MESSAGES.ERRORS.NO_FILES_SELECTED);
         return;
       }
 
       const rootPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       if (!rootPath) {
-        notificationService?.showError("No workspace open");
+        notificationService?.showError(USER_MESSAGES.ERRORS.NO_WORKSPACE);
         return;
       }
 
@@ -91,24 +92,22 @@ export function registerGenerateCommands(
    */
   async function generateContext(options: CompactOptions) {
     try {
-      // Ejecutar la compactación
       const result = await useCase.execute(options);
       if (webviewProvider) {
-        console.log(
-          `--> [extension.ts] generateContext SUCCESS: Attempting setLoading(false)`
-        );
         webviewProvider.setLoading(false);
       }
       if (result.ok === true) {
-        notificationService?.showInformation("Context generated successfully");
+        notificationService?.showInformation(
+          USER_MESSAGES.INFO.CONTEXT_GENERATED
+        );
 
-        /* ── Gestor de archivos grandes ─────────────────────────────── */
         const handled = await handleLargeContent(result.content!, {
           rootPath: options.rootPath,
-          suggestedName: path.basename(options.outputPath || "combined.txt"),
+          suggestedName: path.basename(
+            options.outputPath || "code-context.txt"
+          ),
         });
         if (handled) return;
-        /* ───────────────────────────────────────────────────────────── */
 
         // Tamaño <10 MB  →  abrimos normalmente
         const document = await vscode.workspace.openTextDocument({
@@ -118,20 +117,19 @@ export function registerGenerateCommands(
         await vscode.window.showTextDocument(document);
       } else {
         notificationService?.showError(
-          `Error generating context: ${result.error}`
+          USER_MESSAGES.ERRORS.GENERATION_FAILED(result.error!)
         );
       }
     } catch (error) {
       if (webviewProvider) {
-        console.info(
-          `--> [extension.ts] generateContext CATCH: Attempting setLoading(false)`
-        );
         webviewProvider.setLoading(false);
       }
       const errorMessage = `Error: ${
         error instanceof Error ? error.message : String(error)
       }`;
-      notificationService?.showError(errorMessage);
+      notificationService?.showError(
+        USER_MESSAGES.ERRORS.CONTEXT_GENERATION(errorMessage)
+      );
     }
   }
 

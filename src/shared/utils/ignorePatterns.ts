@@ -57,6 +57,7 @@ const binariesAndMedia = [
 ];
 
 const javascriptNode = [
+  "node_modules",
   "node_modules/**",
   "dist/**",
   "build/**",
