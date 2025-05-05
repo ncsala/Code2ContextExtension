@@ -27,6 +27,8 @@ export const DEBUG_LABELS = {
   INCLUDE_TREE: "Include Tree:",
   MINIFY_CONTENT: "Minify Content:",
   INCLUDE_GITIGNORE: "Include GitIgnore:",
+  INCLUDE_DEFAULT_PATTERNS: "Include Default Patterns:",
+  PROMPT_PRESET: "Prompt Preset:",
   YES: "Yes",
   NO: "No",
 } as const;

@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [options, setOptions] = useState<CompactOptions>({
     rootPath: "",
     outputPath: "combined.txt",
+    promptPreset: undefined,
     includeDefaultPatterns: true,
     customIgnorePatterns: [],
     includeGitIgnore: true,
@@ -36,9 +37,11 @@ const App: React.FC = () => {
 
   // Función para actualizar la salida de depuración con información actual
   // Memoizada con useCallback para evitar recreaciones innecesarias
+  // webview/src/app/App.tsx  ← en la función updateDebugInfo
   const updateDebugInfo = useCallback(() => {
     const fileInfo = `${DEBUG_LABELS.SELECTED_FILES} ${selectedFiles.length}`;
-    const optionsInfo = [
+
+    const optionLines = [
       `${DEBUG_LABELS.ROOT_PATH} ${options.rootPath}`,
       `${DEBUG_LABELS.OUTPUT_PATH} ${options.outputPath}`,
       `${DEBUG_LABELS.SELECTION_MODE} ${options.selectionMode}`,
@@ -51,9 +54,21 @@ const App: React.FC = () => {
       `${DEBUG_LABELS.INCLUDE_GITIGNORE} ${
         options.includeGitIgnore ? DEBUG_LABELS.YES : DEBUG_LABELS.NO
       }`,
-    ].join("\n");
+      `${DEBUG_LABELS.INCLUDE_DEFAULT_PATTERNS} ${
+        options.includeDefaultPatterns ? DEBUG_LABELS.YES : DEBUG_LABELS.NO
+      }`,
+      `${DEBUG_LABELS.PROMPT_PRESET} ${options.promptPreset ?? "none"}`,
+    ];
 
-    setDebugOutput(`${fileInfo}\n\n${optionsInfo}`);
+    /* 👇 Añade los patrones personalizados solo si existen */
+    if (options.customIgnorePatterns.length) {
+      optionLines.push(
+        "Ignore Patterns:",
+        ...options.customIgnorePatterns.map((p) => `  • ${p}`)
+      );
+    }
+
+    setDebugOutput(`${fileInfo}\n\n${optionLines.join("\n")}`);
   }, [selectedFiles.length, options]);
 
   // Actualizar información de depuración cuando cambien opciones o archivos seleccionados

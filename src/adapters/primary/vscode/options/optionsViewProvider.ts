@@ -137,6 +137,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
           includeGitIgnore: this._includeGitIgnore,
           includeTree: this._includeTree,
           minifyContent: this._minifyContent,
+          includeDefaultPatterns: this._includeDefaultPatterns,
           selectionMode: this._selectionMode,
         },
       });
@@ -146,6 +147,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
         rootPath: this._rootPath,
         outputPath: this._outputPath,
         promptPreset: this._promptPreset,
+        includeDefaultPatterns: this._includeDefaultPatterns,
         customIgnorePatterns: this._ignorePatterns,
         includeGitIgnore: this._includeGitIgnore,
         includeTree: this._includeTree,
