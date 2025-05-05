@@ -1,11 +1,30 @@
-.vscode/**
-.vscode-test/**
-src/**
-.gitignore
+# Desarrollo VS Code
+.vscode/
+.vscode-test/
+
+# Código compilado y bundles
+!dist/**
+!dist/extension.js
+out/
+
+# Código fuente TS/JS que no va al VSIX
+src/
+webview/src/
+webview/
+
+# Dependencias (si bundle completo con bundler)
+node_modules/
+
+# Mapas y temporales
+*.map
+
+# Tests
+test/
+.vscode-test.*
+
+# Archivos de configuración que no necesitas empaquetar
 .yarnrc
+eslint.config.mjs
+tsconfig.json
 vsc-extension-quickstart.md
-**/tsconfig.json
-**/eslint.config.mjs
-**/*.map
-**/*.ts
-**/.vscode-test.*
+node_modules/
