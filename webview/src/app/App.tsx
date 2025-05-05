@@ -12,15 +12,17 @@ import {
   sendCompact,
 } from "../shared/utils/messageBuilders";
 import { initVSCodeAPI } from "../shared/utils/vscodeApi";
+import { DEBUG_LABELS, ERROR_MESSAGES } from "../shared/constants";
 
 // Inicializar la API de VSCode
 initVSCodeAPI(window.acquireVsCodeApi());
 
 const App: React.FC = () => {
-  // Estado para las opciones
   const [options, setOptions] = useState<CompactOptions>({
     rootPath: "",
     outputPath: "combined.txt",
+    promptPreset: undefined,
+    includeDefaultPatterns: true,
     customIgnorePatterns: [],
     includeGitIgnore: true,
     includeTree: true,
@@ -28,7 +30,6 @@ const App: React.FC = () => {
     selectionMode: "directory",
   });
 
-  // Estado para el proceso
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [debugOutput, setDebugOutput] = useState<string>("");
@@ -36,19 +37,38 @@ const App: React.FC = () => {
 
   // Función para actualizar la salida de depuración con información actual
   // Memoizada con useCallback para evitar recreaciones innecesarias
+  // webview/src/app/App.tsx  ← en la función updateDebugInfo
   const updateDebugInfo = useCallback(() => {
-    const fileInfo = `Selected files: ${selectedFiles.length}`;
+    const fileInfo = `${DEBUG_LABELS.SELECTED_FILES} ${selectedFiles.length}`;
 
-    const optionsInfo = `
-Root Path: ${options.rootPath}
-Output Path: ${options.outputPath}
-Selection Mode: ${options.selectionMode}
-Include Tree: ${options.includeTree ? "Yes" : "No"}
-Minify Content: ${options.minifyContent ? "Yes" : "No"}
-Include GitIgnore: ${options.includeGitIgnore ? "Yes" : "No"}
-`;
+    const optionLines = [
+      `${DEBUG_LABELS.ROOT_PATH} ${options.rootPath}`,
+      `${DEBUG_LABELS.OUTPUT_PATH} ${options.outputPath}`,
+      `${DEBUG_LABELS.SELECTION_MODE} ${options.selectionMode}`,
+      `${DEBUG_LABELS.INCLUDE_TREE} ${
+        options.includeTree ? DEBUG_LABELS.YES : DEBUG_LABELS.NO
+      }`,
+      `${DEBUG_LABELS.MINIFY_CONTENT} ${
+        options.minifyContent ? DEBUG_LABELS.YES : DEBUG_LABELS.NO
+      }`,
+      `${DEBUG_LABELS.INCLUDE_GITIGNORE} ${
+        options.includeGitIgnore ? DEBUG_LABELS.YES : DEBUG_LABELS.NO
+      }`,
+      `${DEBUG_LABELS.INCLUDE_DEFAULT_PATTERNS} ${
+        options.includeDefaultPatterns ? DEBUG_LABELS.YES : DEBUG_LABELS.NO
+      }`,
+      `${DEBUG_LABELS.PROMPT_PRESET} ${options.promptPreset ?? "none"}`,
+    ];
 
-    setDebugOutput(`${fileInfo}\n\n${optionsInfo}`);
+    /* 👇 Añade los patrones personalizados solo si existen */
+    if (options.customIgnorePatterns.length) {
+      optionLines.push(
+        "Ignore Patterns:",
+        ...options.customIgnorePatterns.map((p) => `  • ${p}`)
+      );
+    }
+
+    setDebugOutput(`${fileInfo}\n\n${optionLines.join("\n")}`);
   }, [selectedFiles.length, options]);
 
   // Actualizar información de depuración cuando cambien opciones o archivos seleccionados
@@ -60,7 +80,6 @@ Include GitIgnore: ${options.includeGitIgnore ? "Yes" : "No"}
   useEffect(() => {
     const handleMessage = (event: MessageEvent<VSCodeMessage>) => {
       const message = event.data;
-      console.log("[WebView App.tsx] Received message:", message);
 
       switch (message.command) {
         case "update":
@@ -80,14 +99,13 @@ Include GitIgnore: ${options.includeGitIgnore ? "Yes" : "No"}
           break;
 
         case "initialize":
-          // Arreglado: Combina el rootPath con las opciones, dando prioridad a las opciones
+          // Combina el rootPath con las opciones, dando prioridad a las opciones
           setOptions((prev) => {
             const initialOptions = {
               ...prev,
               ...(message.options || {}),
             };
 
-            // Si rootPath no está definido en options o está vacío, usa el rootPath del mensaje
             if (!initialOptions.rootPath) {
               initialOptions.rootPath = message.rootPath;
             }
@@ -117,10 +135,6 @@ Include GitIgnore: ${options.includeGitIgnore ? "Yes" : "No"}
           break;
 
         case "setLoading":
-          console.log(
-            `[WebView App.tsx] Received setLoading command. Payload:`,
-            message
-          );
           setLoading(message.loading);
           break;
 
@@ -174,22 +188,19 @@ Include GitIgnore: ${options.includeGitIgnore ? "Yes" : "No"}
   // Manejar el botón de generar contexto
   const handleGenerate = () => {
     if (options.rootPath === "") {
-      setError("You must select a root directory");
+      setError(ERROR_MESSAGES.VALIDATION.SELECT_ROOT_DIRECTORY);
       return;
     }
 
-    // Si estamos en modo de archivos pero no hay nada seleccionado
     if (options.selectionMode === "files" && selectedFiles.length === 0) {
-      setError(
-        "No files selected. Please select files in the file explorer or change selection mode."
-      );
+      setError(ERROR_MESSAGES.VALIDATION.NO_FILES_SELECTED);
       return;
     }
 
     setLoading(true);
     setError(null);
     // Limpiar el panel de depuración antes de iniciar la operación
-    setDebugOutput("Generating context...");
+    setDebugOutput(ERROR_MESSAGES.DEBUG.GENERATING);
 
     sendCompact({
       ...options,

@@ -14,6 +14,9 @@ export interface CompactOptions {
   /** Incluir patrones de ignorado desde .gitignore */
   includeGitIgnore: boolean;
 
+  /** Usa los defaultIgnorePatterns que trae la extensión */
+  includeDefaultPatterns: boolean;
+
   // /** Incluir un prompt predefinido para LLMs al inicio del archivo */
   promptPreset?:
     | "none"

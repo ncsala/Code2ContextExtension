@@ -25,7 +25,6 @@ export class GitAdapter implements GitPort {
     try {
       // Verificar con patrones comunes primero
       if (this.isIgnoredByCommonPatterns(filePath)) {
-        console.log(`Ignorando por patrón común: ${filePath}`);
         return true;
       }
 
@@ -68,7 +67,6 @@ export class GitAdapter implements GitPort {
    * (fallback cuando no hay Git disponible)
    */
   private isIgnoredByCommonPatterns(filePath: string): boolean {
-    // Patrones comunes de ignorado
     // TODO revisr estos patrones
     const commonPatterns = [".DS_Store"];
 
@@ -196,20 +194,6 @@ export class GitAdapter implements GitPort {
     } catch (error) {
       console.error("Error locating Git executable:", error);
       return null;
-    }
-  }
-
-  /**
-   * Verifica si un archivo existe
-   * @param filePath Ruta del archivo
-   * @returns true si existe, false en caso contrario
-   */
-  private async fileExists(filePath: string): Promise<boolean> {
-    try {
-      await fs.promises.access(filePath, fs.constants.F_OK);
-      return true;
-    } catch (error) {
-      return false;
     }
   }
 }

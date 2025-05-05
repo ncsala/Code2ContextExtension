@@ -36,14 +36,14 @@ export class CompactProject implements CompactUseCase {
     this.logger.info(`🚀 Compacting project: ${opts.rootPath}`);
 
     try {
-      // 1. validar carpeta
+      // validar carpeta
       if (!(await this.fs.exists(opts.rootPath)))
         throw new Error(`Root path does not exist: ${opts.rootPath}`);
 
-      // 2. build ignore list
+      // build ignore list
       const ignorePatterns = await this.buildIgnorePatterns(opts);
 
-      // 3. árbol & paths
+      // árbol & paths
       const { treeText, validFilePaths } = await this.treeSvc.buildTree(
         {
           rootPath: opts.rootPath,
@@ -55,10 +55,10 @@ export class CompactProject implements CompactUseCase {
 
       this.logger.info(`📑 Files to process: ${validFilePaths.length}`);
 
-      // 4. cargar archivos
+      // cargar archivos
       const files = await this.loader.load(opts.rootPath, validFilePaths);
 
-      // 5. componer salida
+      // componer salida
       const combined = await this.composer.compose(files, treeText, opts);
 
       this.logger.info("🎉 Compact completed successfully");
@@ -71,9 +71,10 @@ export class CompactProject implements CompactUseCase {
     }
   }
 
-  // ────────── helpers ──────────
   private async buildIgnorePatterns(opts: CompactOptions): Promise<string[]> {
-    const base = this.fileFilter.getDefaultIgnorePatterns();
+    const base = opts.includeDefaultPatterns
+      ? this.fileFilter.getDefaultIgnorePatterns()
+      : [];
     const git = opts.includeGitIgnore
       ? await this.git.getIgnorePatterns(opts.rootPath)
       : [];
