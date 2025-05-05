@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [options, setOptions] = useState<CompactOptions>({
     rootPath: "",
     outputPath: "combined.txt",
+    includeDefaultPatterns: true,
     customIgnorePatterns: [],
     includeGitIgnore: true,
     includeTree: true,

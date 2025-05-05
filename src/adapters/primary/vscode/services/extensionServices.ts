@@ -5,13 +5,15 @@ import { ProgressReporter } from "../../../../application/ports/driven/ProgressR
 import { CompactUseCase } from "../../../../application/ports/driving/CompactUseCase";
 import { NotificationPort } from "../../../../application/ports/driven/NotificationPort";
 import { USER_MESSAGES } from "../constants";
+import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
+import { OptionsViewProvider } from "../options/optionsViewProvider";
 
 export function registerCommands(
   context: vscode.ExtensionContext,
   appState: AppState,
   providers: {
-    fileExplorerProvider: any;
-    optionsViewProvider: any;
+    fileExplorerProvider: FileExplorerProvider;
+    optionsViewProvider: OptionsViewProvider;
     webviewProvider: WebviewProvider;
   },
   compactUseCase: CompactUseCase,

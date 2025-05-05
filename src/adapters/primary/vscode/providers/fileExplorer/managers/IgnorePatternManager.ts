@@ -14,6 +14,7 @@ export class IgnorePatternManager {
   private ignorePatterns: string[] = [];
   private rootPath: string | undefined;
   private includeGitIgnore = true;
+  private includeDefaultPatterns = true;
 
   constructor(rootPath?: string) {
     this.rootPath = rootPath;
@@ -61,9 +62,11 @@ export class IgnorePatternManager {
    * Inicializa el manejador de ignore con los patrones actuales
    */
   private initializeIgnoreHandler(): void {
-    /* ---------- handler para el COMBINADO ---------- */
+    /* ---------- handler para el archivo COMBINADO ---------- */
     this.ignoreHandler = ignore();
-    this.ignoreHandler.add(this.getDefaultBinaryPatterns()); // ① binarios
+    if (this.includeDefaultPatterns) {
+      this.ignoreHandler.add(this.getDefaultIgnorePatterns()); // ① binarios y otros
+    }
     if (this.includeGitIgnore) {
       // ③ .gitignore
       this.ignoreHandler.add(this.getGitIgnorePatterns());
@@ -77,7 +80,7 @@ export class IgnorePatternManager {
   /**
    * Obtiene patrones predeterminados para archivos binarios
    */
-  private getDefaultBinaryPatterns(): string[] {
+  private getDefaultIgnorePatterns(): string[] {
     return defaultIgnorePatterns;
   }
 
@@ -89,6 +92,7 @@ export class IgnorePatternManager {
       vscode.workspace
         .getConfiguration("files")
         .get<Record<string, boolean>>("exclude") ?? {};
+    // TODO revisar estas configuraciones luego
     // const searchEx =
     //   vscode.workspace
     //     .getConfiguration("search")
@@ -114,6 +118,11 @@ export class IgnorePatternManager {
   /** Cambia en caliente el flag includeGitIgnore */
   public setIncludeGitIgnore(value: boolean): void {
     this.includeGitIgnore = value;
+    this.initializeIgnoreHandler();
+  }
+
+  public setIncludeDefaultPatterns(v: boolean): void {
+    this.includeDefaultPatterns = v;
     this.initializeIgnoreHandler();
   }
 

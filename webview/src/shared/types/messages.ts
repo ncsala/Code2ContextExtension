@@ -2,6 +2,7 @@
 export interface CompactOptions {
   rootPath: string;
   outputPath: string;
+  includeDefaultPatterns: boolean;
   customIgnorePatterns: string[];
   includeGitIgnore: boolean;
   includeTree: boolean;

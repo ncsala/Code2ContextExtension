@@ -30,7 +30,7 @@ const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
 }) => {
   return (
     <div className={styles.panel}>
-      <h1 className={styles.title}>{UI_MESSAGES.PANEL.TITLE}r</h1>
+      <h1 className={styles.title}>{UI_MESSAGES.PANEL.TITLE}</h1>
 
       {/* Root Directory Selector */}
       <div className={styles.formGroup}>

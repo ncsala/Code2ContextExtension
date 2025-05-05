@@ -68,7 +68,11 @@ export class WebviewActionHandler {
         break;
       default:
         this.logger.warn(
-          `Received unknown command from webview: ${(message as any)?.command}`
+          `Received unknown command from webview: ${
+            "command" in (message as Record<string, unknown>)
+              ? (message as Record<string, unknown>).command
+              : "unknown"
+          }`
         );
     }
   }

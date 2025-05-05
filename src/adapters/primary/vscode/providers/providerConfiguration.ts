@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { FileItem } from "../providers/fileExplorer/FileItem"; 
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
@@ -9,7 +10,7 @@ import { SelectionPort } from "../../../../application/ports/driven/SelectionPor
 export interface ConfiguredProviders {
   optionsViewProvider: OptionsViewProvider;
   fileExplorerProvider: FileExplorerProvider;
-  treeView: vscode.TreeView<any>;
+  treeView: vscode.TreeView<FileItem>;
 }
 
 export function configureProviders(
@@ -77,6 +78,12 @@ export function configureProviders(
 
     if (options.customIgnorePatterns) {
       fileExplorerProvider.setIgnorePatterns(options.customIgnorePatterns);
+    }
+
+    if (options.includeDefaultPatterns !== undefined) {
+      fileExplorerProvider.setIncludeDefaultPatterns(
+        options.includeDefaultPatterns
+      );
     }
 
     if (options.includeGitIgnore !== undefined) {

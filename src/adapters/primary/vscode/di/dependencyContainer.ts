@@ -28,6 +28,7 @@ export function createContainer(verboseLogging: boolean = false): Container {
     rootPath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || "",
     outputPath: "code-context.txt",
     customIgnorePatterns: [],
+    includeDefaultPatterns: true,
     includeGitIgnore: true,
     includeTree: true,
     minifyContent: true,
