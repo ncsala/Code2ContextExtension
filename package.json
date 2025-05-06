@@ -1,7 +1,7 @@
 {
   "name": "code2context",
   "displayName": "Code2Context",
-  "description": "Generate compact code context for LLMs",
+  "description": "Generate compact code context for AI",
   "version": "0.1.0",
   "engines": {
     "vscode": "^1.99.0"
@@ -22,22 +22,13 @@
   },
   "keywords": [
     "ai",
-    "llm",
     "context",
-    "code-summary",
-    "file-concatenation",
-    "project-context",
-    "gpt",
-    "claude",
-    "copilot",
-    "gpl-3.0",
-    "open-source"
+    "code-analysis",
+    "developer-tools"
   ],
   "categories": [
     "Other",
-    "Machine Learning",
-    "Snippets",
-    "Education"
+    "Snippets"
   ],
   "preview": false,
   "qna": "marketplace",
@@ -112,10 +103,12 @@
     "views": {
       "code2context-explorer": [
         {
+          "icon": "$(files)",
           "id": "code2contextFiles",
           "name": "File Selection"
         },
         {
+          "icon": "$(settings-gear)",
           "id": "code2contextOptions",
           "name": "Options",
           "type": "webview"
