@@ -1,7 +1,6 @@
 # Dependencias
 node_modules
 /webview/node_modules
-/webview
 
 # Archivos compilados
 out
