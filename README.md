@@ -13,24 +13,15 @@ Code2Context is a Visual Studio Code extension that helps you quickly create com
 - **Language Prompts**: Built-in professional prompts for different AI tasks
 - **Large File Handling**: Gracefully manages projects of any size
 
-![Code2Context Main Panel](images/main-panel.png)
+![Code2Context Main Panel](images/c2cImage.png)
 
 ## 🚀 Getting Started
 
-### Installation
-
-1. Open Visual Studio Code
-2. Press `Ctrl+P` (or `Cmd+P` on Mac) to open Quick Open
-3. Type `ext install code2context`
-4. Click Install
-
-### Basic Usage
-
-1. **Open the Generator Panel**: Click on the Code2Context icon in the Activity Bar
-2. **Select Directory**: Click "Browse..." to choose your project directory
-3. **Choose Mode**: Select between "Entire Directory" or "Specific Files"
-4. **Configure Options**: Expand the Options panel to customize output
-5. **Generate**: Click "Generate Context" button
+1. Open the command palette with `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac).  
+2. Type `>Code2Context: Open Generator Panel` (or just `code2context`) and hit **Enter**.  
+3. Pick your project folder or files in the panel.  
+4. Tweak the options (mode, ignores, prompt, etc.).  
+5. Click **Generate Context**, and boom—done! 🎉
 
 ## 📋 Available Commands
 
