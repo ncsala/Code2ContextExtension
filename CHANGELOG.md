@@ -5,6 +5,12 @@ All notable changes to the **Code2Context** extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-05-06
+
+### Changed
+
+- 🖼️ Added extension icon for better visibility in the VS Cod e Marketplace
+
 ## [0.1.0] - 2025-05-04
 
 ### Added
@@ -40,5 +46,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This is the first public release of Code2Context
 - The extension is designed to work with VS Code ^1.85.0
 - All features are stable and ready for daily use
-
-[0.1.0]: https://github.com/your-username/code2context/releases/tag/v0.1.0
