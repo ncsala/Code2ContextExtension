@@ -1,7 +1,7 @@
 {
   "name": "code2context",
   "displayName": "Code2Context",
-  "description": "Generate compact code context for LLMs",
+  "description": "Generate compact code context for AI",
   "version": "0.1.0",
   "engines": {
     "vscode": "^1.99.0"
@@ -10,39 +10,28 @@
     "type": "git",
     "url": "https://github.com/ncsala/Code2ContextExtension"
   },
-  "bugs": {
-    "url": "https://github.com/ncsala/code2context/issues"
-  },
-  "homepage": "https://github.com/ncsala/code2context#readme",
-  "publisher": "Nicolas Caceres Sala",
+  "publisher": "ncsala",
   "license": "GPL-3.0",
   "author": {
     "name": "Nicolas Caceres Sala",
     "email": "ncsala@gmail.com"
   },
   "keywords": [
-    "ai",
-    "llm",
     "context",
-    "code-summary",
-    "file-concatenation",
-    "project-context",
-    "gpt",
-    "claude",
-    "copilot",
-    "gpl-3.0",
-    "open-source"
+    "developer-tools",
+    "summary",
+    "files"
   ],
   "categories": [
     "Other",
-    "Machine Learning",
-    "Snippets",
-    "Education"
+    "Snippets"
   ],
   "preview": false,
   "qna": "marketplace",
-  "main": "out/adapters/primary/vscode/extension.js",
+  "main": "dist/extension.js",
   "scripts": {
+    "build": "webpack --config webpack.config.js",
+    "vscode:prepublish": "npm run build && npm run build-webview",
     "clean": "rimraf ./out ./dist",
     "compile": "tsc --build --clean && tsc -p ./",
     "compile:clean": "npm run clean && npm run compile",
@@ -110,10 +99,12 @@
     "views": {
       "code2context-explorer": [
         {
+          "icon": "$(files)",
           "id": "code2contextFiles",
           "name": "File Selection"
         },
         {
+          "icon": "$(settings-gear)",
           "id": "code2contextOptions",
           "name": "Options",
           "type": "webview"
@@ -173,7 +164,7 @@
     "p-limit": "3.1.0"
   },
   "devDependencies": {
-    "rimraf": "6.0.1",
+    "@types/jest": "29.5.12",
     "@types/node": "18.19.86",
     "@types/vscode": "1.99.1",
     "@typescript-eslint/eslint-plugin": "6.21.0",
@@ -181,10 +172,13 @@
     "@vscode/test-cli": "0.0.6",
     "@vscode/test-electron": "2.5.2",
     "eslint": "8.57.1",
+    "jest": "29.7.0",
+    "rimraf": "6.0.1",
+    "ts-jest": "29.1.1",
+    "ts-loader": "9.5.2",
     "typescript": "5.8.3",
     "vsce": "2.15.0",
-    "jest": "29.7.0",
-    "@types/jest": "29.5.12",
-    "ts-jest": "29.1.1"
+    "webpack": "5.99.7",
+    "webpack-cli": "6.0.1"
   }
 }

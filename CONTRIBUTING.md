@@ -92,7 +92,7 @@ When submitting code, please include the copyright header:
 
 ```typescript
 /*
- * Code2Context - Generate compact code context for LLMs
+ * Code2Context - Generate compact code context for AI language models with just a few clicks.
  * Copyright (C) 2025 Your Name
  * 
  * This program is free software: you can redistribute it...

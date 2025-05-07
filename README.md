@@ -1,6 +1,6 @@
 # Code2Context
 
-Generate compact code context for AI/LLMs with just a few clicks.
+Generate compact code context for AI language models with just a few clicks.
 
 Code2Context is a Visual Studio Code extension that helps you quickly create comprehensive project summaries for AI language models. Perfect for code reviews, documentation, and getting AI assistance on your entire codebase.
 
