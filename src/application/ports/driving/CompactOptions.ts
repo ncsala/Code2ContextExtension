@@ -17,7 +17,7 @@ export interface CompactOptions {
   /** Usa los defaultIgnorePatterns que trae la extensión */
   includeDefaultPatterns: boolean;
 
-  // /** Incluir un prompt predefinido para LLMs al inicio del archivo */
+  // /** Incluir un prompt predefinido para AI al inicio del archivo */
   promptPreset?:
     | "none"
     | import("../../../shared/prompts/proPromptPresets").PromptKey;
