@@ -11,6 +11,7 @@
     "url": "https://github.com/ncsala/Code2ContextExtension"
   },
   "publisher": "ncsala",
+  "icon": "icon.png",
   "license": "GPL-3.0",
   "author": {
     "name": "Nicolas Caceres Sala",
