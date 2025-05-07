@@ -10,10 +10,6 @@
     "type": "git",
     "url": "https://github.com/ncsala/Code2ContextExtension"
   },
-  "bugs": {
-    "url": "https://github.com/ncsala/code2context/issues"
-  },
-  "homepage": "https://github.com/ncsala/code2context#readme",
   "publisher": "ncsala",
   "license": "GPL-3.0",
   "author": {
@@ -21,10 +17,10 @@
     "email": "ncsala@gmail.com"
   },
   "keywords": [
-    "ai",
     "context",
-    "code-analysis",
-    "developer-tools"
+    "developer-tools",
+    "summary",
+    "files"
   ],
   "categories": [
     "Other",
