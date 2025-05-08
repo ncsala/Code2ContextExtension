@@ -75,4 +75,7 @@ export interface SelectionPort {
    * @returns `true` si el archivo queda seleccionado, `false` si se deselecciona.
    */
   toggleFileSelection(file: string): boolean;
+
+  /** Limpia el WebviewProvider registrado (si lo hubiera) */
+  unregisterWebviewProvider(): void;
 }
