@@ -114,7 +114,9 @@ export class VSCodeSelectionService implements SelectionPort {
     if (this.selectedFiles.length > 0) {
       this.selectedFiles = [];
       this.notifyListeners();
-      this.notificationService.showInformation(USER_MESSAGES.INFO.SELECTION_CLEARED);
+      this.notificationService.showInformation(
+        USER_MESSAGES.INFO.SELECTION_CLEARED
+      );
     }
   }
 
@@ -167,5 +169,10 @@ export class VSCodeSelectionService implements SelectionPort {
 
     // Limpiar selección
     this.selectedFiles = [];
+  }
+
+  /** Des-registra cualquier WebviewProvider previamente asignado */
+  unregisterWebviewProvider(): void {
+    this.webviewProvider = null;
   }
 }
