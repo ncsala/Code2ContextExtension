@@ -18,17 +18,19 @@ import { DEBUG_LABELS, ERROR_MESSAGES } from "../shared/constants";
 initVSCodeAPI(window.acquireVsCodeApi());
 
 const App: React.FC = () => {
-  const [options, setOptions] = useState<CompactOptions>({
-    rootPath: "",
-    outputPath: "combined.txt",
-    promptPreset: undefined,
-    includeDefaultPatterns: true,
-    customIgnorePatterns: [],
-    includeGitIgnore: true,
-    includeTree: true,
-    minifyContent: true,
-    selectionMode: "directory",
-  });
+  const [options, setOptions] = useState<CompactOptions>(
+    (window.acquireVsCodeApi().getState() as CompactOptions) ?? {
+      rootPath: "",
+      outputPath: "combined.txt",
+      promptPreset: undefined,
+      includeDefaultPatterns: true,
+      customIgnorePatterns: [],
+      includeGitIgnore: true,
+      includeTree: true,
+      minifyContent: true,
+      selectionMode: "directory",
+    }
+  );
 
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,6 @@ const App: React.FC = () => {
 
   // Función para actualizar la salida de depuración con información actual
   // Memoizada con useCallback para evitar recreaciones innecesarias
-  // webview/src/app/App.tsx  ← en la función updateDebugInfo
   const updateDebugInfo = useCallback(() => {
     const fileInfo = `${DEBUG_LABELS.SELECTED_FILES} ${selectedFiles.length}`;
 
@@ -92,35 +93,40 @@ const App: React.FC = () => {
           break;
 
         case "directorySelected":
-          setOptions((prev) => ({
-            ...prev,
-            rootPath: message.path,
-          }));
+          setOptions((prev) => {
+            const newOptions = {
+              ...prev,
+              rootPath: message.path,
+            };
+            window.acquireVsCodeApi().setState(newOptions);
+            return newOptions;
+          });
           break;
 
         case "initialize":
-          // Combina el rootPath con las opciones, dando prioridad a las opciones
           setOptions((prev) => {
-            const initialOptions = {
+            const newOptions = {
               ...prev,
               ...(message.options || {}),
+              // si no viene root en options, usar el workspace
+              rootPath: message.options?.rootPath || message.rootPath,
             };
-
-            if (!initialOptions.rootPath) {
-              initialOptions.rootPath = message.rootPath;
-            }
-
-            return initialOptions;
+            window.acquireVsCodeApi().setState(newOptions);
+            return newOptions;
           });
           // Solicitar archivos seleccionados después de inicializar
           sendGetSelectedFiles();
           break;
 
         case "updateOptions":
-          setOptions((prev) => ({
-            ...prev,
-            ...(message.options || {}),
-          }));
+          setOptions((prev) => {
+            const newOptions = {
+              ...prev,
+              ...(message.options || {}),
+            };
+            window.acquireVsCodeApi().setState(newOptions);
+            return newOptions;
+          });
           break;
 
         case "debug":

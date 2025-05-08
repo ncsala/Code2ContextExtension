@@ -34,6 +34,9 @@ export function registerCommands(
       try {
         if (providers.webviewProvider) {
           await providers.webviewProvider.openPanel();
+          // vscode.commands.executeCommand(
+          //   "workbench.view.extension.code2context-explorer"
+          // );
         } else {
           logger.error(
             "WebviewProvider no está inicializado al intentar abrir el panel."
