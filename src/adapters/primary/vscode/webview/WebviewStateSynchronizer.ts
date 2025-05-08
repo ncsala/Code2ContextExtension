@@ -76,20 +76,14 @@ export class WebviewStateSynchronizer implements SelectionChangeListener {
   /**
    * Deja de escuchar los cambios y limpia los recursos.
    */
+  /** Deja de escuchar y libera recursos. */
   public dispose(): void {
     this.logger.info("Disposing WebviewStateSynchronizer resources.");
+
     this.optionsDisposable?.dispose();
     this.optionsDisposable = undefined;
 
-    // Cómo desregistrar de selectionService? No parece haber método público.
-    // Si selectionService se limpia al desactivar, podría ser suficiente.
-    // Por ahora, solo marcamos como no registrado.
-    if (this.selectionListenerRegistered) {
-      this.logger.warn(
-        "WebviewStateSynchronizer: No public method to unregister from selectionService. Listener might persist until deactivation."
-      );
-      // Idealmente, selectionService.unregisterWebviewProvider(this);
-      this.selectionListenerRegistered = false;
-    }
+    // ✅ Eliminamos el listener para evitar fugas
+    this.selectionService.unregisterWebviewProvider();
   }
 }
