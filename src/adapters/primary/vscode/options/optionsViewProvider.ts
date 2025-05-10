@@ -179,7 +179,9 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
 
   private _getHtmlForWebview() {
     // Convertir los patrones de ignorado a texto
-    const ignorePatterns = this._ignorePatterns.join("\n");
+    const ignorePatternsString = this._ignorePatterns
+      .filter((p) => p.trim() !== "")
+      .join("\n");
     // Opciones de prompt dinámicas
     const presetKeys: ("none" | PromptKey)[] = [
       "none",
@@ -323,7 +325,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
         
         <div class="form-group">
           <label for="ignorePatterns">Ignore Patterns (one per line):</label>
-            <textarea id="ignorePatterns" placeholder="node_modules&#10;.git&#10;dist">${ignorePatterns}
+            <textarea id="ignorePatterns" placeholder="node_modules&#10;.git&#10;dist">${ignorePatternsString}
             </textarea>
 
           </div>
@@ -428,9 +430,12 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                     }
                     
                     if (options.ignorePatterns) {
-                        ignorePatternsTextarea.value = options.ignorePatterns.join('\\n');
+                        const patternsTextForTextarea = options.ignorePatterns
+                                                        .filter(p => p.trim().length > 0)
+                                                        .join('\\n');
+                        ignorePatternsTextarea.value = patternsTextForTextarea;
                     }
-                    
+                                        
                     if (options.includeGitIgnore !== undefined) {
                         includeGitIgnoreCheckbox.checked = options.includeGitIgnore;
                     }

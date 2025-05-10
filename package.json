@@ -2,7 +2,7 @@
   "name": "code2context",
   "displayName": "Code2Context",
   "description": "Generate compact code context for AI",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -21,11 +21,20 @@
     "context",
     "developer-tools",
     "summary",
-    "files"
+    "files",
+    "ai-assistant",
+    "llm",
+    "code-export",
+    "prompt-engineering",
+    "productivity",
+    "codebase",
+    "copilot-companion"
   ],
   "categories": [
-    "Other",
-    "Snippets"
+    "Snippets",
+    "Formatters",
+    "Programming Languages",
+    "Other"
   ],
   "preview": false,
   "qna": "marketplace",
