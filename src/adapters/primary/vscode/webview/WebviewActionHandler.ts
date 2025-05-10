@@ -90,13 +90,9 @@ export class WebviewActionHandler {
   private async handleCompact(
     payloadFromWebview: CompactOptions
   ): Promise<void> {
-    // Combinar opciones: empezar con las del provider nativo,
-    // luego sobrescribir con las del payload del webview (que pueden ser más recientes),
-    // y finalmente asegurar tipos/defaults.
     const options: CompactOptions = {
-      ...this.optionsViewProvider.getOptions(), // Base
-      ...payloadFromWebview, // Cambios desde Webview (prioridad)
-      // Forzar tipos booleanos y asegurar valores no nulos/undefined
+      ...this.optionsViewProvider.getOptions(),
+      ...payloadFromWebview,
       minifyContent: payloadFromWebview.minifyContent === true,
       includeTree: payloadFromWebview.includeTree === true,
       includeGitIgnore: payloadFromWebview.includeGitIgnore === true,
@@ -104,30 +100,30 @@ export class WebviewActionHandler {
         payloadFromWebview.rootPath ||
         this.optionsViewProvider.getOptions().rootPath ||
         this.workspaceRoot ||
-        "", // Prioridad: Webview -> OptionsView -> Workspace
+        "",
       outputPath:
         payloadFromWebview.outputPath ||
         this.optionsViewProvider.getOptions().outputPath ||
-        "code-context.txt", // Prioridad: Webview -> OptionsView -> Default
+        "code-context.txt",
       customIgnorePatterns:
         payloadFromWebview.customIgnorePatterns ??
         this.optionsViewProvider.getOptions().customIgnorePatterns ??
-        [], // Prioridad: Webview -> OptionsView -> Default
+        [],
       selectionMode:
         payloadFromWebview.selectionMode ??
         this.optionsViewProvider.getOptions().selectionMode ??
-        "directory", // Prioridad: Webview -> OptionsView -> Default
+        "directory",
       specificFiles:
         payloadFromWebview.specificFiles ??
         this.optionsViewProvider.getOptions().specificFiles ??
-        [], // Inicializar como array vacío
+        [],
       verboseLogging:
         payloadFromWebview.verboseLogging ??
         this.optionsViewProvider.getOptions().verboseLogging ??
         false,
     };
 
-    // Sincronizar las opciones procesadas de vuelta al provider nativo
+    // Sincronizar las opciones procesadas de vuelta al provider nativo de opciones
     this.optionsViewProvider.updateOptions(options);
 
     if (!options.rootPath) {
@@ -137,9 +133,8 @@ export class WebviewActionHandler {
     }
 
     if (options.selectionMode === "files") {
-      options.specificFiles = this.selectionService.getSelectedFiles();
-
-      if (options.specificFiles.length === 0) {
+      const currentSelectedFiles = this.selectionService.getSelectedFiles();
+      if (currentSelectedFiles.length === 0) {
         vscode.window.showWarningMessage(
           USER_MESSAGES.WARNINGS.NO_FILES_SELECTED_MODE
         );
@@ -149,17 +144,23 @@ export class WebviewActionHandler {
         });
         return;
       }
+      options.specificFiles = currentSelectedFiles;
     } else {
-      // Asegurarse de que specificFiles esté vacío en modo directorio
       options.specificFiles = [];
+    }
+
+    if (options.selectionMode === "files") {
+      this.logger.info(
+        "Clearing file selection as context generation is initiated (files mode)."
+      );
+      this.fileExplorerProvider.clearSelection();
     }
 
     try {
       await this.generateContextCallback(options);
     } catch (error) {
-      // Se activa si la callback (generateContextCallbackForWebview) relanza un error
       this.logger.error(
-        "--> [ActionHandler] Error in generateContextCallback:",
+        "--> [ActionHandler] Critical error during generateContextCallback invocation:",
         error
       );
     } finally {

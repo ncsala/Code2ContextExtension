@@ -34,7 +34,6 @@ const App: React.FC = () => {
     () => setDirectDebugMessage(null)
   );
 
-  // Handlers que solo envían mensajes y no dependen del estado complejo del hook principal
   const handleShowOptionsUI = () => {
     sendShowOptions();
   };
