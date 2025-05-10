@@ -1,4 +1,3 @@
-// src/adapters/primary/vscode/webview/WebviewStateSynchronizer.ts
 import * as vscode from "vscode";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import {
@@ -76,14 +75,13 @@ export class WebviewStateSynchronizer implements SelectionChangeListener {
   /**
    * Deja de escuchar los cambios y limpia los recursos.
    */
-  /** Deja de escuchar y libera recursos. */
   public dispose(): void {
     this.logger.info("Disposing WebviewStateSynchronizer resources.");
 
     this.optionsDisposable?.dispose();
     this.optionsDisposable = undefined;
 
-    // ✅ Eliminamos el listener para evitar fugas
+    // Eliminamos el listener para evitar fugas
     this.selectionService.unregisterWebviewProvider();
   }
 }

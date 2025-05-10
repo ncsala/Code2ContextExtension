@@ -76,7 +76,6 @@ export function registerGenerateCommands(
       currentOptions.selectionMode = "files";
       optionsViewProvider.updateOptions(currentOptions);
 
-      // Generar contexto
       await generateContext({
         ...currentOptions,
         ...optionsFromPanel,
