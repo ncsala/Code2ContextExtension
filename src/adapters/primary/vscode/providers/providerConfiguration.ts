@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { FileItem } from "../providers/fileExplorer/FileItem"; 
+import { FileItem } from "../providers/fileExplorer/FileItem";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
@@ -57,7 +57,6 @@ export function configureProviders(
     logger.warn("No workspace folder open on activation.");
   }
 
-  // Configure Tree View
   const treeView = vscode.window.createTreeView("code2contextFiles", {
     treeDataProvider: fileExplorerProvider,
     showCollapseAll: true,

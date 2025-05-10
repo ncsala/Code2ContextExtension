@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import { WebviewMessageBridge } from "./WebviewMessageBridge";
 import { WebviewPanelManager } from "./WebviewPanelManager";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";

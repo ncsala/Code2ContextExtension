@@ -39,7 +39,6 @@ export class WebviewMessageBridge {
             this.messageHandler(message);
           } catch (error) {
             this.logger.error("Error handling message from webview:", error);
-            // Opcional: Enviar un mensaje de error de vuelta al webview
             this.postMessage({
               command: "error",
               message: `Error processing command ${message?.command}: ${
