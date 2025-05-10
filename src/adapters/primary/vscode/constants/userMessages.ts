@@ -7,7 +7,7 @@ export const USER_MESSAGES = {
       `Webview build file not found: ${filePath}`,
     GENERATION_FAILED: (error: string) => `Error generating context: ${error}`,
     CRITICAL_ACTIVATION: (error: string) =>
-      `Error crítico al activar Code2Context: ${error}`,
+      `Critical error activating Code2Context: ${error}`,
     NO_FILES_SELECTED: "No files selected to generate context",
     UNABLE_TO_OPEN_PANEL: "Internal error: WebviewProvider is not available.",
     PANEL_ERROR: (error: string) => `Error opening panel: ${error}`,
@@ -36,5 +36,7 @@ export const USER_MESSAGES = {
     NO_FILES_SELECTED_MODE:
       "No files selected. Please select files in the Code2Context explorer or change to directory mode.",
     FILE_SAVE_CANCELLED: "Generation completed, but file saving was canceled.",
+    STILL_INITIALIZING_TRY_AGAIN:
+      "The extension is still initializing. Please try again in a few moments.",
   },
 } as const;
