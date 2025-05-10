@@ -14,7 +14,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   // Opciones por defecto
   private _rootPath: string = "";
   private _outputPath: string = "code-context.txt";
-  private _promptPreset: "none" | PromptKey = "deepContextV1";
+  private _promptPreset: "none" | PromptKey = "fullStackWizard";
   private _ignorePatterns: string[] = [];
   private _includeDefaultPatterns = true;
   private _includeGitIgnore: boolean = true;
