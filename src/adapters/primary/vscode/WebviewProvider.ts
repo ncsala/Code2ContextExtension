@@ -154,4 +154,12 @@ export class WebviewProvider {
       loading: isLoading,
     });
   }
+
+  /**
+   * Verifica si el panel principal del Webview (gestionado por panelManager) está actualmente visible.
+   * @returns true si el panel está visible, false en caso contrario.
+   */
+  public isMainPanelVisible(): boolean {
+    return this.panelManager.getPanel()?.visible ?? false;
+  }
 }
