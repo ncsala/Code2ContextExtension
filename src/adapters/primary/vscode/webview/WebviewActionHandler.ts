@@ -19,7 +19,7 @@ import { USER_MESSAGES } from "../constants";
  * interactuando con otros servicios y APIs de VS Code.
  */
 export class WebviewActionHandler {
-  private readonly workspaceRoot: string | undefined;
+  private currentWorkspaceRoot: string | undefined;
   private generateContextCallback: (options: CompactOptions) => Promise<void>;
 
   constructor(
@@ -31,7 +31,8 @@ export class WebviewActionHandler {
     private readonly logger: ProgressReporter
   ) {
     this.generateContextCallback = generateContextCallback;
-    this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    this.currentWorkspaceRoot =
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     this.logger.debug("WebviewActionHandler instance created");
   }
 
@@ -66,6 +67,19 @@ export class WebviewActionHandler {
       case "changeSelectionMode":
         this.handleChangeSelectionMode(message);
         break;
+      case "ready": {
+        this.logger.info("Webview reported ready. Sending initialize data.");
+        // 1. Mandamos las opciones y la ruta root ACTUALIZADA
+        this.messageBridge.postMessage({
+          command: "initialize",
+          rootPath: this.currentWorkspaceRoot || "",
+          options: this.optionsViewProvider.getOptions(),
+        });
+
+        // 2. Mandamos la selección de archivos actual
+        this.handleGetSelectedFiles();
+        break;
+      }
       default:
         this.logger.warn(
           `Received unknown command from webview: ${
@@ -75,6 +89,16 @@ export class WebviewActionHandler {
           }`
         );
     }
+  }
+
+  /**
+   * Establece la ruta del workspace actual. Llamado por WebviewProvider.openPanel().
+   */
+  public setCurrentWorkspaceRoot(rootPath: string | undefined): void {
+    this.currentWorkspaceRoot = rootPath;
+    this.logger.debug(
+      `WebviewActionHandler: workspaceRoot updated to ${rootPath}`
+    );
   }
 
   /**
@@ -99,7 +123,7 @@ export class WebviewActionHandler {
       rootPath:
         payloadFromWebview.rootPath ||
         this.optionsViewProvider.getOptions().rootPath ||
-        this.workspaceRoot ||
+        this.currentWorkspaceRoot ||
         "",
       outputPath:
         payloadFromWebview.outputPath ||
@@ -172,7 +196,8 @@ export class WebviewActionHandler {
     message: SelectDirectoryMessage
   ): Promise<void> {
     const currentRoot =
-      this.optionsViewProvider.getOptions().rootPath || this.workspaceRoot;
+      this.optionsViewProvider.getOptions().rootPath ||
+      this.currentWorkspaceRoot;
     const defaultUri = message.currentPath
       ? vscode.Uri.file(message.currentPath)
       : currentRoot

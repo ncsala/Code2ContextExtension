@@ -101,6 +101,10 @@ export interface ChangeSelectionModeMessage extends WebviewToVSCodeMessage {
   mode: "directory" | "files";
 }
 
+export interface ReadyMessage extends WebviewToVSCodeMessage {
+  command: "ready";
+}
+
 export type WebviewToVSCodeMessageType =
   | CompactMessage
   | SelectDirectoryMessage
@@ -108,7 +112,8 @@ export type WebviewToVSCodeMessageType =
   | GetSelectedFilesMessage
   | OpenNativeFileExplorerMessage
   | ShowOptionsMessage
-  | ChangeSelectionModeMessage;
+  | ChangeSelectionModeMessage
+  | ReadyMessage;
 
 /**
  * Tipo para la API de VSCode

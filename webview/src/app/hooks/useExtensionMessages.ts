@@ -89,7 +89,6 @@ export const useExtensionMessages = () => {
           setDirectDebugMessage(message.data);
           break;
         default:
-          console.warn(`Unknown message command: ${(message as any).command}`);
           break;
       }
     };
