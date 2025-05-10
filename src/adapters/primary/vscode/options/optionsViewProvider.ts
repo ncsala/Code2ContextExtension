@@ -14,7 +14,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   // Opciones por defecto
   private _rootPath: string = "";
   private _outputPath: string = "code-context.txt";
-  private _promptPreset: "none" | PromptKey = "fullStackWizard";
+  private _promptPreset: "none" | PromptKey = "none";
   private _ignorePatterns: string[] = [];
   private _includeDefaultPatterns = true;
   private _includeGitIgnore: boolean = true;
@@ -400,7 +400,6 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                 const includeTree = includeTreeCheckbox.checked;
                 const minifyContent = minifyContentCheckbox.checked;
                 
-                // Enviar mensaje con los nuevos valores
                 vscode.postMessage({
                     command: 'optionsChanged',
                     promptPreset: selectedPreset,

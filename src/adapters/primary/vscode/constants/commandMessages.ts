@@ -7,7 +7,7 @@ export const COMMAND_MESSAGES = {
     GENERATE_CONTEXT: "Generate Context from Selected Files",
     GENERATE_FROM_OPTIONS: "Generate Context from Current Options",
     BROWSE: "Browse...",
-    SAVE_COMBINED: "Guardar archivo combinado",
+    SAVE_COMBINED: "Save Combined File",
   },
   LABELS: {
     OPEN_PROJECT_ROOT: "Select Project Root",
@@ -15,7 +15,7 @@ export const COMMAND_MESSAGES = {
   },
   PROMPTS: {
     OPEN_EXPLORER: "Open Code2Context File Explorer",
-    AWAITING_INITIALIZATION: "Esperando inicialización...",
-    AUTO_OPEN_PANEL: "Intentando abrir el panel automáticamente...",
+    AWAITING_INITIALIZATION: "Waiting for initialization...",
+    AUTO_OPEN_PANEL: "Attempting to open panel automatically...",
   },
 } as const;

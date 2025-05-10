@@ -2,7 +2,7 @@
   "name": "code2context",
   "displayName": "Code2Context",
   "description": "Generate compact code context for AI",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "engines": {
     "vscode": "^1.99.0"
   },

@@ -11,7 +11,7 @@ export async function handleLargeContent(
   opts: { rootPath: string; suggestedName?: string }
 ): Promise<boolean> {
   const sizeBytes = Buffer.byteLength(content, "utf8");
-  if (sizeBytes <= LARGE_THRESHOLD) return false; // ⬅️  no es “grande”
+  if (sizeBytes <= LARGE_THRESHOLD) return false;
 
   const defaultUri = vscode.Uri.file(
     path.join(opts.rootPath, opts.suggestedName ?? "combined.txt")

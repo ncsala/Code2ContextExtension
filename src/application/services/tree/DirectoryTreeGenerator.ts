@@ -1,4 +1,3 @@
-// src/infrastructure/generators/DirectoryTreeGenerator.ts
 import * as path from "path";
 import { Ignore } from "ignore";
 import { toPosix } from "../../../shared/utils/pathUtils";

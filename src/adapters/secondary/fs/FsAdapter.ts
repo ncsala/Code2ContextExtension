@@ -138,7 +138,7 @@ export class FsAdapter implements FileSystemPort {
         concurrencyLimit(async () => {
           const childRel = toPosix(path.join(relPath, entry.name));
           const ignorePath = entry.isDirectory() ? `${childRel}/` : childRel;
-          if (ig?.ignores(ignorePath)) return; // 🛑 filtro temprano
+          if (ig?.ignores(ignorePath)) return; // filtro temprano
 
           const full = path.join(currentPath, entry.name);
 
