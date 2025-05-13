@@ -77,7 +77,6 @@ export class FileTreeBuilder {
         result.push(item);
       }
 
-      // Ordenar: primero directorios, luego archivos (alfabéticamente)
       return result.sort((a, b) => {
         if (a.isDirectory === b.isDirectory) {
           return a.resourceUri.fsPath.localeCompare(b.resourceUri.fsPath);

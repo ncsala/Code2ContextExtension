@@ -8,6 +8,7 @@ import { IgnorePatternManager } from "./managers/IgnorePatternManager";
 import { FileItemCache } from "./managers/FileItemCache";
 import { SelectionManager } from "./managers/SelectionManager";
 import { FileTreeBuilder } from "./managers/FileTreeBuilder";
+import { USER_MESSAGES } from "../../constants";
 
 type TreeChangeEvent = FileItem | undefined | null | void;
 /**
@@ -123,7 +124,9 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     this.selectionService.setSelectedFiles(this.getSelectedFiles());
 
     // Notificar
-    this.notificationService.showInformation(`Selected ${filesSelected} files`);
+    this.notificationService.showInformation(
+      USER_MESSAGES.INFO.FILES_SELECTED(filesSelected)
+    );
   }
 
   /**

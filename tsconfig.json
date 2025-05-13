@@ -15,5 +15,6 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "exclude": ["node_modules", ".vscode-test", "webview", "tests/**/*"]
+  "exclude": ["node_modules", ".vscode-test", "webview", "tests/**/*"],
+  "include": ["src", "src/types/**/*.d.ts"]
 }

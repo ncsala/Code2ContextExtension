@@ -1,21 +1,17 @@
-import * as vscode from "vscode";
 import { WebviewMessageBridge } from "./WebviewMessageBridge";
 import { WebviewPanelManager } from "./WebviewPanelManager";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 
-/**
- * Reenvía los console.log de *este* extension‑host al WebView **sin** monkey‑patch.
- * Requiere VS Code ≥ 1.88 (console.subscribe).  Si no está disponible,
- * simplemente no intercepta –así evitas romper otras extensiones.
- */
+type ConsoleListener = (
+  level: "log" | "warn" | "error",
+  args: unknown[],
+  ts: string
+) => void;
+
 export class ConsoleLogInterceptor {
-  private unsubscribe: (() => void) | undefined;
+  private unsubscribe?: () => void;
   private active = false;
 
-  /**
-   * Empieza a escuchar los logs.
-   * No parcha `console.log`; usa `console.subscribe` cuando existe.
-   */
   public start(
     messageBridge: WebviewMessageBridge,
     panelManager: WebviewPanelManager,
@@ -26,49 +22,44 @@ export class ConsoleLogInterceptor {
       return;
     }
 
-    // API introducida en VS Code 1.88
-    const subscribe = (console as any).subscribe as
-      | undefined
-      | ((
-          listener: (
-            level: "log" | "warn" | "error",
-            args: unknown[],
-            /** ISO timestamp */ ts: string
-          ) => void
-        ) => () => void);
+    // 1) Definimos un listener ya tipado
+    const listener: ConsoleListener = (level, args, ts) => {
+      if (level !== "log") return; // sólo logs “normales”
+      const panel = panelManager.getPanel();
+      if (!panel?.visible) return; // sólo si está visible
 
-    if (typeof subscribe !== "function") {
+      try {
+        const text = args
+          .map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a)))
+          .join(" ");
+        // data:string → stringifyamos payload
+        messageBridge.postMessage({
+          command: "debug",
+          data: JSON.stringify({ text, ts }),
+        });
+      } catch (err) {
+        logger.error("Error sending log to webview:", err);
+      }
+    };
+
+    // 2) Lo pasamos limpio a console.subscribe
+    const cleanup = console.subscribe?.(listener);
+
+    if (!cleanup) {
       logger.warn(
-        "console.subscribe() not available – log interception disabled."
+        "console.subscribe() no disponible — log interception disabled."
       );
       return;
     }
 
-    this.unsubscribe = subscribe(
-      (level: "log" | "warn" | "error", args: unknown[]) => {
-        // Solo enviamos si el panel está visible y es un log normal
-        if (level !== "log") return;
-        if (!panelManager.getPanel()?.visible) return;
-
-        try {
-          const msg = args
-            .map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a)))
-            .join(" ");
-          messageBridge.postMessage({ command: "debug", data: msg });
-        } catch (err) {
-          logger.error("Error sending log to webview:", err);
-        }
-      }
-    );
-
+    this.unsubscribe = cleanup;
     this.active = true;
     logger.info("ConsoleLogInterceptor subscribed via console.subscribe().");
   }
 
-  /** Deja de escuchar los logs y limpia recursos. */
   public stop(): void {
     if (!this.active) return;
-    this.unsubscribe?.(); // Cancela la suscripción
+    this.unsubscribe?.();
     this.unsubscribe = undefined;
     this.active = false;
   }

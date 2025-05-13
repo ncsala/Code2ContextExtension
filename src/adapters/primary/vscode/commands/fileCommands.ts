@@ -14,9 +14,8 @@ export function registerFileCommands(
   fileExplorerProvider: FileExplorerProvider,
   _optionsViewProvider: OptionsViewProvider,
   currentOptions: Partial<CompactOptions>,
-  notificationService: NotificationPort // Añadido
+  notificationService: NotificationPort
 ) {
-  // Comando para seleccionar/deseleccionar un archivo
   const toggleSelectionCommand = vscode.commands.registerCommand(
     "code2context.toggleSelection",
     (item: FileItem) => {
@@ -26,16 +25,16 @@ export function registerFileCommands(
     }
   );
 
-  // Crear comando para seleccionar todo
   const selectAllCommand = vscode.commands.registerCommand(
     "code2context.selectAll",
     () => {
       fileExplorerProvider.selectAll();
-      notificationService.showInformation(`${USER_MESSAGES.INFO.ALL_FILES_SELECTED}`);
+      notificationService.showInformation(
+        `${USER_MESSAGES.INFO.ALL_FILES_SELECTED}`
+      );
     }
   );
 
-  // Crear comando para deseleccionar todo
   const deselectAllCommand = vscode.commands.registerCommand(
     "code2context.deselectAll",
     () => {
@@ -44,7 +43,6 @@ export function registerFileCommands(
     }
   );
 
-  // Comando para seleccionar un directorio completo
   const selectDirectoryCommand = vscode.commands.registerCommand(
     "code2context.selectDirectory",
     async (directoryItem?: FileItem) => {
