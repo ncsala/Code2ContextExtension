@@ -38,7 +38,6 @@ export function createGenerateContextCallback(
         if (handled) {
           return;
         }
-        /* ────────────────────────────────────────────────────────────── */
 
         // --- Usar IIAFE para abrir el documento de forma no bloqueante ---
         (async () => {

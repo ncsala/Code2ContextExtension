@@ -19,7 +19,7 @@ import { USER_MESSAGES } from "../constants";
  * interactuando con otros servicios y APIs de VS Code.
  */
 export class WebviewActionHandler {
-  private readonly workspaceRoot: string | undefined;
+  private currentWorkspaceRoot: string | undefined;
   private generateContextCallback: (options: CompactOptions) => Promise<void>;
 
   constructor(
@@ -31,7 +31,8 @@ export class WebviewActionHandler {
     private readonly logger: ProgressReporter
   ) {
     this.generateContextCallback = generateContextCallback;
-    this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    this.currentWorkspaceRoot =
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     this.logger.debug("WebviewActionHandler instance created");
   }
 
@@ -66,6 +67,19 @@ export class WebviewActionHandler {
       case "changeSelectionMode":
         this.handleChangeSelectionMode(message);
         break;
+      case "ready": {
+        this.logger.info("Webview reported ready. Sending initialize data.");
+        // 1. Mandamos las opciones y la ruta root ACTUALIZADA
+        this.messageBridge.postMessage({
+          command: "initialize",
+          rootPath: this.currentWorkspaceRoot || "",
+          options: this.optionsViewProvider.getOptions(),
+        });
+
+        // 2. Mandamos la selección de archivos actual
+        this.handleGetSelectedFiles();
+        break;
+      }
       default:
         this.logger.warn(
           `Received unknown command from webview: ${
@@ -75,6 +89,16 @@ export class WebviewActionHandler {
           }`
         );
     }
+  }
+
+  /**
+   * Establece la ruta del workspace actual. Llamado por WebviewProvider.openPanel().
+   */
+  public setCurrentWorkspaceRoot(rootPath: string | undefined): void {
+    this.currentWorkspaceRoot = rootPath;
+    this.logger.debug(
+      `WebviewActionHandler: workspaceRoot updated to ${rootPath}`
+    );
   }
 
   /**
@@ -90,44 +114,40 @@ export class WebviewActionHandler {
   private async handleCompact(
     payloadFromWebview: CompactOptions
   ): Promise<void> {
-    // Combinar opciones: empezar con las del provider nativo,
-    // luego sobrescribir con las del payload del webview (que pueden ser más recientes),
-    // y finalmente asegurar tipos/defaults.
     const options: CompactOptions = {
-      ...this.optionsViewProvider.getOptions(), // Base
-      ...payloadFromWebview, // Cambios desde Webview (prioridad)
-      // Forzar tipos booleanos y asegurar valores no nulos/undefined
+      ...this.optionsViewProvider.getOptions(),
+      ...payloadFromWebview,
       minifyContent: payloadFromWebview.minifyContent === true,
       includeTree: payloadFromWebview.includeTree === true,
       includeGitIgnore: payloadFromWebview.includeGitIgnore === true,
       rootPath:
         payloadFromWebview.rootPath ||
         this.optionsViewProvider.getOptions().rootPath ||
-        this.workspaceRoot ||
-        "", // Prioridad: Webview -> OptionsView -> Workspace
+        this.currentWorkspaceRoot ||
+        "",
       outputPath:
         payloadFromWebview.outputPath ||
         this.optionsViewProvider.getOptions().outputPath ||
-        "code-context.txt", // Prioridad: Webview -> OptionsView -> Default
+        "code-context.txt",
       customIgnorePatterns:
         payloadFromWebview.customIgnorePatterns ??
         this.optionsViewProvider.getOptions().customIgnorePatterns ??
-        [], // Prioridad: Webview -> OptionsView -> Default
+        [],
       selectionMode:
         payloadFromWebview.selectionMode ??
         this.optionsViewProvider.getOptions().selectionMode ??
-        "directory", // Prioridad: Webview -> OptionsView -> Default
+        "directory",
       specificFiles:
         payloadFromWebview.specificFiles ??
         this.optionsViewProvider.getOptions().specificFiles ??
-        [], // Inicializar como array vacío
+        [],
       verboseLogging:
         payloadFromWebview.verboseLogging ??
         this.optionsViewProvider.getOptions().verboseLogging ??
         false,
     };
 
-    // Sincronizar las opciones procesadas de vuelta al provider nativo
+    // Sincronizar las opciones procesadas de vuelta al provider nativo de opciones
     this.optionsViewProvider.updateOptions(options);
 
     if (!options.rootPath) {
@@ -137,9 +157,8 @@ export class WebviewActionHandler {
     }
 
     if (options.selectionMode === "files") {
-      options.specificFiles = this.selectionService.getSelectedFiles();
-
-      if (options.specificFiles.length === 0) {
+      const currentSelectedFiles = this.selectionService.getSelectedFiles();
+      if (currentSelectedFiles.length === 0) {
         vscode.window.showWarningMessage(
           USER_MESSAGES.WARNINGS.NO_FILES_SELECTED_MODE
         );
@@ -149,17 +168,23 @@ export class WebviewActionHandler {
         });
         return;
       }
+      options.specificFiles = currentSelectedFiles;
     } else {
-      // Asegurarse de que specificFiles esté vacío en modo directorio
       options.specificFiles = [];
+    }
+
+    if (options.selectionMode === "files") {
+      this.logger.info(
+        "Clearing file selection as context generation is initiated (files mode)."
+      );
+      this.fileExplorerProvider.clearSelection();
     }
 
     try {
       await this.generateContextCallback(options);
     } catch (error) {
-      // Se activa si la callback (generateContextCallbackForWebview) relanza un error
       this.logger.error(
-        "--> [ActionHandler] Error in generateContextCallback:",
+        "--> [ActionHandler] Critical error during generateContextCallback invocation:",
         error
       );
     } finally {
@@ -171,7 +196,8 @@ export class WebviewActionHandler {
     message: SelectDirectoryMessage
   ): Promise<void> {
     const currentRoot =
-      this.optionsViewProvider.getOptions().rootPath || this.workspaceRoot;
+      this.optionsViewProvider.getOptions().rootPath ||
+      this.currentWorkspaceRoot;
     const defaultUri = message.currentPath
       ? vscode.Uri.file(message.currentPath)
       : currentRoot

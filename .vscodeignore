@@ -1,28 +1,55 @@
+# Carpetas y archivos de configuración específicos del desarrollo con VS Code
 .vscode/**
 .vscode-test/**
+.vscode-test.mjs
+
+# Código fuente TypeScript de la extensión principal
 src/**
+
+# Carpeta de salida intermedia del compilador TypeScript (tsc)
+out/**
+
+# Archivos y carpetas de pruebas
 tests/**
 test/**
+tsconfig.test.json   # Configuración de TypeScript específica para pruebas (si existe)
+
+# Módulos de Node.js (dependencias de desarrollo y las que Webpack empaqueta)
+# Tanto en la raíz del proyecto como las específicas del webview (cubiertas por webview/**)
 node_modules/**
+
+# Archivos de configuración del proyecto (TypeScript, Webpack, Vite raíz, etc.)
+# Estos son para desarrollo y build, no para la extensión empaquetada.
 tsconfig.json
 webpack.config.js
 tsconfig.node.json
-vite.config.ts
+vite.config.ts 
+
+# Archivos de bloqueo de dependencias
 package-lock.json
-*.md
+
+# Archivos de Git
 .gitignore
+
+# Archivos de configuración de formato de código y linting
 .prettierrc
-.eslintrc
-eslint.config.mjs
+.eslintrc            # O .eslintrc.js, .eslintrc.json
+eslint.config.mjs    # Si usas la configuración plana de ESLint
+
+# Archivos de configuración de runners de tests
 jest.config.js
-webview/src/**
-webview/node_modules/**
-webview/public/**
-webview/tsconfig.json
-webview/tsconfig.node.json
-webview/package.json
-webview/vite.config.ts
-webview/package-lock.json
+
+# Código fuente, dependencias de desarrollo y configuraciones del Webview
+webview/**
+
+# Archivos de Source Map (mapas de código)
+# Útiles para depuración en desarrollo, pero no necesarios en el VSIX de producción.
 **/*.map
-.vscode-test.mjs
-tsconfig.test.json
+
+# Archivos Markdown
+# Por defecto, excluir todos los archivos .md
+*.md
+# PERO, incluir explícitamente los que SÍ quieres en el paquete:
+!README.md
+!CHANGELOG.md
+!LICENSE.md

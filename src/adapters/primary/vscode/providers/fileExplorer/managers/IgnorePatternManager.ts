@@ -92,15 +92,7 @@ export class IgnorePatternManager {
       vscode.workspace
         .getConfiguration("files")
         .get<Record<string, boolean>>("exclude") ?? {};
-    // TODO revisar estas configuraciones luego
-    // const searchEx =
-    //   vscode.workspace
-    //     .getConfiguration("search")
-    //     .get<Record<string, boolean>>("exclude") ?? {};
-    return [
-      ...Object.keys(filesEx).filter((k) => filesEx[k]),
-      // ...Object.keys(searchEx).filter((k) => searchEx[k]),
-    ];
+    return [...Object.keys(filesEx).filter((k) => filesEx[k])];
   }
 
   /** Lee y devuelve los patrones del .gitignore si existe */

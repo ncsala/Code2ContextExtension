@@ -3,8 +3,6 @@ import { CompactOptions } from "../../../application/ports/driving/CompactOption
 import { FileExplorerProvider } from "./providers/fileExplorer/FileExplorerProvider";
 import { OptionsViewProvider } from "./options/optionsViewProvider";
 import { VSCodeToWebviewMessage } from "./types/webviewMessages";
-
-// Importar los nuevos componentes del webview
 import { WebviewPanelManager } from "./webview/WebviewPanelManager";
 import { WebviewMessageBridge } from "./webview/WebviewMessageBridge";
 import { WebviewActionHandler } from "./webview/WebviewActionHandler";
@@ -83,52 +81,33 @@ export class WebviewProvider {
    * Configura toda la comunicación y sincronización.
    */
   public async openPanel(): Promise<void> {
-    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!root) {
+    const freshRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!freshRoot) {
       vscode.window.showErrorMessage(USER_MESSAGES.ERRORS.NO_WORKSPACE);
       return;
     }
 
-    // Asegurarse de que el explorador de archivos nativo use el workspace actual
-    this.fileExplorerProvider.setRootPath(root);
+    // Actualizar el actionHandler con la ruta fresca del workspace
+    this.actionHandler.setCurrentWorkspaceRoot(freshRoot);
 
-    // Crear o mostrar el panel usando el PanelManager
+    // Asegurarse de que los otros proveedores también tengan la ruta más fresca
+    this.fileExplorerProvider.setRootPath(freshRoot);
+    this.optionsViewProvider.updateOptions({ rootPath: freshRoot });
+
+    // --- Configuración del Panel y Comunicación ---
     const panel = this.panelManager.createOrShow();
-
-    // Establecer el contenido HTML usando el PanelManager
     this.panelManager.setHtmlContent(panel);
-
-    // Adjuntar el MessageBridge al webview del panel
     this.messageBridge.attach(panel.webview);
-
-    // Inicializar el StateSynchronizer (empezará a escuchar y enviar updates)
-    this.stateSynchronizer.initialize();
-
+    this.stateSynchronizer.initialize(); // Escucha cambios de opciones y selección
     this.consoleLogInterceptor.start(
       this.messageBridge,
       this.panelManager,
       this.logger
     );
-
-    // Registrar el manejador principal para mensajes del Webview en el MessageBridge
     this.messageBridge.onMessage(
       this.actionHandler.handleIncomingMessage.bind(this.actionHandler)
     );
 
-    // Enviar estado inicial al Webview ahora que todo está listo
-    this.messageBridge.postMessage({
-      command: "initialize",
-      rootPath: root,
-      options: this.optionsViewProvider.getOptions(), // Enviar opciones actuales
-    });
-    // Enviar selección inicial
-    const currentSelection = this.selectionService.getSelectedFiles();
-    this.messageBridge.postMessage({
-      command: "selectedFiles",
-      files: currentSelection,
-    });
-
-    // Configurar limpieza cuando el panel se cierra
     this.panelManager.onDidDispose(() => {
       this.consoleLogInterceptor.stop();
       this.stateSynchronizer.dispose();
@@ -153,5 +132,13 @@ export class WebviewProvider {
       command: "setLoading",
       loading: isLoading,
     });
+  }
+
+  /**
+   * Verifica si el panel principal del Webview (gestionado por panelManager) está actualmente visible.
+   * @returns true si el panel está visible, false en caso contrario.
+   */
+  public isMainPanelVisible(): boolean {
+    return this.panelManager.getPanel()?.visible ?? false;
   }
 }

@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 import { WebviewProvider } from "../WebviewProvider";
 
