@@ -1,94 +1,99 @@
 import * as path from "path";
-import { promises as fs } from "fs";
 import pLimit from "p-limit";
 import { FileSystemPort } from "../../../ports/driven/FileSystemPort";
 import { FileEntry } from "../../../../domain/model/FileEntry";
 import { ProgressReporter } from "../../../ports/driven/ProgressReporter";
 import { withTimeout } from "../../../../shared/utils/withTimeout";
 
-/**
- * Servicio encargado de cargar múltiples archivos de disco de forma concurrente
- * y segura, con timeout para cada lectura individual.
- */
 export class FileLoaderService {
-  /** Límite máximo de lecturas concurrentes. */
-  private readonly limit = pLimit(16);
+  private readonly concurrencyLimiter = pLimit(16);
 
-  /**
-   * Crea una nueva instancia de FileLoaderService.
-   *
-   * @param {FileSystemPort} fsPort - Puerto para leer archivos (in-memory o FS real).
-   * @param {ProgressReporter} logger - Reportero de progreso para logging de operaciones.
-   */
   constructor(
     private readonly fsPort: FileSystemPort,
     private readonly logger: ProgressReporter
   ) {}
 
-  /**
-   * Carga un conjunto de archivos relativos a partir de un directorio raíz.
-   *
-   * Aplica un timeout a cada lectura y filtra entradas no válidas.
-   *
-   * @param {string} rootPath       - Ruta absoluta o relativa del directorio raíz.
-   * @param {string[]} relPaths     - Lista de rutas relativas de los archivos a cargar.
-   * @returns {Promise<FileEntry[]>} - Promesa con los FileEntry válidos cargados.
-   * @throws {Error}                 - Si ningún archivo pudo ser procesado con éxito.
-   */
-  async load(rootPath: string, relPaths: string[]): Promise<FileEntry[]> {
-    this.logger.startOperation("loadFiles");
+  async load(rootPath: string, relativePaths: string[]): Promise<FileEntry[]> {
+    if (relativePaths.length === 0) {
+      this.logger.info("FileLoaderService.load: No files to load.");
+      return [];
+    }
+    this.logger.startOperation("FileLoaderService.load");
+    const TIMEOUT_MS = 10_000;
 
-    const TIMEOUT = 10_000; // 10 s
-    const results = await Promise.all(
-      relPaths.map((rel) =>
-        this.limit(() =>
-          withTimeout(this.readOne(rootPath, rel), TIMEOUT, `read ${rel}`)
+    const fileReadPromises = relativePaths.map((relPath) =>
+      this.concurrencyLimiter(() =>
+        withTimeout(
+          this.readSingleFile(rootPath, relPath),
+          TIMEOUT_MS,
+          `read ${relPath}`
         )
       )
     );
 
-    const files = results.filter((f): f is FileEntry => f !== null);
+    const results = await Promise.allSettled(fileReadPromises);
+    const successfullyReadFiles: FileEntry[] = [];
+    let failedCount = 0;
 
-    if (files.length === 0)
-      throw new Error("No valid files could be processed");
+    results.forEach((result) => {
+      if (result.status === "fulfilled" && result.value !== null) {
+        successfullyReadFiles.push(result.value);
+      } else if (result.status === "rejected") {
+        this.logger.warn(
+          `FileLoaderService.load: A file read operation failed or timed out: ${result.reason}`
+        );
+        failedCount++;
+      } else {
+        failedCount++; // Contar como fallo si el archivo no era válido o no se pudo leer
+      }
+    });
 
-    this.logger.info(`✅ Processed ${files.length}/${relPaths.length} files`);
-    this.logger.endOperation("loadFiles");
-    return files;
+    if (successfullyReadFiles.length === 0 && relativePaths.length > 0) {
+      this.logger.warn(
+        "FileLoaderService.load: No valid files could be processed from the provided list."
+      );
+    }
+    this.logger.info(
+      `FileLoaderService.load: Processed ${successfullyReadFiles.length}/${relativePaths.length} files. Failed: ${failedCount}.`
+    );
+    this.logger.endOperation("FileLoaderService.load");
+    return successfullyReadFiles;
   }
 
-  /**
-   * Lee un único archivo y lo convierte a FileEntry.
-   *
-   * - Verifica que la ruta corresponda a un archivo.
-   * - Usa el puerto fsPort para la lectura real.
-   * - Devuelve `null` y registra un error si hay fallo o contenido vacío.
-   *
-   * @param {string} root - Directorio base donde resolver la ruta.
-   * @param {string} rel  - Ruta relativa del archivo a leer.
-   * @returns {Promise<FileEntry|null>} - FileEntry si tuvo éxito, o `null` en caso contrario.
-   */
-
-  private async readOne(root: string, rel: string): Promise<FileEntry | null> {
-    const abs = path.join(root, rel);
+  private async readSingleFile(
+    rootPath: string,
+    relativePath: string
+  ): Promise<FileEntry | null> {
+    const absolutePath = path.join(rootPath, relativePath);
     try {
-      const stat = await fs.stat(abs);
-      if (!stat.isFile()) {
-        this.logger.error(`Not a file: ${abs}`);
+      const fileStats = await this.fsPort.stat(absolutePath);
+      if (!fileStats) {
+        this.logger.warn(
+          `FileLoaderService.readSingleFile: Stat failed for ${absolutePath}. Path may not exist.`
+        );
         return null;
       }
-      const content = await this.fsPort.readFile(abs);
+      if (!fileStats.isFile) {
+        this.logger.warn(
+          `FileLoaderService.readSingleFile: Path is not a file: ${absolutePath}.`
+        );
+        return null;
+      }
+
+      const content = await this.fsPort.readFile(absolutePath);
       if (content === null) {
-        this.logger.error(`Empty content: ${abs}`);
+        this.logger.warn(
+          `FileLoaderService.readSingleFile: Content is null for file: ${absolutePath}.`
+        );
         return null;
       }
-      return { path: rel, content };
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        this.logger.error(`File error ${abs}: ${err.message}`);
-      } else {
-        this.logger.error(`File error ${abs}: ${String(err)}`);
-      }
+      return { path: relativePath, content };
+    } catch (error: unknown) {
+      this.logger.error(
+        `FileLoaderService.readSingleFile: Error processing ${absolutePath}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       return null;
     }
   }

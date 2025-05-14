@@ -4,180 +4,297 @@ import { toPosix } from "../../../shared/utils/pathUtils";
 import { FileTree } from "../../../domain/model/FileTree";
 import { DirectoryTreeGenerator } from "./DirectoryTreeGenerator";
 import { BaseTreeGenerator } from "./BaseTreeGenerator";
-import { TreeLimits, MeasuredEntry } from "./common";
+import { TreeLimits } from "./common";
+import {
+  FileSystemPort,
+  PortDirectoryEntry,
+} from "../../ports/driven/FileSystemPort";
+import { compareFileTrees } from "../../../shared/utils/sortUtils";
+import { PrefixSet } from "../../../shared/utils/PrefixSet";
 
-/**
- * {@link FilesTreeGenerator} genera un árbol en “modo files”, expandiendo solo
- * las ramas que contienen archivos seleccionados.
- */
+interface MeasuredEntry {
+  abs: string;
+  rel: string;
+  cnt: number;
+  entry: PortDirectoryEntry;
+}
+
 export class FilesTreeGenerator extends BaseTreeGenerator {
-  constructor(limits: Partial<TreeLimits> = {}) {
-    super({
-      maxTotal: limits.maxTotal ?? 500,
-      maxChildren: limits.maxChildren ?? 40,
-    });
+  constructor(limits: Partial<TreeLimits> = {}, fsPort: FileSystemPort) {
+    super(
+      {
+        maxTotal: limits.maxTotal ?? 500,
+        maxChildren: limits.maxChildren ?? 40,
+      },
+      fsPort
+    );
   }
 
-  private fixTreePaths(node: FileTree, prefix: string): void {
-    if (prefix === "") return;
-    node.children?.forEach((c) => {
-      if (c.name.startsWith("[ ")) return;
-      if (c.path && !c.path.startsWith(`${prefix}/`) && c.path !== prefix) {
-        c.path = c.path === "" ? prefix : `${prefix}/${c.path}`;
-      }
-      if (c.isDirectory) this.fixTreePaths(c, prefix);
-    });
-  }
-
-  protected async build(
-    dirFs: string,
-    ig: Ignore,
-    root: string
+  protected async buildTreeStructure(
+    dirFsPath: string,
+    ignoreHandler: Ignore,
+    rootFsPath: string
   ): Promise<{ node: FileTree; count: number }> {
-    const rel = toPosix(path.relative(root, dirFs));
-    const isRoot = rel === "";
+    const relativePath = toPosix(path.relative(rootFsPath, dirFsPath));
+    const isRootLevel = relativePath === "";
 
-    if (await this.shouldDelegateToDirectoryMode(dirFs, rel, ig, root)) {
-      return this.delegateToDirectoryMode(dirFs, rel, ig, root);
+    if (
+      await this.shouldDelegateToDirectoryMode(
+        dirFsPath,
+        relativePath,
+        ignoreHandler,
+        rootFsPath
+      )
+    ) {
+      return this.delegateToDirectoryModeGenerator(
+        dirFsPath,
+        relativePath,
+        ignoreHandler,
+        rootFsPath
+      );
     }
 
-    const entries = await this.listRelevantEntries(dirFs, ig, root);
-    const measured = await this.measureEntries(entries, dirFs, ig, root);
-
-    const totalDesc = measured.reduce((sum, m) => sum + m.cnt, 0);
-    const expandAll =
-      isRoot ||
-      this.hasSelectionInside(rel) ||
-      (measured.length <= this.limits.maxChildren &&
-        totalDesc <= this.limits.maxTotal);
-
-    if (expandAll) {
-      return this.expandAll(rel, measured, ig, root, isRoot, true);
+    const relevantEntries = await this.getRelevantDirectoryEntries(
+      dirFsPath,
+      ignoreHandler,
+      rootFsPath
+    );
+    if (
+      !isRootLevel &&
+      relevantEntries.length === 0 &&
+      !this.isAnySelectedPathInside(relativePath) &&
+      !this.selectedPathsSet.has(relativePath)
+    ) {
+      return {
+        node: {
+          name: path.basename(dirFsPath),
+          path: relativePath,
+          isDirectory: true,
+          children: [],
+        },
+        count: 0,
+      };
     }
 
-    return this.assembleTruncatedTree(dirFs, rel, measured, ig, root);
+    const measuredEntries = await this.measureDirectoryEntries(
+      relevantEntries,
+      dirFsPath,
+      ignoreHandler,
+      rootFsPath
+    );
+
+    const totalDescendants = measuredEntries.reduce((sum, m) => sum + m.cnt, 0);
+    const shouldExpandAll =
+      isRootLevel ||
+      this.isAnySelectedPathInside(relativePath) ||
+      (measuredEntries.length <= this.limits.maxChildren &&
+        totalDescendants <= this.limits.maxTotal);
+
+    if (shouldExpandAll) {
+      return this.expandAllEntries(
+        relativePath,
+        measuredEntries,
+        ignoreHandler,
+        rootFsPath,
+        isRootLevel,
+        true
+      );
+    }
+
+    return this.assembleFilesModeTruncatedTree(
+      dirFsPath,
+      relativePath,
+      measuredEntries,
+      ignoreHandler,
+      rootFsPath
+    );
   }
-
-  /* ─────────────────── Auxiliares privados ─────────────────────────────── */
 
   private async shouldDelegateToDirectoryMode(
-    dirFs: string,
-    rel: string,
-    ig: Ignore,
-    root: string
+    dirFsPath: string,
+    relativePath: string,
+    ignoreHandler: Ignore,
+    rootFsPath: string
   ): Promise<boolean> {
-    const selectedHere = [...this.selected].filter((s) =>
-      s.startsWith(rel ? `${rel}/` : "")
-    );
-    if (!selectedHere.length) return false;
-
-    const totalFiles = await this.countDescendantFiles(dirFs, ig, root);
-    return selectedHere.length === totalFiles;
-  }
-
-  private async delegateToDirectoryMode(
-    dirFs: string,
-    rel: string,
-    ig: Ignore,
-    _root: string
-  ): Promise<{ node: FileTree; count: number }> {
-    const dirGen = new DirectoryTreeGenerator({
-      maxTotal: this.limits.maxTotal,
-      maxChildren: this.limits.maxChildren,
+    const selectedPathsInThisBranch = [...this.selectedPathsSet].filter((s) => {
+      if (relativePath === "") return true;
+      return s.startsWith(`${relativePath}/`) || s === relativePath;
     });
 
-    const { fileTree, truncatedPaths } = await dirGen.generatePrunedTreeText(
-      dirFs,
-      ig,
-      []
+    if (selectedPathsInThisBranch.length === 0) {
+      return false;
+    }
+
+    const totalActualFiles = await this.countActualDescendantFiles(
+      dirFsPath,
+      ignoreHandler,
+      rootFsPath
     );
-
-    truncatedPaths.forEach((p) => this.truncated.add(rel ? `${rel}/${p}` : p));
-
-    fileTree.path = rel;
-    this.fixTreePaths(fileTree, rel);
-
-    return { node: fileTree, count: this.countTree(fileTree) };
+    return (
+      selectedPathsInThisBranch.length === totalActualFiles &&
+      totalActualFiles > 0
+    );
   }
 
-  private async assembleTruncatedTree(
-    dirFs: string,
-    rel: string,
-    measured: MeasuredEntry[],
-    ig: Ignore,
-    root: string
+  private async delegateToDirectoryModeGenerator(
+    dirFsPath: string,
+    relativePath: string,
+    ignoreHandler: Ignore,
+    rootFsPath: string
   ): Promise<{ node: FileTree; count: number }> {
-    const totalDesc = measured.reduce((sum, m) => sum + m.cnt, 0);
-
-    const [heavy, remaining] = this.applyHeavyTruncation(measured, totalDesc);
-    const [small, middle, large] = this.applySmartTruncation(
-      remaining,
-      totalDesc
-    );
-
-    let count = 0;
-    const children: FileTree[] = [];
-
-    heavy.forEach((h) => {
-      children.push(h.node);
-      count += h.count;
-    });
-
-    for (const s of small) {
-      if (s.entry.isDirectory()) {
-        const sub = await this.build(s.abs, ig, root);
-        children.push(sub.node);
-        count += sub.count;
-      } else {
-        children.push({ name: s.entry.name, path: s.rel, isDirectory: false });
-        count++;
-      }
-    }
-
-    if (middle.length) {
-      children.push(this.middlePlaceholder(middle));
-      count += middle.reduce((sum, e) => sum + e.cnt, 0);
-    }
-
-    for (const l of large) {
-      if (l.entry.isDirectory()) {
-        const sub = await this.build(l.abs, ig, root);
-        children.push(sub.node);
-        count += sub.count;
-      } else {
-        children.push({ name: l.entry.name, path: l.rel, isDirectory: false });
-        count++;
-      }
-    }
-
-    return {
-      node: {
-        name: path.basename(dirFs),
-        path: rel,
-        isDirectory: true,
-        children,
+    const dirModeGenerator = new DirectoryTreeGenerator(
+      {
+        maxTotal: this.limits.maxTotal,
+        maxChildren: this.limits.maxChildren,
       },
-      count,
+      this.fsPort
+    );
+
+    const originalSelectedPaths = new Set(this.selectedPathsSet);
+    this.selectedPathsSet.clear();
+    this.selectedPathPrefixes = new PrefixSet([]);
+
+    const subTreeResult = await dirModeGenerator.buildTreeStructure(
+      dirFsPath,
+      ignoreHandler,
+      rootFsPath
+    );
+
+    this.selectedPathsSet = originalSelectedPaths; // Restaurar
+    this.selectedPathPrefixes = new PrefixSet(
+      [...this.selectedPathsSet].flatMap((p) =>
+        p.split("/").map((_, i, arr) => arr.slice(0, i + 1).join("/"))
+      )
+    );
+
+    subTreeResult.node.path = relativePath;
+    return {
+      node: subTreeResult.node,
+      count: this.countTreeNodes(subTreeResult.node),
     };
   }
 
-  private async countDescendantFiles(
-    dirFs: string,
-    ig: Ignore,
-    root: string
-  ): Promise<number> {
-    let files = 0;
-    const stack = [dirFs];
+  private async assembleFilesModeTruncatedTree(
+    dirFsPath: string,
+    relativePath: string,
+    measuredEntries: MeasuredEntry[],
+    ignoreHandler: Ignore,
+    rootFsPath: string
+  ): Promise<{ node: FileTree; count: number }> {
+    const totalDescendantsInDir = measuredEntries.reduce(
+      (sum, m) => sum + m.cnt,
+      0
+    );
 
-    while (stack.length) {
-      const cur = stack.pop()!;
-      for (const e of await this.getDirents(cur)) {
-        const abs = path.join(cur, e.name);
-        const rel = toPosix(path.relative(root, abs));
-        if (this.isLinkOrIgnored(e, rel, ig)) continue;
-        e.isDirectory() ? stack.push(abs) : files++;
+    const [heavilyTruncatedNodes, remainingAfterHeavyTruncation] =
+      this.applyHeavyTruncation(measuredEntries, totalDescendantsInDir);
+
+    const [headEntries, middleEntriesToSkip, tailEntries] =
+      this.applySmartTruncation(remainingAfterHeavyTruncation);
+
+    let currentTotalNodeCount = 0;
+    const childrenForNode: FileTree[] = [];
+
+    heavilyTruncatedNodes.forEach((htn) => {
+      childrenForNode.push(htn.node);
+      currentTotalNodeCount += htn.count;
+    });
+
+    const processEntry = async (entry: MeasuredEntry) => {
+      if (entry.entry.isDirectory()) {
+        // Solo construir subárbol si la rama es relevante para la selección
+        if (
+          this.isAnySelectedPathInside(entry.rel) ||
+          this.selectedPathsSet.has(entry.rel)
+        ) {
+          const subTree = await this.buildTreeStructure(
+            entry.abs,
+            ignoreHandler,
+            rootFsPath
+          );
+          if (
+            (subTree.node.children && subTree.node.children.length > 0) ||
+            this.selectedPathsSet.has(entry.rel)
+          ) {
+            childrenForNode.push(subTree.node);
+            currentTotalNodeCount += subTree.count;
+          } else if (subTree.count > 0) {
+            // Si el subárbol vacío contó algo (el propio nodo)
+            currentTotalNodeCount += subTree.count; // Contar el nodo aunque no se añada
+          }
+        } else {
+          // Directorio no seleccionado y no contiene seleccionados, lo contamos pero no lo añadimos al árbol visual
+          currentTotalNodeCount += entry.cnt; // Contar todos sus descendientes
+        }
+      } else if (this.selectedPathsSet.has(entry.rel)) {
+        childrenForNode.push({
+          name: entry.entry.name,
+          path: entry.rel,
+          isDirectory: false,
+        });
+        currentTotalNodeCount++;
+      } else {
+        // Archivo no seleccionado, lo contamos pero no lo añadimos
+        currentTotalNodeCount++;
+      }
+    };
+
+    for (const entry of headEntries) await processEntry(entry);
+    if (middleEntriesToSkip.length > 0) {
+      const placeholderNode =
+        this.createMiddlePlaceholderNode(middleEntriesToSkip);
+      childrenForNode.push(placeholderNode);
+      currentTotalNodeCount += middleEntriesToSkip.reduce(
+        (sum, e) => sum + e.cnt,
+        0
+      );
+    }
+    for (const entry of tailEntries) await processEntry(entry);
+
+    childrenForNode.sort(compareFileTrees);
+
+    return {
+      node: {
+        name: path.basename(dirFsPath),
+        path: relativePath,
+        isDirectory: true,
+        children: childrenForNode,
+      },
+      count: this.countTreeNodes({
+        name: "",
+        path: "",
+        isDirectory: true,
+        children: childrenForNode,
+      }),
+    };
+  }
+
+  private async countActualDescendantFiles(
+    dirFsPath: string,
+    ignoreHandler: Ignore,
+    rootFsPath: string
+  ): Promise<number> {
+    let fileCount = 0;
+    const stack: string[] = [dirFsPath];
+
+    while (stack.length > 0) {
+      const currentDir = stack.pop()!;
+      const entries = await this.fetchDirectoryEntries(currentDir);
+
+      for (const entry of entries) {
+        const absolutePath = path.join(currentDir, entry.name);
+        const relativePath = toPosix(path.relative(rootFsPath, absolutePath));
+
+        if (this.isEntryLinkOrIgnored(entry, relativePath, ignoreHandler)) {
+          continue;
+        }
+        if (entry.isDirectory()) {
+          stack.push(absolutePath);
+        } else if (entry.isFile()) {
+          fileCount++;
+        }
       }
     }
-    return files;
+    return fileCount;
   }
 }

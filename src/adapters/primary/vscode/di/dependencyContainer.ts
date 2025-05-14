@@ -3,7 +3,7 @@ import { FsAdapter } from "../../../secondary/fs/FsAdapter";
 import { GitAdapter } from "../../../secondary/git/GitAdapter";
 import { CompactProject } from "../../../../application/use-cases/compact/CompactProject";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
-import { ConsoleProgressReporter } from "../../../../infrastructure/reporting/ConsoleProgressReporter";
+import { ConsoleProgressReporter } from "../../../secondary/reporting/ConsoleProgressReporter";
 import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 import { CompactUseCase } from "../../../../application/ports/driving/CompactUseCase";
 import { VSCodeNotificationService } from "../services/notificationService";
