@@ -90,7 +90,6 @@ export class WebviewProvider {
     // Actualizar el actionHandler con la ruta fresca del workspace
     this.actionHandler.setCurrentWorkspaceRoot(freshRoot);
 
-    // Asegurarse de que los otros proveedores también tengan la ruta más fresca
     this.fileExplorerProvider.setRootPath(freshRoot);
     this.optionsViewProvider.updateOptions({ rootPath: freshRoot });
 
@@ -98,7 +97,7 @@ export class WebviewProvider {
     const panel = this.panelManager.createOrShow();
     this.panelManager.setHtmlContent(panel);
     this.messageBridge.attach(panel.webview);
-    this.stateSynchronizer.initialize(); // Escucha cambios de opciones y selección
+    this.stateSynchronizer.initialize();
     this.consoleLogInterceptor.start(
       this.messageBridge,
       this.panelManager,

@@ -1,6 +1,7 @@
 import { TreeGenerator } from "./TreeGenerator";
 import { FilesTreeGenerator } from "./FilesTreeGenerator";
 import { DirectoryTreeGenerator } from "./DirectoryTreeGenerator";
+import { FileSystemPort } from "../../ports/driven/FileSystemPort";
 
 export interface TreeGeneratorFactory {
   make(
@@ -10,16 +11,20 @@ export interface TreeGeneratorFactory {
 }
 
 export class DefaultTreeGeneratorFactory implements TreeGeneratorFactory {
+  constructor(private readonly fsPort: FileSystemPort) {}
+
   make(
     mode: "directory" | "files",
     limits: { maxTotal?: number; maxChildren?: number } = {}
   ): TreeGenerator {
     const cfg = {
-      maxTotal: limits.maxTotal ?? 150,
-      maxChildren: limits.maxChildren ?? 30,
+      maxTotal: limits.maxTotal ?? (mode === "files" ? 500 : 300),
+      maxChildren: limits.maxChildren ?? (mode === "files" ? 40 : 30),
     };
-    return mode === "files"
-      ? new FilesTreeGenerator(cfg)
-      : new DirectoryTreeGenerator(cfg);
+    if (mode === "files") {
+      return new FilesTreeGenerator(cfg, this.fsPort);
+    } else {
+      return new DirectoryTreeGenerator(cfg, this.fsPort);
+    }
   }
 }

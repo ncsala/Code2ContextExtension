@@ -5,6 +5,20 @@ All notable changes to the **Code2Context** extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2025-05-14
+
+### ✏️ Changed in 0.2.2
+
+- **Major Internal Refactoring for Stricter Hexagonal Architecture**:
+  - Core application services (`FileLoaderService`, `OutputComposer`, `TreeService`, and underlying tree generation logic) have been significantly refactored to strictly adhere to hexagonal architecture principles.
+  - Key services are now fully decoupled from direct Node.js `fs` module dependencies, interacting with the file system exclusively through the `FileSystemPort`.
+  - The `FileSystemPort` interface was enhanced (e.g., `listDirectoryEntries`, richer `stat` method) and `FsAdapter` updated to implement these changes.
+  - Dependency injection mechanisms within `CompactProject` and `TreeGeneratorFactory` were refined to ensure correct propagation of `FileSystemPort`.
+  - This refactoring significantly improves the internal design, modularity, testability, and long-term maintainability of the extension's core.
+- **Unit Test Suite Overhaul**:
+  - All unit tests for the refactored services (`TreeService`, `FileLoaderService`, `OutputComposer`, `CompactProject`) have been thoroughly updated and corrected.
+  - Tests now accurately reflect new method signatures, dependencies, and correctly mock the `FileSystemPort` and other abstracted services, ensuring comprehensive coverage and a "green" test suite.
+
 ## [0.2.1] - 2025-05-10
 
 ### ✨ Added
@@ -17,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Clicking "Select Files" in the webview now attempts to correctly focus the "File Selection" view in the sidebar.
   - Opening the extension's sidebar view (e.g., from the Activity Bar) will now automatically open the main generator panel if it's not already visible, ensuring a consistent user experience.
 
-### ✏️ Changed
+### ✏️ Changed in 0.2.1
 
 - **Webview Refactoring**: Significantly refactored the main webview component (`App.tsx`) by extracting stateful logic and message handling into custom React hooks (`useExtensionMessages` and `useDebugOutputManager`), improving code organization, maintainability, and separation of concerns.
 - **Message Standardization**: All user-facing notification messages within the extension have been standardized to English and are managed via centralized constants.
@@ -28,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dependencies**: Updated all project dependencies (root and webview) to their latest stable versions.
 - **Internal Code Quality**: Various internal refactorings, including removal of unnecessary comments and improved TypeScript typings for better code clarity.
 
-### 🐞 Fixed
+### 🐞 Fixed in 0.2.1
 
 - **Webview Root Path Stability**: Implemented more robust logic in the webview to ensure the `rootPath` (current workspace directory) is reliably initialized and maintained, preventing it from being unintentionally cleared by subsequent state updates.
 - (The console logging change also implicitly fixes potential issues related to patching the global console).

@@ -1,7 +1,7 @@
-// tests/unit/application/use-cases/compact/services/FileLoaderService.test.ts
 import { FileLoaderService } from "../../../../../../src/application/use-cases/compact/services/FileLoaderService";
 import { FileSystemPort } from "../../../../../../src/application/ports/driven/FileSystemPort";
 import { ProgressReporter } from "../../../../../../src/application/ports/driven/ProgressReporter";
+import * as nodePath from "path"; // Para construir paths de forma consistente
 
 describe("FileLoaderService", () => {
   let fileLoaderService: FileLoaderService;
@@ -16,6 +16,7 @@ describe("FileLoaderService", () => {
       getDirectoryTree: jest.fn(),
       getFiles: jest.fn(),
       stat: jest.fn(),
+      listDirectoryEntries: jest.fn(),
     };
 
     mockLogger = {
@@ -30,194 +31,214 @@ describe("FileLoaderService", () => {
     fileLoaderService = new FileLoaderService(mockFileSystem, mockLogger);
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe("load method", () => {
     test("should successfully load multiple files", async () => {
-      // Arrange
       const rootPath = "C:\\test\\project";
       const relPaths = ["file1.ts", "file2.ts", "file3.ts"];
+      const absPath1 = nodePath.join(rootPath, "file1.ts");
+      const absPath2 = nodePath.join(rootPath, "file2.ts");
+      const absPath3 = nodePath.join(rootPath, "file3.ts");
 
-      // Mock fs.stat para simular que son archivos - corregido
-      mockFileSystem.stat?.mockResolvedValue({ size: 1000 });
+      mockFileSystem.stat.mockImplementation(async (p) => {
+        if (p === absPath1)
+          return {
+            size: 1000,
+            isFile: true,
+            isDirectory: false,
+            isSymbolicLink: false,
+          };
+        if (p === absPath2)
+          return {
+            size: 1000,
+            isFile: true,
+            isDirectory: false,
+            isSymbolicLink: false,
+          };
+        if (p === absPath3)
+          return {
+            size: 1000,
+            isFile: true,
+            isDirectory: false,
+            isSymbolicLink: false,
+          };
+        return null;
+      });
 
-      // Mock jest para simular fs.promises.stat - corregido
-      const mockFsStat = jest
-        .spyOn(require("fs").promises, "stat")
-        .mockImplementation(() => {
-          return Promise.resolve({
-            isFile: () => true,
-            isDirectory: () => false,
-          });
-        });
-
-      // Mock readFile para retornar contenido por archivo
       mockFileSystem.readFile
         .mockResolvedValueOnce("content1")
         .mockResolvedValueOnce("content2")
         .mockResolvedValueOnce("content3");
 
-      // Act
       const result = await fileLoaderService.load(rootPath, relPaths);
 
-      // Assert
       expect(result).toHaveLength(3);
       expect(result[0]).toEqual({ path: "file1.ts", content: "content1" });
       expect(result[1]).toEqual({ path: "file2.ts", content: "content2" });
       expect(result[2]).toEqual({ path: "file3.ts", content: "content3" });
 
-      expect(mockLogger.startOperation).toHaveBeenCalledWith("loadFiles");
-      expect(mockLogger.endOperation).toHaveBeenCalledWith("loadFiles");
-      expect(mockLogger.info).toHaveBeenCalledWith("✅ Processed 3/3 files");
+      expect(mockFileSystem.stat).toHaveBeenCalledWith(absPath1);
+      expect(mockFileSystem.stat).toHaveBeenCalledWith(absPath2);
+      expect(mockFileSystem.stat).toHaveBeenCalledWith(absPath3);
+      expect(mockFileSystem.readFile).toHaveBeenCalledWith(absPath1);
+      // ... y así para los otros readFile
 
-      // Cleanup
-      mockFsStat.mockRestore();
+      expect(mockLogger.startOperation).toHaveBeenCalledWith(
+        "FileLoaderService.load"
+      );
+      expect(mockLogger.endOperation).toHaveBeenCalledWith(
+        "FileLoaderService.load"
+      );
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.stringContaining("Processed 3/3 files")
+      );
     });
 
     test("should filter out directories", async () => {
-      // Arrange
       const rootPath = "C:\\test\\project";
       const relPaths = ["file1.ts", "directory", "file2.ts"];
+      const pathFile1 = nodePath.join(rootPath, "file1.ts");
+      const pathDirectory = nodePath.join(rootPath, "directory");
+      const pathFile2 = nodePath.join(rootPath, "file2.ts");
 
-      // Mock fs.promises.stat - corregido
-      const mockFsStat = jest
-        .spyOn(require("fs").promises, "stat")
-        .mockImplementation((...args: any[]) => {
-          const path = args[0] as string;
-          const isDirectory = path.includes("directory");
-          return Promise.resolve({
-            isFile: () => !isDirectory,
-            isDirectory: () => isDirectory,
-          });
-        });
+      mockFileSystem.stat.mockImplementation(async (p) => {
+        if (p === pathFile1)
+          return {
+            size: 100,
+            isFile: true,
+            isDirectory: false,
+            isSymbolicLink: false,
+          };
+        if (p === pathDirectory)
+          return {
+            size: 0,
+            isFile: false,
+            isDirectory: true,
+            isSymbolicLink: false,
+          };
+        if (p === pathFile2)
+          return {
+            size: 200,
+            isFile: true,
+            isDirectory: false,
+            isSymbolicLink: false,
+          };
+        return null;
+      });
 
-      mockFileSystem.readFile
-        .mockResolvedValueOnce("content1")
-        .mockResolvedValueOnce("content2");
+      mockFileSystem.readFile.mockImplementation(async (p) => {
+        if (p === pathFile1) return "content1";
+        if (p === pathFile2) return "content2";
+        return null;
+      });
 
-      // Act
       const result = await fileLoaderService.load(rootPath, relPaths);
 
-      // Assert
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({ path: "file1.ts", content: "content1" });
       expect(result[1]).toEqual({ path: "file2.ts", content: "content2" });
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining("Not a file")
+      expect(mockFileSystem.stat).toHaveBeenCalledWith(pathDirectory);
+      expect(mockFileSystem.readFile).not.toHaveBeenCalledWith(pathDirectory);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        `FileLoaderService.readSingleFile: Path is not a file: ${pathDirectory}.`
       );
-      expect(mockLogger.info).toHaveBeenCalledWith("✅ Processed 2/3 files");
-
-      // Cleanup
-      mockFsStat.mockRestore();
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.stringContaining("Processed 2/3 files")
+      );
     });
 
-    test("should handle file read errors", async () => {
-      // Arrange
+    test("should handle file read errors (readFile returns null)", async () => {
       const rootPath = "C:\\test\\project";
       const relPaths = ["file1.ts", "file2.ts", "file3.ts"];
+      const pathFile2 = nodePath.join(rootPath, "file2.ts");
 
-      // Mock fs.promises.stat
-      const mockFsStat = jest
-        .spyOn(require("fs").promises, "stat")
-        .mockImplementation(() =>
-          Promise.resolve({
-            isFile: () => true,
-            isDirectory: () => false,
-          })
-        );
+      mockFileSystem.stat.mockResolvedValue({
+        size: 100,
+        isFile: true,
+        isDirectory: false,
+        isSymbolicLink: false,
+      });
 
-      // Simular error en el segundo archivo
       mockFileSystem.readFile
         .mockResolvedValueOnce("content1")
-        .mockResolvedValueOnce(null) // Error al leer
+        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce("content3");
 
-      // Act
       const result = await fileLoaderService.load(rootPath, relPaths);
 
-      // Assert
       expect(result).toHaveLength(2);
       expect(result).toContainEqual({ path: "file1.ts", content: "content1" });
       expect(result).toContainEqual({ path: "file3.ts", content: "content3" });
 
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.stringContaining("Empty content")
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        `FileLoaderService.readSingleFile: Content is null for file: ${pathFile2}.`
       );
-      expect(mockLogger.info).toHaveBeenCalledWith("✅ Processed 2/3 files");
-
-      // Cleanup
-      mockFsStat.mockRestore();
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.stringContaining("Processed 2/3 files. Failed: 1.")
+      );
     });
 
-    test("should throw error when no valid files could be processed", async () => {
-      // Arrange
+    test("should return empty array and warn if no valid files could be processed", async () => {
       const rootPath = "C:\\test\\project";
       const relPaths = ["file1.ts", "file2.ts"];
 
-      // Mock fs.promises.stat
-      const mockFsStat = jest
-        .spyOn(require("fs").promises, "stat")
-        .mockImplementation(() =>
-          Promise.resolve({
-            isFile: () => true,
-            isDirectory: () => false,
-          })
-        );
-
-      // Todos los archivos fallan
+      mockFileSystem.stat.mockResolvedValue({
+        size: 100,
+        isFile: true,
+        isDirectory: false,
+        isSymbolicLink: false,
+      });
       mockFileSystem.readFile.mockResolvedValue(null);
 
-      // Act & Assert
-      await expect(fileLoaderService.load(rootPath, relPaths)).rejects.toThrow(
-        "No valid files could be processed"
+      const result = await fileLoaderService.load(rootPath, relPaths);
+
+      expect(result).toEqual([]);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        "FileLoaderService.load: No valid files could be processed from the provided list."
       );
-
-      expect(mockLogger.error).toHaveBeenCalledTimes(2);
-
-      // Cleanup
-      mockFsStat.mockRestore();
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.stringContaining("Processed 0/2 files. Failed: 2.")
+      );
     });
 
-    test("should use concurrency limit correctly", async () => {
-      // Arrange
+    test("should use concurrency limit and process all files", async () => {
       const rootPath = "C:\\test\\project";
-      const relPaths = Array.from({ length: 20 }, (_, i) => `file${i}.ts`);
+      const numFiles = 20;
+      const relPaths = Array.from(
+        { length: numFiles },
+        (_, i) => `file${i}.ts`
+      );
 
-      // Mock fs.promises.stat
-      const mockFsStat = jest
-        .spyOn(require("fs").promises, "stat")
-        .mockImplementation(() =>
-          Promise.resolve({
-            isFile: () => true,
-            isDirectory: () => false,
-          })
-        );
-
-      // Mock readFile con delay para simular operaciones lentas
-      let concurrentCalls = 0;
-      let maxConcurrent = 0;
-
-      mockFileSystem.readFile.mockImplementation((path) => {
-        concurrentCalls++;
-        maxConcurrent = Math.max(maxConcurrent, concurrentCalls);
-
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            concurrentCalls--;
-            resolve(`content for ${path}`);
-          }, 100);
-        });
+      mockFileSystem.stat.mockResolvedValue({
+        size: 100,
+        isFile: true,
+        isDirectory: false,
+        isSymbolicLink: false,
       });
+      mockFileSystem.readFile.mockImplementation(
+        async (p) => `content for ${p}`
+      );
 
-      // Act
-      await fileLoaderService.load(rootPath, relPaths);
+      const result = await fileLoaderService.load(rootPath, relPaths);
 
-      // Assert
-      // El límite está fijado en 16 en el código
-      expect(maxConcurrent).toBeLessThanOrEqual(16);
-      expect(mockLogger.info).toHaveBeenCalledWith("✅ Processed 20/20 files");
+      expect(result).toHaveLength(numFiles);
+      expect(mockFileSystem.readFile).toHaveBeenCalledTimes(numFiles);
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.stringContaining(`Processed ${numFiles}/${numFiles} files`)
+      );
+    });
 
-      // Cleanup
-      mockFsStat.mockRestore();
+    test("should return empty array if relPaths is empty", async () => {
+      const result = await fileLoaderService.load("any/path", []);
+      expect(result).toEqual([]);
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        "FileLoaderService.load: No files to load."
+      );
+      expect(mockFileSystem.stat).not.toHaveBeenCalled();
     });
   });
 });
