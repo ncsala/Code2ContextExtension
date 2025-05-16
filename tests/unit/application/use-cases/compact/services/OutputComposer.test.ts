@@ -1,23 +1,29 @@
-// tests/unit/application/use-cases/compact/services/OutputComposer.test.ts
 import { OutputComposer } from "../../../../../../src/application/use-cases/compact/services/OutputComposer";
 import { FileEntry } from "../../../../../../src/domain/model/FileEntry";
 import { ProgressReporter } from "../../../../../../src/application/ports/driven/ProgressReporter";
 import { CompactOptions } from "../../../../../../src/application/ports/driving/CompactOptions";
-import * as fs from "fs";
-
-// Mock fs
-jest.mock("fs", () => ({
-  ...jest.requireActual("fs"),
-  createWriteStream: jest.fn(),
-  promises: {
-    readFile: jest.fn(),
-  },
-}));
+import { FileSystemPort } from "../../../../../../src/application/ports/driven/FileSystemPort";
+import {
+  getPrompt,
+  PROMPT_PRESETS,
+} from "../../../../../../src/shared/prompts/proPromptPresets";
 
 describe("OutputComposer", () => {
   let outputComposer: OutputComposer;
   let mockLogger: jest.Mocked<ProgressReporter>;
-  let mockWriteStream: any;
+  let mockFsPort: jest.Mocked<FileSystemPort>;
+
+  const baseTestOptions: Omit<
+    CompactOptions,
+    "outputPath" | "includeTree" | "minifyContent" | "promptPreset"
+  > = {
+    rootPath: "C:\\test\\project",
+    customIgnorePatterns: [],
+    includeDefaultPatterns: true,
+    includeGitIgnore: true,
+    selectionMode: "directory",
+    verboseLogging: false,
+  };
 
   beforeEach(() => {
     mockLogger = {
@@ -29,141 +35,224 @@ describe("OutputComposer", () => {
       debug: jest.fn(),
     };
 
-    mockWriteStream = {
-      write: jest.fn((_chunk, cb) => {
-        cb?.();
-        return true;
-      }),
-      end: jest.fn((cb) => cb?.()),
+    mockFsPort = {
+      readFile: jest.fn(),
+      writeFile: jest.fn(),
+      exists: jest.fn(),
+      stat: jest.fn(),
+      getDirectoryTree: jest.fn(),
+      getFiles: jest.fn(),
+      listDirectoryEntries: jest.fn(),
     };
 
-    (fs.createWriteStream as jest.Mock).mockReturnValue(mockWriteStream);
-
-    outputComposer = new OutputComposer(mockLogger);
+    outputComposer = new OutputComposer(mockLogger, mockFsPort);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
+  const getExpectedConventions = (
+    includeTree: boolean,
+    minifyContent: boolean
+  ): string => {
+    let header = "// Conventions used in this document:\n";
+    if (includeTree) {
+      header += "// @Tree: project directory structure.\n";
+    }
+    header += "// @Index: table of contents with all the files included.\n";
+    header += `// @F: file index | path | ${
+      minifyContent ? "minified" : "original"
+    } content.\n\n`;
+    return header;
+  };
+
   describe("compose method", () => {
     test("should compose in memory mode when no outputPath", async () => {
-      // Arrange
       const files: FileEntry[] = [
         { path: "file1.ts", content: "content1" },
         { path: "file2.ts", content: "content2" },
       ];
-      const treeText = "@Tree:\nmock tree\n";
+      const treeText = "mock tree";
       const options: CompactOptions = {
-        rootPath: "C:\\test\\project",
-        outputPath: "", // No outputPath = memory mode
-        customIgnorePatterns: [],
-        includeDefaultPatterns: true,
-        includeGitIgnore: true,
+        ...baseTestOptions,
+        outputPath: "",
         includeTree: true,
         minifyContent: false,
         promptPreset: "none",
-        selectionMode: "directory",
       };
 
-      // Act
       const result = await outputComposer.compose(files, treeText, options);
-
-      // Assert
-      expect(result).toContain("@Tree:");
-      expect(result).toContain("@Index:");
-      expect(result).toContain("@F:|1|file1.ts|content1");
-      expect(result).toContain("@F:|2|file2.ts|content2");
-      expect(mockLogger.startOperation).toHaveBeenCalledWith("composeOutput");
-      expect(mockLogger.endOperation).toHaveBeenCalledWith("composeOutput");
-      expect(fs.createWriteStream).not.toHaveBeenCalled();
+      const expectedConventions = getExpectedConventions(
+        options.includeTree,
+        options.minifyContent
+      );
+      const expectedOutput = `${expectedConventions}@Tree:\n${treeText}\n\n@Index:\n1|file1.ts\n2|file2.ts\n\n@F:|1|file1.ts|content1\n@F:|2|file2.ts|content2\n`;
+      expect(result).toBe(expectedOutput);
+      expect(mockFsPort.writeFile).not.toHaveBeenCalled();
     });
 
-    test("should compose in stream mode when outputPath exists", async () => {
-      // Arrange
+    test("should call fsPort.writeFile when outputPath exists", async () => {
       const files: FileEntry[] = [{ path: "file1.ts", content: "content1" }];
       const treeText = "";
       const options: CompactOptions = {
-        rootPath: "C:\\test\\project",
-        outputPath: "output.txt", // With outputPath = stream mode
-        customIgnorePatterns: [],
-        includeDefaultPatterns: true,
-        includeGitIgnore: true,
+        ...baseTestOptions,
+        outputPath: "output.txt",
         includeTree: false,
         minifyContent: false,
         promptPreset: "none",
-        selectionMode: "directory",
       };
+      mockFsPort.writeFile.mockResolvedValue(true);
 
-      // Mock fs.promises.readFile for reading the file back
-      (fs.promises.readFile as jest.Mock).mockResolvedValue(
-        "mocked file content"
+      const expectedConventions = getExpectedConventions(
+        options.includeTree,
+        options.minifyContent
       );
-
-      // Act
+      const expectedContent = `${expectedConventions}@Index:\n1|file1.ts\n\n@F:|1|file1.ts|content1\n`;
       const result = await outputComposer.compose(files, treeText, options);
 
-      // Assert
-      expect(fs.createWriteStream).toHaveBeenCalledWith("output.txt", "utf8");
-      expect(mockWriteStream.write).toHaveBeenCalled();
-      expect(mockWriteStream.end).toHaveBeenCalled();
-      expect(mockLogger.info).toHaveBeenCalledWith("💾 Written to: output.txt");
-      expect(result).toBe("mocked file content");
+      expect(mockFsPort.writeFile).toHaveBeenCalledWith(
+        options.outputPath,
+        expectedContent
+      );
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        `OutputComposer.compose: Successfully written to ${options.outputPath}`
+      );
+      expect(result).toBe(expectedContent);
     });
 
-    test("should handle minification", async () => {
-      // Arrange
+    test("should handle minification correctly in composed output", async () => {
       const files: FileEntry[] = [
         {
           path: "file1.ts",
           content: "function test() {\n  console.log('hello');\n}",
         },
       ];
-      const treeText = "";
+      const treeText = "min_tree";
       const options: CompactOptions = {
-        rootPath: "C:\\test\\project",
+        ...baseTestOptions,
         outputPath: "",
-        customIgnorePatterns: [],
-        includeDefaultPatterns: true,
-        includeGitIgnore: true,
-        includeTree: false,
-        minifyContent: true, // Enable minification
+        includeTree: true,
+        minifyContent: true,
         promptPreset: "none",
-        selectionMode: "directory",
       };
-
-      // Act
+      const minifiedFileContent = "function test() { console.log('hello'); }";
+      const expectedConventions = getExpectedConventions(
+        options.includeTree,
+        options.minifyContent
+      );
+      const expectedOutput = `${expectedConventions}@Tree:\n${treeText}\n\n@Index:\n1|file1.ts\n\n@F:|1|file1.ts|${minifiedFileContent}\n`;
       const result = await outputComposer.compose(files, treeText, options);
-
-      // Assert
-      expect(result).toContain("function test() { console.log('hello'); }");
-      expect(result).not.toContain("\n  console.log('hello');");
+      expect(result).toBe(expectedOutput);
     });
 
-    test("should include prompt preset", async () => {
-      // Arrange
+    test("should include prompt preset in composed output", async () => {
       const files: FileEntry[] = [{ path: "file1.ts", content: "content1" }];
-      const treeText = "";
+      const treeText = "tree_with_prompt";
       const options: CompactOptions = {
-        rootPath: "C:\\test\\project",
+        ...baseTestOptions,
         outputPath: "",
-        customIgnorePatterns: [],
-        includeDefaultPatterns: true,
-        includeGitIgnore: true,
-        includeTree: false,
+        includeTree: true,
         minifyContent: false,
-        promptPreset: "deepContextV1", // Include prompt preset
-        selectionMode: "directory",
+        promptPreset: "deepContextV1",
       };
 
-      // Act
+      const promptTextResult = getPrompt(
+        options.promptPreset as keyof typeof PROMPT_PRESETS
+      );
+      const expectedConventions = getExpectedConventions(
+        options.includeTree,
+        options.minifyContent
+      );
+      const expectedOutput = `${promptTextResult}${expectedConventions}@Tree:\n${treeText}\n\n@Index:\n1|file1.ts\n\n@F:|1|file1.ts|content1\n`;
       const result = await outputComposer.compose(files, treeText, options);
+      expect(result).toBe(expectedOutput);
+    });
 
-      // Assert - Buscamos partes del texto que no tengan caracteres especiales
-      expect(result).toContain("expert full‑stack engineer");
-      expect(result).toContain("@Index");
-      expect(result).toContain("@F");
-      expect(result).toContain("CONTEXT");
+    test("should produce correct output with multiple files", async () => {
+      const files: FileEntry[] = [
+        { path: "file1.ts", content: "content1" },
+        { path: "file2.js", content: "content2" },
+      ];
+      const treeText = "project_tree";
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: true,
+        minifyContent: false,
+        promptPreset: "none",
+      };
+
+      const result = await outputComposer.compose(files, treeText, options);
+      const expectedConventions = getExpectedConventions(
+        options.includeTree,
+        options.minifyContent
+      );
+      const expectedOutput = `${expectedConventions}@Tree:\nproject_tree\n\n@Index:\n1|file1.ts\n2|file2.js\n\n@F:|1|file1.ts|content1\n@F:|2|file2.js|content2\n`;
+      expect(result).toBe(expectedOutput);
+    });
+
+    test("should produce correct output when no files are provided", async () => {
+      const files: FileEntry[] = [];
+      const treeText = "empty_project_tree";
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: true,
+        minifyContent: false,
+        promptPreset: "none",
+      };
+
+      const result = await outputComposer.compose(files, treeText, options);
+      const expectedConventions = getExpectedConventions(
+        options.includeTree,
+        options.minifyContent
+      );
+      const expectedOutput = `${expectedConventions}@Tree:\nempty_project_tree\n\n@Index:\n\n`;
+      expect(result).toBe(expectedOutput);
+    });
+
+    test("should produce correct output when tree is not included", async () => {
+      const files: FileEntry[] = [
+        { path: "no_tree_file.ts", content: "no_tree_content" },
+      ];
+      const treeText = "some_tree_text_that_should_be_ignored";
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: false,
+        minifyContent: false,
+        promptPreset: "none",
+      };
+
+      const result = await outputComposer.compose(files, treeText, options);
+      const expectedConventions = getExpectedConventions(
+        options.includeTree,
+        options.minifyContent
+      );
+      const expectedOutput = `${expectedConventions}@Index:\n1|no_tree_file.ts\n\n@F:|1|no_tree_file.ts|no_tree_content\n`;
+      expect(result).toBe(expectedOutput);
+      expect(result).not.toContain("@Tree:");
+      expect(result).not.toContain(treeText);
+    });
+
+    test("should handle empty treeText correctly when includeTree is true", async () => {
+      const files: FileEntry[] = [{ path: "file.ts", content: "data" }];
+      const treeText = ""; // Árbol vacío
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: true,
+        minifyContent: false,
+        promptPreset: "none",
+      };
+      const result = await outputComposer.compose(files, treeText, options);
+      const expectedConventions = getExpectedConventions(
+        options.includeTree,
+        options.minifyContent
+      );
+      const expectedOutput = `${expectedConventions}@Index:\n1|file.ts\n\n@F:|1|file.ts|data\n`;
+      expect(result).toBe(expectedOutput);
     });
   });
 });

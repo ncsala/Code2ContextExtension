@@ -4,12 +4,13 @@ import { CompactResult } from "../../ports/driving/CompactResult";
 import { FileSystemPort } from "../../ports/driven/FileSystemPort";
 import { GitPort } from "../../ports/driven/GitPort";
 import { ProgressReporter } from "../../ports/driven/ProgressReporter";
-import { ConsoleProgressReporter } from "../../../infrastructure/reporting/ConsoleProgressReporter";
+import { ConsoleProgressReporter } from "../../../adapters/secondary/reporting/ConsoleProgressReporter";
 import { FileFilter } from "../../services/filter/FileFilter";
 import { FileLoaderService } from "./services/FileLoaderService";
 import { OutputComposer } from "./services/OutputComposer";
 import { TreeService } from "./services/TreeService";
 import { DefaultTreeGeneratorFactory } from "../../services/tree/TreeGeneratorFactory";
+import ignore from "ignore";
 
 export class CompactProject implements CompactUseCase {
   private readonly logger: ProgressReporter;
@@ -19,65 +20,121 @@ export class CompactProject implements CompactUseCase {
   private readonly composer: OutputComposer;
 
   constructor(
-    private readonly fs: FileSystemPort,
-    private readonly git: GitPort,
+    private readonly fsPort: FileSystemPort,
+    private readonly gitPort: GitPort,
     logger?: ProgressReporter
   ) {
-    this.logger = logger ?? new ConsoleProgressReporter();
-    const factory = new DefaultTreeGeneratorFactory();
-    this.treeSvc = new TreeService(this.logger, factory);
-    this.loader = new FileLoaderService(this.fs, this.logger);
-    this.composer = new OutputComposer(this.logger);
+    this.logger = logger ?? new ConsoleProgressReporter(false, false);
+
+    const treeGeneratorFactory = new DefaultTreeGeneratorFactory(this.fsPort);
+    this.treeSvc = new TreeService(this.logger, treeGeneratorFactory);
+
+    this.loader = new FileLoaderService(this.fsPort, this.logger);
+    this.composer = new OutputComposer(this.logger, this.fsPort);
   }
 
-  // ────────── ENTRYPOINT ──────────
-  async execute(opts: CompactOptions): Promise<CompactResult> {
+  async execute(options: CompactOptions): Promise<CompactResult> {
     this.logger.startOperation("CompactProject.execute");
-    this.logger.info(`🚀 Compacting project: ${opts.rootPath}`);
+    this.logger.info(`🚀 Compacting project: ${options.rootPath}`);
 
     try {
-      // validar carpeta
-      if (!(await this.fs.exists(opts.rootPath)))
-        throw new Error(`Root path does not exist: ${opts.rootPath}`);
+      if (!(await this.fsPort.exists(options.rootPath))) {
+        const errorMsg = `Root path does not exist or is not accessible: ${options.rootPath}`;
+        this.logger.error(errorMsg);
+        this.logger.endOperation("CompactProject.execute");
+        return { ok: false, error: errorMsg };
+      }
 
-      // build ignore list
-      const ignorePatterns = await this.buildIgnorePatterns(opts);
+      const ignorePatternsList = await this.buildIgnorePatterns(options);
+      const ignoreHandler = ignore().add(ignorePatternsList);
 
-      // árbol & paths
       const { treeText, validFilePaths } = await this.treeSvc.buildTree(
         {
-          rootPath: opts.rootPath,
-          selectionMode: opts.selectionMode,
-          specificFiles: opts.specificFiles,
+          rootPath: options.rootPath,
+          selectionMode: options.selectionMode,
+          specificFiles: options.specificFiles,
         },
-        ignorePatterns
+        ignoreHandler
       );
 
-      this.logger.info(`📑 Files to process: ${validFilePaths.length}`);
+      if (validFilePaths.length === 0) {
+        this.logger.info(
+          "CompactProject: No files to include in the context after tree processing and filtering."
+        );
+        const emptyContextContent = await this.composer.compose(
+          [],
+          treeText,
+          options
+        );
+        this.logger.endOperation("CompactProject.execute");
+        return { ok: true, content: emptyContextContent };
+      }
 
-      // cargar archivos
-      const files = await this.loader.load(opts.rootPath, validFilePaths);
+      this.logger.info(
+        `CompactProject: Initial valid file paths from tree: ${validFilePaths.length}`
+      );
 
-      // componer salida
-      const combined = await this.composer.compose(files, treeText, opts);
+      const loadedFiles = await this.loader.load(
+        options.rootPath,
+        validFilePaths
+      );
 
-      this.logger.info("🎉 Compact completed successfully");
+      if (loadedFiles.length === 0 && validFilePaths.length > 0) {
+        this.logger.warn(
+          "CompactProject: All initially valid files failed to load. Proceeding with empty file set."
+        );
+      }
+      this.logger.info(
+        `CompactProject: Successfully loaded ${loadedFiles.length} files.`
+      );
+
+      const combinedOutput = await this.composer.compose(
+        loadedFiles,
+        treeText,
+        options
+      );
+
+      this.logger.info("🎉 CompactProject: Compact completed successfully.");
       this.logger.endOperation("CompactProject.execute");
-      return { ok: true, content: combined };
+      return { ok: true, content: combinedOutput };
     } catch (err: any) {
-      this.logger.error(`❌ Compact failed: ${err.message}`, err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `❌ CompactProject: Compact failed: ${errorMessage}`,
+        err instanceof Error ? err.stack : undefined
+      );
       this.logger.endOperation("CompactProject.execute");
-      return { ok: false, error: err.message };
+      return { ok: false, error: errorMessage };
     }
   }
 
-  private async buildIgnorePatterns(opts: CompactOptions): Promise<string[]> {
-    const base = opts.includeDefaultPatterns
-      ? this.fileFilter.getDefaultIgnorePatterns()
-      : [];
-    const git = opts.includeGitIgnore
-      ? await this.git.getIgnorePatterns(opts.rootPath)
-      : [];
-    return [...base, ...git, ...(opts.customIgnorePatterns ?? [])];
+  private async buildIgnorePatterns(
+    options: CompactOptions
+  ): Promise<string[]> {
+    const patterns: string[] = [];
+    if (options.includeDefaultPatterns) {
+      patterns.push(...this.fileFilter.getDefaultIgnorePatterns());
+    }
+    if (options.includeGitIgnore && options.rootPath) {
+      try {
+        const gitignorePatterns = await this.gitPort.getIgnorePatterns(
+          options.rootPath
+        );
+        patterns.push(...gitignorePatterns);
+      } catch (error) {
+        this.logger.warn(
+          `Could not load .gitignore patterns from ${options.rootPath}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    }
+    if (
+      options.customIgnorePatterns &&
+      options.customIgnorePatterns.length > 0
+    ) {
+      patterns.push(...options.customIgnorePatterns);
+    }
+    return patterns;
   }
 }

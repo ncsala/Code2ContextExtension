@@ -1,4 +1,4 @@
-import { ProgressReporter } from "../../application/ports/driven/ProgressReporter";
+import { ProgressReporter } from "../../../application/ports/driven/ProgressReporter";
 
 /**
  * Implementación de ProgressReporter que usa console y puede añadir prefijos de nivel.

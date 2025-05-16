@@ -3,6 +3,8 @@ import { ProgressReporter } from "../../../../../../src/application/ports/driven
 import { TreeGeneratorFactory } from "../../../../../../src/application/services/tree/TreeGeneratorFactory";
 import { TreeGenerator } from "../../../../../../src/application/services/tree/TreeGenerator";
 import { FileTree } from "../../../../../../src/domain/model/FileTree";
+import ignore = require("ignore");
+type IgnoreHandler = ignore.Ignore;
 
 describe("TreeService", () => {
   let treeService: TreeService;
@@ -32,15 +34,19 @@ describe("TreeService", () => {
     treeService = new TreeService(mockLogger, mockFactory);
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe("buildTree method", () => {
     test("should build tree in directory mode", async () => {
-      // Arrange
       const options = {
         rootPath: "C:\\test\\project",
         selectionMode: "directory" as const,
         specificFiles: [],
       };
       const ignorePatterns = [".git", "node_modules"];
+      const currentIgnoreHandler: IgnoreHandler = ignore().add(ignorePatterns);
 
       const mockFileTree: FileTree = {
         path: "",
@@ -51,33 +57,39 @@ describe("TreeService", () => {
           { path: "file2.ts", name: "file2.ts", isDirectory: false },
         ],
       };
-
       mockGenerator.generatePrunedTreeText.mockResolvedValue({
         treeText: "Mock tree text",
         fileTree: mockFileTree,
         truncatedPaths: new Set(),
       });
+      mockGenerator.isInsideTruncatedDir.mockReturnValue(false);
 
-      // Act
-      const result = await treeService.buildTree(options, ignorePatterns);
+      const result = await treeService.buildTree(options, currentIgnoreHandler);
 
-      // Assert
-      expect(mockFactory.make).toHaveBeenCalledWith("directory");
-      expect(mockGenerator.generatePrunedTreeText).toHaveBeenCalled();
+      expect(mockFactory.make).toHaveBeenCalledWith(options.selectionMode);
+      expect(mockGenerator.generatePrunedTreeText).toHaveBeenCalledWith(
+        options.rootPath,
+        currentIgnoreHandler,
+        []
+      );
       expect(result.treeText).toBe("Mock tree text");
       expect(result.validFilePaths).toEqual(["file1.ts", "file2.ts"]);
-      expect(mockLogger.startOperation).toHaveBeenCalledWith("generateTree");
-      expect(mockLogger.endOperation).toHaveBeenCalledWith("generateTree");
+      expect(mockLogger.startOperation).toHaveBeenCalledWith(
+        "TreeService.buildTree"
+      );
+      expect(mockLogger.endOperation).toHaveBeenCalledWith(
+        "TreeService.buildTree"
+      );
     });
 
     test("should build tree in files mode with specific files", async () => {
-      // Arrange
       const options = {
         rootPath: "C:\\test\\project",
         selectionMode: "files" as const,
         specificFiles: ["src/file1.ts", "src/file2.ts"],
       };
-      const ignorePatterns: string[] = []; // Especifica el tipo explícitamente
+      const ignorePatterns: string[] = [];
+      const currentIgnoreHandler: IgnoreHandler = ignore().add(ignorePatterns);
 
       const mockFileTree: FileTree = {
         path: "",
@@ -88,34 +100,32 @@ describe("TreeService", () => {
           { path: "src/file2.ts", name: "file2.ts", isDirectory: false },
         ],
       };
-
       mockGenerator.generatePrunedTreeText.mockResolvedValue({
         treeText: "Mock tree text",
         fileTree: mockFileTree,
         truncatedPaths: new Set(),
       });
+      mockGenerator.isInsideTruncatedDir.mockReturnValue(false);
 
-      // Act
-      const result = await treeService.buildTree(options, ignorePatterns);
+      const result = await treeService.buildTree(options, currentIgnoreHandler);
 
-      // Assert
-      expect(mockFactory.make).toHaveBeenCalledWith("files");
+      expect(mockFactory.make).toHaveBeenCalledWith(options.selectionMode);
       expect(mockGenerator.generatePrunedTreeText).toHaveBeenCalledWith(
         options.rootPath,
-        expect.any(Object),
-        ["src/file1.ts", "src/file2.ts"]
+        currentIgnoreHandler,
+        options.specificFiles.map((p) => p.replace(/\\/g, "/"))
       );
       expect(result.validFilePaths).toEqual(["src/file1.ts", "src/file2.ts"]);
     });
 
     test("should filter out files in truncated directories", async () => {
-      // Arrange
       const options = {
         rootPath: "C:\\test\\project",
         selectionMode: "directory" as const,
         specificFiles: [],
       };
-      const ignorePatterns: string[] = []; // Especifica el tipo explícitamente
+      const ignorePatterns: string[] = [];
+      const currentIgnoreHandler: IgnoreHandler = ignore().add(ignorePatterns);
 
       const mockFileTree: FileTree = {
         path: "",
@@ -123,6 +133,11 @@ describe("TreeService", () => {
         isDirectory: true,
         children: [
           { path: "file1.ts", name: "file1.ts", isDirectory: false },
+          {
+            path: "dir_not_truncated/file_in_dir.ts",
+            name: "file_in_dir.ts",
+            isDirectory: false,
+          },
           { path: "truncated/file2.ts", name: "file2.ts", isDirectory: false },
           {
             path: "truncated/subfolder/file3.ts",
@@ -132,54 +147,63 @@ describe("TreeService", () => {
         ],
       };
 
+      const truncatedDirsSet = new Set(["truncated"]);
+
       mockGenerator.generatePrunedTreeText.mockResolvedValue({
         treeText: "Mock tree text",
         fileTree: mockFileTree,
-        truncatedPaths: new Set(["truncated"]),
+        truncatedPaths: truncatedDirsSet,
       });
 
-      // Mock isInsideTruncatedDir to return true for files in truncated directory
-      mockGenerator.isInsideTruncatedDir.mockImplementation((filePath) =>
-        filePath.startsWith("truncated/")
+      mockGenerator.isInsideTruncatedDir.mockImplementation(
+        (filePath: string, tPaths: Set<string>) => {
+          const normalizedFilePath = filePath.replace(/\\/g, "/");
+          let isInside = false;
+          tPaths.forEach((truncatedDir) => {
+            if (isInside) return;
+            if (
+              normalizedFilePath === truncatedDir ||
+              normalizedFilePath.startsWith(`${truncatedDir}/`)
+            ) {
+              isInside = true;
+            }
+          });
+          return isInside;
+        }
       );
 
-      // Act
-      const result = await treeService.buildTree(options, ignorePatterns);
+      const result = await treeService.buildTree(options, currentIgnoreHandler);
 
-      // Assert
-      expect(result.validFilePaths).toEqual(["file1.ts"]);
-      expect(result.validFilePaths).not.toContain("truncated/file2.ts");
-      expect(result.validFilePaths).not.toContain(
-        "truncated/subfolder/file3.ts"
-      );
+      expect(result.validFilePaths).toEqual([
+        "file1.ts",
+        "dir_not_truncated/file_in_dir.ts",
+      ]);
     });
 
     test("should handle empty tree", async () => {
-      // Arrange
       const options = {
         rootPath: "C:\\test\\project",
         selectionMode: "directory" as const,
         specificFiles: [],
       };
-      const ignorePatterns: string[] = []; // Especifica el tipo explícitamente
+      const ignorePatterns: string[] = [];
+      const currentIgnoreHandler: IgnoreHandler = ignore().add(ignorePatterns);
 
       const mockFileTree: FileTree = {
         path: "",
         name: "project",
         isDirectory: true,
-        children: [], // Empty tree
+        children: [],
       };
-
       mockGenerator.generatePrunedTreeText.mockResolvedValue({
         treeText: "",
         fileTree: mockFileTree,
         truncatedPaths: new Set(),
       });
+      mockGenerator.isInsideTruncatedDir.mockReturnValue(false);
 
-      // Act
-      const result = await treeService.buildTree(options, ignorePatterns);
+      const result = await treeService.buildTree(options, currentIgnoreHandler);
 
-      // Assert
       expect(result.validFilePaths).toEqual([]);
       expect(result.treeText).toBe("");
     });

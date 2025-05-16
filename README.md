@@ -144,7 +144,7 @@ By contributing to Code2Context, you agree that your contributions will be licen
 
 ## 👏 Acknowledgments
 
-Built with ❤️ by [Nicolas Caceres Sala](https://github.com/ncsala)
+Built with ❤️ by [Nicolas Caceres Sala](https://www.linkedin.com/in/nicolas-caceres-sala/)
 
 ---
 
