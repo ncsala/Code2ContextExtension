@@ -31,3 +31,7 @@ export function sendChangeSelectionMode(mode: "directory" | "files"): void {
 export function sendCompact(payload: CompactOptions): void {
   postMessage({ command: "compact", payload });
 }
+
+export function sendExtractProject(): void {
+  postMessage({ command: "extractProject" });
+}

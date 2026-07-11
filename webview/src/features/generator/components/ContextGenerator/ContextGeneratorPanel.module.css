@@ -169,3 +169,28 @@
   margin: 0;
   color: #ef4444;
 }
+
+.toolsSection {
+  margin-top: 24px;
+  border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
+  padding-top: 16px;
+}
+
+.sectionTitle {
+  font-size: 1.1rem;
+  font-weight: 500;
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: var(--vscode-foreground);
+}
+
+.toolButton {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: var(--vscode-button-secondaryBackground, #5f5f5f);
+  color: var(--vscode-button-secondaryForeground, white);
+}
+
+.toolButton:hover:not(:disabled) {
+  background-color: var(--vscode-button-secondaryHoverBackground, #4f4f4f);
+}

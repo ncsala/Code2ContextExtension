@@ -8,6 +8,7 @@ import { useDebugOutputManager } from "./hooks/useDebugOutputManager";
 import {
   sendShowOptions,
   sendOpenNativeFileExplorer,
+  sendExtractProject,
 } from "../shared/utils/messageBuilders";
 
 // Inicializar la API de VSCode
@@ -42,6 +43,10 @@ const App: React.FC = () => {
     sendOpenNativeFileExplorer();
   };
 
+  const handleExtractProjectUI = () => {
+    sendExtractProject();
+  };
+
   return (
     <div className={styles.container}>
       <GeneratorPanel
@@ -54,6 +59,7 @@ const App: React.FC = () => {
         onGenerate={handleGenerateContext}
         onShowOptions={handleShowOptionsUI}
         onOpenFileExplorer={handleOpenFileExplorerUI}
+        onExtractProject={handleExtractProjectUI}
       />
       <DebugPanel debugOutput={debugOutput} onClear={clearDebugOutput} />
     </div>

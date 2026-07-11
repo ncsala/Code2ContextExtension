@@ -5,6 +5,23 @@ All notable changes to the **Code2Context** extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-06-07
+
+### ✨ Added
+
+- **Recreate Project from Context File**:
+  - Implemented a complete project reconstruction / extraction feature that recreates folders and files directly from a generated context file (`code-context.txt` or `proyect.txt`).
+  - Added a **"Recreate Project from Context File"** button in the Webview panel's "Utilities" section.
+  - Contributed a new VS Code command `Code2Context: Recreate Project from Context File` accessible via the Command Palette (`Ctrl+Shift+P`).
+  - Implemented automatic **path traversal security checks** to prevent unauthorized directory writes outside the target folder.
+  - Implemented robust **BOM and encoding detection** (supports UTF-8 with BOM, UTF-16 LE, UTF-16 BE, and UTF-8).
+  - Implemented on-the-fly **copy-paste character sanitization** that filters out invalid characters (`\uFFFD`, `\uFEFF`, `\u0000`) introduced by RDP/remote clipboard issues, ensuring clean output files.
+
+### ✏️ Changed
+
+- **Ignore Patterns**:
+  - Removed `"packages/**"` from the default `.NET` ignore patterns list, allowing users to include packages directory if needed.
+
 ## [0.2.2] - 2025-05-14
 
 ### ✏️ Changed in 0.2.2

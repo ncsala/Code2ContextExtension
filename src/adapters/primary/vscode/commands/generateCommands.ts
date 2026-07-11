@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { CompactUseCase } from "../../../../application/ports/driving/CompactUseCase";
+import { ExtractUseCase } from "../../../../application/ports/driving/ExtractUseCase";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import { NotificationPort } from "../../../../application/ports/driven/NotificationPort";
@@ -15,6 +16,7 @@ import { USER_MESSAGES } from "../constants/userMessages";
 export function registerGenerateCommands(
   context: vscode.ExtensionContext,
   useCase: CompactUseCase,
+  extractUseCase: ExtractUseCase,
   fileExplorerProvider: FileExplorerProvider,
   optionsViewProvider: OptionsViewProvider,
   currentOptions: Partial<CompactOptions>,
@@ -123,9 +125,8 @@ export function registerGenerateCommands(
       if (webviewProvider) {
         webviewProvider.setLoading(false);
       }
-      const errorMessage = `Error: ${
-        error instanceof Error ? error.message : String(error)
-      }`;
+      const errorMessage = `Error: ${error instanceof Error ? error.message : String(error)
+        }`;
       notificationService?.showError(
         USER_MESSAGES.ERRORS.CONTEXT_GENERATION(errorMessage)
       );
@@ -135,4 +136,100 @@ export function registerGenerateCommands(
   // Registrar comandos
   context.subscriptions.push(generateFromOptionsCommand);
   context.subscriptions.push(generateFromSelectionCommand);
+  // Comando para extraer/recrear proyecto desde un archivo de contexto
+  const extractProjectCommand = vscode.commands.registerCommand(
+    "code2context.extractProject",
+    async () => {
+      // 1. Mostrar diálogo para seleccionar archivo de contexto
+      const fileUris = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        openLabel: "Select Context File",
+        filters: {
+          "Text Files": ["txt", "md", "json", "js", "ts"],
+          "All Files": ["*"]
+        }
+      });
+
+      if (!fileUris || fileUris.length === 0) {
+        return;
+      }
+      const sourceFilePath = fileUris[0].fsPath;
+
+      // 2. Determinar ruta destino por defecto (current root path o workspace path)
+      const defaultTarget = optionsViewProvider.getOptions().rootPath ||
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!defaultTarget) {
+        notificationService?.showError(USER_MESSAGES.ERRORS.NO_WORKSPACE);
+        return;
+      }
+
+      // 3. Mostrar advertencia de sobreescritura y confirmación de ruta destino
+      const proceedOption = `Extract to current folder`;
+      const selectOtherOption = "Select target folder...";
+      const cancelOption = "Cancel";
+
+      const userChoice = await vscode.window.showWarningMessage(
+        `This will extract files from "${path.basename(sourceFilePath)}" and overwrite existing files in target folder. Target path: "${defaultTarget}"`,
+        proceedOption,
+        selectOtherOption,
+        cancelOption
+      );
+
+      let targetDirectoryPath = defaultTarget;
+      if (userChoice === selectOtherOption) {
+        const folderUris = await vscode.window.showOpenDialog({
+          canSelectFiles: false,
+          canSelectFolders: true,
+          canSelectMany: false,
+          openLabel: "Select Target Folder"
+        });
+        if (!folderUris || folderUris.length === 0) {
+          return;
+        }
+        targetDirectoryPath = folderUris[0].fsPath;
+      } else if (userChoice === cancelOption || !userChoice) {
+        return;
+      }
+
+      // 4. Ejecutar el caso de uso
+      if (webviewProvider) {
+        webviewProvider.setLoading(true);
+      }
+
+      try {
+        const result = await extractUseCase.execute({
+          sourceFilePath,
+          targetDirectoryPath
+        });
+
+        if (webviewProvider) {
+          webviewProvider.setLoading(false);
+        }
+
+        if (result.ok) {
+          let message = `Successfully extracted ${result.fileCount} files to "${targetDirectoryPath}".`;
+          if (result.isMinified) {
+            message += " WARNING: The source context file was minified, so the extracted files are also minified.";
+            notificationService?.showWarning(message);
+          } else {
+            notificationService?.showInformation(message);
+          }
+        } else {
+          notificationService?.showError(`Extraction failed: ${result.error}`);
+        }
+      } catch (err: any) {
+        if (webviewProvider) {
+          webviewProvider.setLoading(false);
+        }
+        notificationService?.showError(`Error during extraction: ${err.message || err}`);
+      }
+    }
+  );
+
+  // Registrar comandos
+  context.subscriptions.push(generateFromOptionsCommand);
+  context.subscriptions.push(generateFromSelectionCommand);
+  context.subscriptions.push(extractProjectCommand);
 }

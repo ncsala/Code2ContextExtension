@@ -49,6 +49,9 @@ export class WebviewActionHandler {
       case "compact":
         await this.handleCompact(message.payload);
         break;
+      case "extractProject":
+        await vscode.commands.executeCommand("code2context.extractProject");
+        break;
       case "selectDirectory":
         await this.handleSelectDirectory(message);
         break;
@@ -82,10 +85,9 @@ export class WebviewActionHandler {
       }
       default:
         this.logger.warn(
-          `Received unknown command from webview: ${
-            "command" in (message as Record<string, unknown>)
-              ? (message as Record<string, unknown>).command
-              : "unknown"
+          `Received unknown command from webview: ${"command" in (message as Record<string, unknown>)
+            ? (message as Record<string, unknown>).command
+            : "unknown"
           }`
         );
     }
@@ -201,8 +203,8 @@ export class WebviewActionHandler {
     const defaultUri = message.currentPath
       ? vscode.Uri.file(message.currentPath)
       : currentRoot
-      ? vscode.Uri.file(currentRoot)
-      : undefined;
+        ? vscode.Uri.file(currentRoot)
+        : undefined;
 
     const options: vscode.OpenDialogOptions = {
       canSelectFiles: false,

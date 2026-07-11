@@ -2,7 +2,7 @@
   "name": "code2context",
   "displayName": "Code2Context",
   "description": "Generate compact code context for AI",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -95,6 +95,11 @@
         "command": "code2context.selectDirectory",
         "title": "Select Directory and All Children",
         "icon": "$(folder-active)"
+      },
+      {
+        "command": "code2context.extractProject",
+        "title": "Code2Context: Recreate Project from Context File",
+        "icon": "$(file-zip)"
       }
     ],
     "viewsContainers": {

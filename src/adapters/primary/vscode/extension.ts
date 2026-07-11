@@ -62,6 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
         webviewProvider,
       },
       container.compactUseCase,
+      container.extractUseCase,
       logger,
       notificationService
     );

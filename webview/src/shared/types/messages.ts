@@ -36,6 +36,9 @@ export interface ChangeSelectionModeMessage extends WebviewToVSCodeMessage {
   command: "changeSelectionMode";
   mode: "directory" | "files";
 }
+export interface ExtractProjectMessage extends WebviewToVSCodeMessage {
+  command: "extractProject";
+}
 
 // Mensajes enviados desde VSCode al webview
 interface VSCodeToWebviewMessage {

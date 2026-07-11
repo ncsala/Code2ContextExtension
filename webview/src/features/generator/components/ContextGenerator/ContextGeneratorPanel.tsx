@@ -15,6 +15,7 @@ interface GeneratorPanelProps {
   onGenerate: () => void;
   onShowOptions: () => void;
   onOpenFileExplorer?: () => void;
+  onExtractProject: () => void;
 }
 
 const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
@@ -27,6 +28,7 @@ const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
   onGenerate,
   onShowOptions,
   onOpenFileExplorer,
+  onExtractProject,
 }) => {
   return (
     <div className={styles.panel}>
@@ -129,13 +131,27 @@ const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
         {UI_MESSAGES.NOTES.CONFIGURE_OPTIONS}
       </div>
 
+      {/* Utilities Section */}
+      <div className={styles.toolsSection}>
+        <h2 className={styles.sectionTitle}>Utilities</h2>
+        <button
+          onClick={onExtractProject}
+          disabled={loading}
+          className={`${styles.button} ${styles.toolButton}`}
+        >
+          Recreate Project from Context File
+        </button>
+      </div>
+
       {/* Error Message */}
-      {error && (
-        <div className={styles.error}>
-          <p>{error}</p>
-        </div>
-      )}
-    </div>
+      {
+        error && (
+          <div className={styles.error}>
+            <p>{error}</p>
+          </div>
+        )
+      }
+    </div >
   );
 };
 

@@ -105,6 +105,10 @@ export interface ReadyMessage extends WebviewToVSCodeMessage {
   command: "ready";
 }
 
+export interface ExtractProjectMessage extends WebviewToVSCodeMessage {
+  command: "extractProject";
+}
+
 export type WebviewToVSCodeMessageType =
   | CompactMessage
   | SelectDirectoryMessage
@@ -113,7 +117,8 @@ export type WebviewToVSCodeMessageType =
   | OpenNativeFileExplorerMessage
   | ShowOptionsMessage
   | ChangeSelectionModeMessage
-  | ReadyMessage;
+  | ReadyMessage
+  | ExtractProjectMessage;
 
 /**
  * Tipo para la API de VSCode

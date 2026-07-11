@@ -6,6 +6,8 @@ import { ProgressReporter } from "../../../../application/ports/driven/ProgressR
 import { ConsoleProgressReporter } from "../../../secondary/reporting/ConsoleProgressReporter";
 import { CompactOptions } from "../../../../application/ports/driving/CompactOptions";
 import { CompactUseCase } from "../../../../application/ports/driving/CompactUseCase";
+import { ExtractUseCase } from "../../../../application/ports/driving/ExtractUseCase";
+import { ExtractProject } from "../../../../application/use-cases/extract/ExtractProject";
 import { VSCodeNotificationService } from "../services/notificationService";
 import { VSCodeSelectionService } from "../services/selectionService";
 import { NotificationPort } from "../../../../application/ports/driven/NotificationPort";
@@ -17,6 +19,7 @@ export interface Container {
   logger: ProgressReporter;
   progressReporterForUseCase: ProgressReporter;
   compactUseCase: CompactUseCase;
+  extractUseCase: ExtractUseCase;
   defaultOptions: CompactOptions;
   currentOptions: CompactOptions;
   notificationService: NotificationPort;
@@ -58,12 +61,18 @@ export function createContainer(verboseLogging: boolean = false): Container {
     progressReporterForUseCase
   );
 
+  const extractUseCase = new ExtractProject(
+    fsAdapter,
+    progressReporterForUseCase
+  );
+
   return {
     fsAdapter,
     gitAdapter,
     logger,
     progressReporterForUseCase,
     compactUseCase,
+    extractUseCase,
     defaultOptions,
     currentOptions: { ...defaultOptions },
     notificationService,

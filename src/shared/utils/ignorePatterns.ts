@@ -124,7 +124,6 @@ const dotnet = [
   "*.userosscache",
   "*.sln.docstates",
   ".vs/**",
-  "packages/**",
 ];
 
 const golang = [

@@ -12,6 +12,7 @@ Code2Context is a Visual Studio Code extension that helps you quickly create com
 - **Customizable Ignores**: Support for .gitignore patterns and custom exclusions
 - **Language Prompts**: Built-in professional prompts for different AI tasks
 - **Large File Handling**: Gracefully manages projects of any size
+- **Recreate Project from Context**: Safely reconstructs directories and files back from a context file (supporting automatic UTF-8/UTF-16/BOM decoding and copy-paste character cleaning).
 
 ![Code2Context Main Panel](images/c2cImage.png)
 
@@ -32,6 +33,7 @@ Code2Context is a Visual Studio Code extension that helps you quickly create com
 | `Code2Context: Deselect All Files` | Clears current selection |
 | `Code2Context: Generate from Selection` | Creates context from selected files |
 | `Code2Context: Generate from Options` | Uses options panel configuration |
+| `Code2Context: Recreate Project from Context File` | Reconstructs directories and files from a context file |
 
 ## ⚙️ Configuration Options
 

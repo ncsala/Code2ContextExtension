@@ -19,7 +19,31 @@ const concurrencyLimit = pLimit(32);
 export class FsAdapter implements FileSystemPort {
   async readFile(filePath: string): Promise<string | null> {
     try {
-      return await fs.promises.readFile(filePath, "utf-8");
+      const buffer = await fs.promises.readFile(filePath);
+
+      // Detect UTF-16 LE BOM (FF FE)
+      if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xFE) {
+        return buffer.toString("utf16le");
+      }
+
+      // Detect UTF-16 BE BOM (FE FF)
+      if (buffer.length >= 2 && buffer[0] === 0xFE && buffer[1] === 0xFF) {
+        const swapped = Buffer.from(buffer);
+        swapped.swap16();
+        return swapped.toString("utf16le");
+      }
+
+      // Detect UTF-8 BOM (EF BB BF) and strip it
+      if (
+        buffer.length >= 3 &&
+        buffer[0] === 0xEF &&
+        buffer[1] === 0xBB &&
+        buffer[2] === 0xBF
+      ) {
+        return buffer.toString("utf-8", 3);
+      }
+
+      return buffer.toString("utf-8");
     } catch (err) {
       return null;
     }

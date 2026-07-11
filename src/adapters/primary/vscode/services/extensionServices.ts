@@ -3,6 +3,7 @@ import { WebviewProvider } from "../WebviewProvider";
 import { AppState } from "../state/appState";
 import { ProgressReporter } from "../../../../application/ports/driven/ProgressReporter";
 import { CompactUseCase } from "../../../../application/ports/driving/CompactUseCase";
+import { ExtractUseCase } from "../../../../application/ports/driving/ExtractUseCase";
 import { NotificationPort } from "../../../../application/ports/driven/NotificationPort";
 import { USER_MESSAGES } from "../constants";
 import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProvider";
@@ -20,6 +21,7 @@ export function registerCommands(
     webviewProvider: WebviewProvider;
   },
   compactUseCase: CompactUseCase,
+  extractUseCase: ExtractUseCase,
   logger: ProgressReporter,
   notificationService: NotificationPort
 ): void {
@@ -64,6 +66,7 @@ export function registerCommands(
   registerGenerateCommands(
     context,
     compactUseCase,
+    extractUseCase,
     fileExplorerProvider,
     optionsViewProvider,
     appState.currentOptions,
@@ -95,7 +98,7 @@ async function _handleExtensionInitialization(
   if (!appState.initialized) {
     logger.warn(
       USER_MESSAGES.WARNINGS.NOT_INITIALIZED +
-        " (desde _handleExtensionInitialization)"
+      " (desde _handleExtensionInitialization)"
     );
     await new Promise((resolve) => setTimeout(resolve, 1000));
     if (!appState.initialized) {
