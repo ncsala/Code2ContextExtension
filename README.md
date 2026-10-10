@@ -7,13 +7,14 @@ Code2Context is a Visual Studio Code extension that helps you quickly create com
 ## ✨ Features
 
 - **Smart File Selection**: Choose specific files or entire directories
-- **Git-Aware Selection**: Select only your staged files (or every uncommitted change) in one click
-- **Tree Structure Generation**: Includes project directory structure
-- **Content Minification**: Reduces file size while maintaining readability
+- **Git-Aware Selection**: Select only your staged files (or every uncommitted change) in one click, including deleted files
+- **Tree Structure Generation**: Includes project directory structure, with optional truncation of oversized folders
+- **Content Minification**: Collapses each file into a single line to save tokens when the context is meant for an AI
 - **Customizable Ignores**: Support for .gitignore patterns and custom exclusions
 - **Language Prompts**: Built-in professional prompts for different AI tasks
-- **Large File Handling**: Gracefully manages projects of any size
-- **Recreate Project from Context**: Safely reconstructs directories and files back from a context file (supporting automatic UTF-8/UTF-16/BOM decoding and copy-paste character cleaning).
+- **Large File Handling**: Outputs over 10 MB are saved straight to disk instead of being opened in the editor
+- **Recreate Project from Context**: Safely reconstructs directories and files back from a context file (automatic UTF-8/UTF-16/BOM detection), optionally applying deleted files after confirmation
+- **Safe Copy-Paste Between Machines**: Optional escaping of non-ASCII characters so the context survives remote clipboards (e.g. RDP)
 
 ![Code2Context Main Panel](images/c2cImage.png)
 
@@ -30,12 +31,13 @@ Code2Context is a Visual Studio Code extension that helps you quickly create com
 | Command | Description |
 |---------|-------------|
 | `Code2Context: Open Generator Panel` | Opens the main generation interface |
-| `Code2Context: Select All Files` | Selects all files in the explorer |
-| `Code2Context: Deselect All Files` | Clears current selection |
+| `Select All Files` | Selects all files in the **File Selection** view |
+| `Deselect All Files` | Clears current selection |
+| `Select Directory and All Children` | Selects a folder and everything inside it (right-click a folder in the **File Selection** view) |
 | `Code2Context: Select Git Staged Files` | Replaces the selection with the files staged in Git and switches to Files mode |
-| `Code2Context: Select All Git Changes` | Same, but includes staged, unstaged and untracked files |
-| `Code2Context: Generate from Selection` | Creates context from selected files |
-| `Code2Context: Generate from Options` | Uses options panel configuration |
+| `Code2Context: Select All Git Changes (staged, unstaged, untracked)` | Same, but includes staged, unstaged and untracked files |
+| `Generate Context from Selected Files` | Creates context from the selected files |
+| `Generate Context from Current Options` | Creates context using the **Options** view configuration |
 | `Code2Context: Recreate Project from Context File` | Reconstructs directories and files from a context file |
 
 ## ⚙️ Configuration Options
@@ -64,13 +66,14 @@ When a context file contains an `@Deleted:` section, **Recreate Project from Con
 - **Include Tree Structure**: Shows project hierarchy
 - **Truncate Large Folders**: Collapses oversized folders in the tree (enabled by default). Disable it to get the full tree, including the content of every file inside those folders
 - **Escape Non-ASCII Characters** (disabled by default): writes accents, emojis and symbols as `[[U+XXXX]]` codes so the context survives copy-paste between machines (e.g. Windows → Linux over RDP, which turns them into `\Uffffffff` and swallows nearby characters). **Recreate Project from Context File** restores them exactly. Leave it off when the file is only meant for an AI
-- **Minify Content**: Reduces file size
+- **Minify Content**: Joins each file into a single line to reduce size. It is lossy (line comments and indentation-sensitive languages such as Python break), so leave it off when you plan to **Recreate Project from Context File**
 - **Prompt Presets**: Professional prompts for various AI tasks
-  - Deep Context V1
-  - Architecture Review
-  - Bug Hunter
-  - Documentation Generator
-  - Refactor Guide
+  - `fullStackWizard`: Full Stack Wizard (analysis, architecture, security and performance)
+  - `deepContextV1`: Deep Context V1
+  - `architectReview`: Architecture Review
+  - `bugHunter`: Bug Hunter
+  - `docGenerator`: Documentation Generator
+  - `refactorGuide`: Refactor Guide
 
 ## 🛠️ Use Cases
 
@@ -86,22 +89,23 @@ When a context file contains an `@Deleted:` section, **Recreate Project from Con
 // Conventions used in this document:
 // @Tree: project directory structure.
 // @Index: table of contents with all the files included.
-// @F: file index | path | minified content.
+// @F: file index | path | original content.
 
 @Tree:
-|-- src
-|   |-- main.ts
-|   |-- utils
-|   |   |-- helpers.ts
-...
+└─ src
+    ├─ utils
+    │   └─ helpers.ts
+    └─ main.ts
 
 @Index:
 1|src/main.ts
 2|src/utils/helpers.ts
-...
 
 @F:|1|src/main.ts|console.log("Hello World");
+@F:|2|src/utils/helpers.ts|export const sum = (a: number, b: number) => a + b;
 ```
+
+Depending on the selection and options, the file may also contain an `@Deleted:` section (files removed in Git) and a `// @Escaped:` header line (non-ASCII escaping enabled).
 
 ## 🤖 AI Integration Tips
 
@@ -111,8 +115,9 @@ When a context file contains an `@Deleted:` section, **Recreate Project from Con
 
 ## 📚 Requirements
 
-- Visual Studio Code ^1.85.0
-- Node.js (for development)
+- Visual Studio Code 1.99 or newer
+- Git (only for the Git-aware selection)
+- For development: Node.js 20+ and pnpm (see [CONTRIBUTING.md](CONTRIBUTING.md))
 
 ## 🔄 Release Notes
 
