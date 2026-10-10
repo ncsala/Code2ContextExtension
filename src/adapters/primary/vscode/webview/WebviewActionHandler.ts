@@ -125,6 +125,9 @@ export class WebviewActionHandler {
       truncateLargeDirectories:
         payloadFromWebview.truncateLargeDirectories ??
         this.optionsViewProvider.getOptions().truncateLargeDirectories,
+      escapeNonAsciiCharacters:
+        payloadFromWebview.escapeNonAsciiCharacters ??
+        this.optionsViewProvider.getOptions().escapeNonAsciiCharacters,
       rootPath:
         payloadFromWebview.rootPath ||
         this.optionsViewProvider.getOptions().rootPath ||

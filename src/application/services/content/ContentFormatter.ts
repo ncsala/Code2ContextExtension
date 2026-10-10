@@ -1,3 +1,11 @@
+/** Qué secciones y convenciones describe el encabezado */
+export interface HeaderOptions {
+  isMinified: boolean;
+  includeTree: boolean;
+  includeDeleted: boolean;
+  escapedNonAscii: boolean;
+}
+
 /**
  * Servicio para formatear el contenido de los archivos
  */
@@ -7,33 +15,31 @@ export class ContentFormatter {
   public static readonly FILE_MARKER = "@F:";
   /** Va antes del primer @F: para que los extractores viejos lo ignoren */
   public static readonly DELETED_MARKER = "@Deleted:";
+  /** Indica que el contenido tiene los caracteres no ASCII escapados */
+  public static readonly ESCAPED_MARKER = "@Escaped:";
+  /** Línea del encabezado que activa la restauración al recrear */
+  public static readonly ESCAPED_HEADER_LINE = `// ${ContentFormatter.ESCAPED_MARKER} non-ASCII characters are written as [[U+XXXX]] (hex Unicode code point); "Recreate Project from Context File" restores them.`;
 
   /**
    * Genera un encabezado estándar para el archivo combinado
-   * @param treeMarker   Marcador para el árbol de directorios
-   * @param indexMarker  Marcador para el índice de archivos
-   * @param fileMarker   Marcador para los archivos
-   * @param isMinified   true ⟹ contenido minificado
-   * @param includeTree  true ⟹ hay sección de árbol
-   * @param includeDeleted true ⟹ hay sección de archivos eliminados
    */
-  generateHeader(
-    treeMarker: string,
-    indexMarker: string,
-    fileMarker: string,
-    isMinified: boolean,
-    includeTree: boolean,
-    includeDeleted: boolean = false
-  ): string {
+  generateHeader(options: HeaderOptions): string {
+    const { TREE_MARKER, INDEX_MARKER, DELETED_MARKER, FILE_MARKER } =
+      ContentFormatter;
     return (
       `// Conventions used in this document:\n` +
-      (includeTree ? `// ${treeMarker} project directory structure.\n` : "") +
-      `// ${indexMarker} table of contents with all the files included.\n` +
-      (includeDeleted
-        ? `// ${ContentFormatter.DELETED_MARKER} files deleted from the project (paths only, no content).\n`
+      (options.includeTree
+        ? `// ${TREE_MARKER} project directory structure.\n`
         : "") +
-      `// ${fileMarker} file index | path | ${
-        isMinified ? "minified" : "original"
+      `// ${INDEX_MARKER} table of contents with all the files included.\n` +
+      (options.includeDeleted
+        ? `// ${DELETED_MARKER} files deleted from the project (paths only, no content).\n`
+        : "") +
+      (options.escapedNonAscii
+        ? `${ContentFormatter.ESCAPED_HEADER_LINE}\n`
+        : "") +
+      `// ${FILE_MARKER} file index | path | ${
+        options.isMinified ? "minified" : "original"
       } content.\n\n`
     );
   }

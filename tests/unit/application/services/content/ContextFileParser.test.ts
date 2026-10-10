@@ -49,10 +49,47 @@ describe("ContextFileParser", () => {
     expect(parsed.files).toEqual([{ path: "a.ts", content: "first\nsecond" }]);
   });
 
-  test("strips copy-paste artifacts from lines", () => {
-    const parsed = parser.parse("﻿@Deleted:\nold\u0000.ts\n\n@F:|1|a.ts|x�");
+  test("keeps content verbatim when the file is not escaped (no silent cleanup)", () => {
+    const parsed = parser.parse(
+      "@Deleted:\nold\u0000.ts\n\n@F:|1|a.ts|Contrase�a \\Uffffffff [[U+00F1]]"
+    );
 
-    expect(parsed.deletedPaths).toEqual(["old.ts"]);
-    expect(parsed.files[0].content).toBe("x");
+    expect(parsed.wasEscaped).toBe(false);
+    expect(parsed.deletedPaths).toEqual(["old\u0000.ts"]);
+    expect(parsed.files[0].content).toBe(
+      "Contrase�a \\Uffffffff [[U+00F1]]"
+    );
+  });
+
+  describe("escaped files", () => {
+    const escapedHeader =
+      '// @Escaped: non-ASCII characters are written as [[U+XXXX]] (hex Unicode code point); "Recreate Project from Context File" restores them.';
+
+    test("restores paths, deletions and content when the header says so", () => {
+      const parsed = parser.parse(
+        [
+          escapedHeader,
+          "@Deleted:",
+          "src/configuraci[[U+00F3]]n.json",
+          "",
+          "@F:|1|src/a[[U+00F1]]o.ts|const a[[U+00F1]]o = 1; // [[U+1F600]]",
+        ].join("\n")
+      );
+
+      expect(parsed.wasEscaped).toBe(true);
+      expect(parsed.deletedPaths).toEqual(["src/configuración.json"]);
+      expect(parsed.files).toEqual([
+        { path: "src/año.ts", content: "const año = 1; // 😀" },
+      ]);
+    });
+
+    test("ignores an @Escaped: line that appears inside file content", () => {
+      const parsed = parser.parse(
+        ["@F:|1|notes.md|# Notes", escapedHeader, "a[[U+00F1]]o"].join("\n")
+      );
+
+      expect(parsed.wasEscaped).toBe(false);
+      expect(parsed.files[0].content).toContain("a[[U+00F1]]o");
+    });
   });
 });

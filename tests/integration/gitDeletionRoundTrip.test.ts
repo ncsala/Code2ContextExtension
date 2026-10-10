@@ -107,6 +107,7 @@ describeIfGit("Git staged changes round trip (generate → recreate)", () => {
       includeTree: true,
       minifyContent: false,
       truncateLargeDirectories: true,
+      escapeNonAsciiCharacters: false,
     });
     expect(compactResult.ok).toBe(true);
     const contextFile = path.join(sandbox, "context.txt");

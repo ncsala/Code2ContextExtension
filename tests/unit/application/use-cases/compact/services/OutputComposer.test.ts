@@ -22,6 +22,7 @@ describe("OutputComposer", () => {
     includeDefaultPatterns: true,
     includeGitIgnore: true,
     truncateLargeDirectories: true,
+    escapeNonAsciiCharacters: false,
     selectionMode: "directory",
     verboseLogging: false,
   };
@@ -278,6 +279,49 @@ describe("OutputComposer", () => {
       expect(result).toBe(
         `${expectedHeader}@Index:\n1|kept.ts\n\n@Deleted:\na-old.ts\nsrc/z-old.ts\n\n@F:|1|kept.ts|data\n`
       );
+    });
+
+    test("should escape non-ASCII characters only when the option is enabled", async () => {
+      const files: FileEntry[] = [
+        { path: "src/año.ts", content: 'const msg = "Contraseña";' },
+      ];
+      const treeText = "└─ src\n    └─ año.ts";
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: true,
+        minifyContent: false,
+        promptPreset: "none",
+        escapeNonAsciiCharacters: true,
+      };
+
+      const result = await outputComposer.compose(files, treeText, options);
+
+      expect(result).toMatch(/^[\t\n\r\x20-\x7E]*$/);
+      expect(result).toContain(
+        "// @Escaped: non-ASCII characters are written as [[U+XXXX]]"
+      );
+      expect(result).toContain("@Tree:\n`-- src\n    `-- a[[U+00F1]]o.ts\n");
+      expect(result).toContain(
+        '@F:|1|src/a[[U+00F1]]o.ts|const msg = "Contrase[[U+00F1]]a";'
+      );
+    });
+
+    test("should leave the output untouched when escaping is disabled", async () => {
+      const files: FileEntry[] = [{ path: "src/año.ts", content: "ñ" }];
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: true,
+        minifyContent: false,
+        promptPreset: "none",
+      };
+
+      const result = await outputComposer.compose(files, "└─ año.ts", options);
+
+      expect(result).not.toContain("@Escaped:");
+      expect(result).toContain("@Tree:\n└─ año.ts\n");
+      expect(result).toContain("@F:|1|src/año.ts|ñ");
     });
 
     test("should skip deleted paths containing line breaks", async () => {

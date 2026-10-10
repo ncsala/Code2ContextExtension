@@ -18,6 +18,7 @@ const initialOptions: CompactOptions = {
   includeTree: true,
   minifyContent: true,
   truncateLargeDirectories: true,
+  escapeNonAsciiCharacters: false,
   selectionMode: "directory",
 };
 

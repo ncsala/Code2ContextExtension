@@ -63,6 +63,7 @@ When a context file contains an `@Deleted:` section, **Recreate Project from Con
 
 - **Include Tree Structure**: Shows project hierarchy
 - **Truncate Large Folders**: Collapses oversized folders in the tree (enabled by default). Disable it to get the full tree, including the content of every file inside those folders
+- **Escape Non-ASCII Characters** (disabled by default): writes accents, emojis and symbols as `[[U+XXXX]]` codes so the context survives copy-paste between machines (e.g. Windows → Linux over RDP, which turns them into `\Uffffffff` and swallows nearby characters). **Recreate Project from Context File** restores them exactly. Leave it off when the file is only meant for an AI
 - **Minify Content**: Reduces file size
 - **Prompt Presets**: Professional prompts for various AI tasks
   - Deep Context V1

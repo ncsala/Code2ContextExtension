@@ -37,6 +37,12 @@ export interface CompactOptions {
    */
   truncateLargeDirectories: boolean;
 
+  /**
+   * Escribe los caracteres no ASCII como `[[U+XXXX]]` para que el archivo sobreviva
+   * a portapapeles que solo transportan ASCII (p. ej. RDP). El Recreate los restaura.
+   */
+  escapeNonAsciiCharacters: boolean;
+
   /** Ruta de salida donde se generará el archivo compactado */
   outputPath: string;
 

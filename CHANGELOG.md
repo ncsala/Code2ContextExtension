@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Recreate Project from Context File** previews the file and asks for explicit confirmation (modal, listing the paths) before deleting; "Keep them" writes files only.
   - Deletions only affect regular files physically inside the target folder (symlinks are resolved), never directories with content, and prune folders left empty. Paths that are also written are never deleted.
   - The section is written before the first `@F:` entry, so older versions of the extension simply ignore it.
+- **"Escape non-ASCII characters (safe copy-paste)" option** (disabled by default):
+  - Fixes context files broken by remote clipboards (e.g. Windows → Linux over RDP), which turn every accented character into `\Uffffffff` and also swallow the characters right after it.
+  - When enabled, every non-ASCII character (in contents, paths, prompt and tree) is written as `[[U+XXXX]]`, so only ASCII travels; the tree switches to ASCII connectors to stay readable. A header line (`// @Escaped:`) marks the file.
+  - **Recreate Project from Context File** detects that line and restores every character exactly. Files without it are recreated verbatim.
+
+### 🗑️ Removed
+
+- The copy-paste "sanitization" added in 0.2.4 on **Recreate Project**: it silently deleted `U+FFFD`, `U+FEFF` and `U+0000` characters, which changed file contents and even file names (`configuraci�n.json` → `configuracin.json`) while not detecting the real RDP corruption (`\Uffffffff`). Context files are now recreated verbatim; use the escape option to transport them safely.
 
 ### 🐛 Fixed
 

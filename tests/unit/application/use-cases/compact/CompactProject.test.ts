@@ -39,6 +39,7 @@ describe("CompactProject Use Case", () => {
     includeTree: true,
     minifyContent: false,
     truncateLargeDirectories: true,
+    escapeNonAsciiCharacters: false,
     promptPreset: "none",
     selectionMode: "directory",
     verboseLogging: false,

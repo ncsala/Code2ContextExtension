@@ -9,6 +9,7 @@ export interface CompactOptions {
   includeTree: boolean;
   minifyContent: boolean;
   truncateLargeDirectories: boolean;
+  escapeNonAsciiCharacters: boolean;
   selectionMode: "directory" | "files";
 }
 

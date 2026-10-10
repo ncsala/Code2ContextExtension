@@ -1,10 +1,10 @@
 import { ContentFormatter } from "./ContentFormatter";
+import { NonAsciiEscaper } from "./NonAsciiEscaper";
 
 const FILE_HEADER_PREFIX = `${ContentFormatter.FILE_MARKER}|`;
+const ESCAPED_HEADER_PREFIX = `// ${ContentFormatter.ESCAPED_MARKER}`;
 /** Formato: @F:|<index>|<path>|<first_line_content> */
 const FILE_HEADER_PATTERN = /^@F:\|(\d+)\|([^|]+)\|(.*)$/;
-/** Corrupciones típicas de copy-paste (BOM, NUL, Unicode Replacement) */
-const COPY_PASTE_ARTIFACTS = /[\uFFFD\uFEFF\u0000]/g;
 const MINIFIED_HINT = "minified content.";
 
 type Section = "preamble" | "deleted" | "files";
@@ -24,6 +24,8 @@ export interface ParsedContextFile {
   isMinified: boolean;
   /** Números de línea (1-based) con un encabezado @F:| mal formado */
   malformedHeaderLines: number[];
+  /** El archivo se generó con "Escape non-ASCII characters" y se restauró */
+  wasEscaped: boolean;
 }
 
 /**
@@ -31,19 +33,24 @@ export interface ParsedContextFile {
  * Es puro: no toca el disco ni valida rutas (eso es del caso de uso).
  */
 export class ContextFileParser {
+  private readonly escaper = new NonAsciiEscaper();
+
   parse(content: string): ParsedContextFile {
+    const lines = content.split(/\r?\n/);
+    const wasEscaped = hasEscapedHeader(lines);
     const result: ParsedContextFile = {
       files: [],
       deletedPaths: [],
       isMinified: content.includes(MINIFIED_HINT),
       malformedHeaderLines: [],
+      wasEscaped,
     };
     let section: Section = "preamble";
     let currentFile: { path: string; lines: string[] } | null = null;
 
-    const lines = content.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].replace(COPY_PASTE_ARTIFACTS, "");
+      // Un token nunca abarca líneas ni decodifica a saltos de línea
+      const line = wasEscaped ? this.escaper.unescape(lines[i]) : lines[i];
 
       if (line.startsWith(FILE_HEADER_PREFIX)) {
         section = "files";
@@ -78,6 +85,15 @@ export class ContextFileParser {
     }
     return line.trim() === ContentFormatter.DELETED_MARKER ? "deleted" : section;
   }
+}
+
+/** La marca solo cuenta en el encabezado: el contenido de un archivo no la activa */
+function hasEscapedHeader(lines: string[]): boolean {
+  for (const line of lines) {
+    if (line.startsWith(FILE_HEADER_PREFIX)) return false;
+    if (line.startsWith(ESCAPED_HEADER_PREFIX)) return true;
+  }
+  return false;
 }
 
 function toEntry(file: { path: string; lines: string[] }): ContextFileEntry {
