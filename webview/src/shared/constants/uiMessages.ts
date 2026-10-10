@@ -11,6 +11,7 @@ export const UI_MESSAGES = {
     OUTPUT_FILE: "Output File:",
     IGNORE_PATTERNS: "Ignore Patterns (one per line):",
     SELECTED_FILES: "Selected Files:",
+    DELETED_FILES: "Files to delete (listed in @Deleted:):",
     PROMPT_PRESET: "Prompt preset:",
   },
   PLACEHOLDERS: {
@@ -38,5 +39,6 @@ export const UI_MESSAGES = {
     INCLUDE_TREE: "Include directory tree structure",
     MINIFY_CONTENT: "Minify content",
     TRUNCATE_LARGE_DIRECTORIES: "Truncate large folders in tree",
+    ESCAPE_NON_ASCII: "Escape non-ASCII characters (safe copy-paste)",
   },
 } as const;

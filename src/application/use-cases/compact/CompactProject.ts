@@ -45,17 +45,8 @@ export class CompactProject implements CompactUseCase {
         return { ok: false, error: errorMsg };
       }
 
-      const ignorePatternsList = await this.buildIgnorePatterns(options);
-      const ignoreHandler = ignore().add(ignorePatternsList);
-
-      const { treeText, validFilePaths } = await this.treeSvc.buildTree(
-        {
-          rootPath: options.rootPath,
-          selectionMode: options.selectionMode,
-          specificFiles: options.specificFiles,
-          truncateLargeDirectories: options.truncateLargeDirectories,
-        },
-        ignoreHandler
+      const { treeText, validFilePaths } = await this.buildTreeIfNeeded(
+        options
       );
 
       if (validFilePaths.length === 0) {
@@ -107,6 +98,32 @@ export class CompactProject implements CompactUseCase {
       this.logger.endOperation("CompactProject.execute");
       return { ok: false, error: errorMessage };
     }
+  }
+
+  /**
+   * En modo "files" sin archivos (p. ej. solo eliminados) no hay árbol que
+   * generar: el generador interpretaría una selección vacía como "todo".
+   */
+  private async buildTreeIfNeeded(
+    options: CompactOptions
+  ): Promise<{ treeText: string; validFilePaths: string[] }> {
+    const hasNoFilesToInclude =
+      options.selectionMode === "files" &&
+      (options.specificFiles ?? []).length === 0;
+    if (hasNoFilesToInclude) {
+      return { treeText: "", validFilePaths: [] };
+    }
+
+    const ignorePatternsList = await this.buildIgnorePatterns(options);
+    return this.treeSvc.buildTree(
+      {
+        rootPath: options.rootPath,
+        selectionMode: options.selectionMode,
+        specificFiles: options.specificFiles,
+        truncateLargeDirectories: options.truncateLargeDirectories,
+      },
+      ignore().add(ignorePatternsList)
+    );
   }
 
   private async buildIgnorePatterns(

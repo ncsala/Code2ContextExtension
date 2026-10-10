@@ -2,6 +2,7 @@ import pLimit from "p-limit";
 import { FileEntry } from "../../../../domain/model/FileEntry";
 import { ContentFormatter } from "../../../services/content/ContentFormatter";
 import { ContentMinifier } from "../../../services/content/ContentMinifier";
+import { NonAsciiEscaper } from "../../../services/content/NonAsciiEscaper";
 import { ProgressReporter } from "../../../ports/driven/ProgressReporter";
 import { CompactOptions } from "../../../ports/driving/CompactOptions";
 import { FileSystemPort } from "../../../ports/driven/FileSystemPort";
@@ -10,12 +11,21 @@ import {
   PROMPT_PRESETS,
 } from "../../../../shared/prompts/proPromptPresets";
 
-const { TREE_MARKER, INDEX_MARKER, FILE_MARKER } = ContentFormatter;
+const { TREE_MARKER, INDEX_MARKER, FILE_MARKER, DELETED_MARKER } =
+  ContentFormatter;
+const LINE_BREAK_PATTERN = /[\r\n]/;
 const FILE_PROCESSING_CONCURRENCY = 8;
+/** Conectores del árbol → equivalentes ASCII (estilo `tree --charset=ascii`) */
+const ASCII_TREE_CONNECTORS: ReadonlyArray<[string, string]> = [
+  ["├─ ", "|-- "],
+  ["└─ ", "`-- "],
+  ["│   ", "|   "],
+];
 
 export class OutputComposer {
   private readonly minifier = new ContentMinifier();
   private readonly formatter = new ContentFormatter();
+  private readonly escaper = new NonAsciiEscaper();
   private readonly processingLimiter = pLimit(FILE_PROCESSING_CONCURRENCY);
 
   constructor(
@@ -30,10 +40,20 @@ export class OutputComposer {
   ): Promise<string> {
     this.logger.startOperation("OutputComposer.compose");
 
-    const headerPart = this.composeHeader(options);
+    const escapeNonAscii = options.escapeNonAsciiCharacters === true;
+    const deletedPaths = this.getPrintableDeletedPaths(options);
+    const headerPart = this.composeHeader(
+      options,
+      deletedPaths.length > 0,
+      escapeNonAscii
+    );
     const promptPart = this.composePrompt(options);
-    const treePart = this.composeTreeSection(treeText, options);
+    const treePart = this.composeTreeSection(
+      escapeNonAscii ? toAsciiTree(treeText) : treeText,
+      options
+    );
     const indexPart = this.composeIndexSection(files);
+    const deletedPart = this.composeDeletedSection(deletedPaths);
 
     const fileContentChunks = await this.composeFileContentChunks(
       files,
@@ -43,8 +63,11 @@ export class OutputComposer {
     const filesSection =
       fileContentChunks.length > 0 ? fileContentChunks.join("\n") + "\n" : "";
 
-    const fullCombinedContent =
-      promptPart + headerPart + treePart + indexPart + filesSection;
+    const body = treePart + indexPart + deletedPart + filesSection;
+    // El encabezado no se escapa: describe el formato [[U+XXXX]] literalmente
+    const fullCombinedContent = escapeNonAscii
+      ? this.escaper.escape(promptPart) + headerPart + this.escaper.escape(body)
+      : promptPart + headerPart + body;
 
     if (options.outputPath) {
       this.logger.info(
@@ -76,14 +99,38 @@ export class OutputComposer {
     return "";
   }
 
-  private composeHeader(options: CompactOptions): string {
-    return this.formatter.generateHeader(
-      TREE_MARKER,
-      INDEX_MARKER,
-      FILE_MARKER,
-      options.minifyContent ?? false,
-      options.includeTree
+  private composeHeader(
+    options: CompactOptions,
+    includeDeleted: boolean,
+    escapedNonAscii: boolean
+  ): string {
+    return this.formatter.generateHeader({
+      isMinified: options.minifyContent ?? false,
+      includeTree: options.includeTree,
+      includeDeleted,
+      escapedNonAscii,
+    });
+  }
+
+  /** El formato es por líneas: una ruta con saltos de línea lo rompería */
+  private getPrintableDeletedPaths(options: CompactOptions): string[] {
+    const deletedPaths = options.deletedFiles ?? [];
+    const printablePaths = deletedPaths.filter(
+      (p) => !LINE_BREAK_PATTERN.test(p)
     );
+    if (printablePaths.length < deletedPaths.length) {
+      this.logger.warn(
+        `OutputComposer: Skipped ${
+          deletedPaths.length - printablePaths.length
+        } deleted paths containing line breaks.`
+      );
+    }
+    return printablePaths.sort();
+  }
+
+  private composeDeletedSection(deletedPaths: string[]): string {
+    if (deletedPaths.length === 0) return "";
+    return `${DELETED_MARKER}\n${deletedPaths.join("\n")}\n\n`;
   }
 
   private composeTreeSection(
@@ -139,4 +186,12 @@ export class OutputComposer {
     const chunks = await Promise.all(chunkPromises);
     return chunks;
   }
+}
+
+/** En modo escapado el árbol queda legible en vez de llenarse de tokens */
+function toAsciiTree(treeText: string): string {
+  return ASCII_TREE_CONNECTORS.reduce(
+    (text, [unicode, ascii]) => text.split(unicode).join(ascii),
+    treeText
+  );
 }

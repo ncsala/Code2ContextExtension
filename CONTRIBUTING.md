@@ -24,27 +24,65 @@ We use GitHub to host code, to track issues and feature requests, as well as acc
 1. Clone your fork of the repo
 
    ```bash
-   git clone https://github.com/your-username/code2context.git
+   git clone https://github.com/ncsala/Code2ContextExtension.git
+   cd Code2ContextExtension
    ```
 
-2. Install dependencies
+2. Install dependencies with [pnpm](https://pnpm.io) (the version is pinned in `packageManager`; `corepack enable` sets it up, or `npm install -g pnpm`). The extension and the React webview have separate `package.json` files:
 
    ```bash
-   npm install
+   pnpm install
+   pnpm --dir webview install
    ```
 
-3. Build the webview
+3. Run the extension: open the folder in VS Code and press **F5** ("Run Extension").
+
+   F5 runs `pnpm run build:dev` first, which bundles `dist/extension.js` (the file VS Code loads, see `main` in `package.json`) with source maps and builds the webview into `webview-dist/`. A new **[Extension Development Host]** window opens with your local version of the extension.
+
+   To try a change, stop the session (`Shift+F5`) and press **F5** again so the bundle is rebuilt.
+
+   > ⚠️ `pnpm run compile` / `pnpm run watch` only type-check into `out/`; VS Code never loads that folder, so they are not enough to see your changes.
+
+4. Run the checks before opening a pull request (`pnpm test` also compiles and lints first)
 
    ```bash
-   npm run build-webview
+   pnpm test
    ```
 
-4. Run the extension
+## Testing the packaged extension (VSIX)
+
+This installs the extension exactly as users get it from the Marketplace, in your regular VS Code:
+
+```bash
+git checkout <branch-to-test> && git pull
+pnpm run package:vsix           # clean install (extension + webview) and creates code2context-<version>.vsix
+code --install-extension code2context-<version>.vsix --force
+```
+
+`package:vsix` runs `pnpm install --frozen-lockfile` in both the root and `webview/` (packaging also builds the webview) and then `vsce package`, so it works on a fresh clone. Then reload VS Code (`Ctrl+Shift+P` → **Developer: Reload Window**).
+
+- `--force` is needed when the same version is already installed (e.g. from the Marketplace).
+- If the `code` command is not found, use `Ctrl+Shift+P` → **Shell Command: Install 'code' command in PATH** (macOS), or install it from the Extensions view: `...` → **Install from VSIX…**.
+- To go back to the published version: `code --install-extension ncsala.code2context --force`.
+
+## Releasing to the Marketplace
+
+One-time setup: a [Personal Access Token](https://dev.azure.com) with the **Marketplace → Manage** scope and **All accessible organizations**, for the `ncsala` publisher. Tokens expire; if `vsce login` returns 401, create a new one. See the [official publishing guide](https://code.visualstudio.com/api/working-with-extensions/publishing-extension) if the authentication flow has changed.
+
+1. Bump `version` in `package.json` following [Semantic Versioning](https://semver.org/) (new features → minor, fixes → patch).
+2. In `CHANGELOG.md`, rename `[Unreleased]` to `[x.y.z] - YYYY-MM-DD`.
+3. Merge to `main`, then publish from an up-to-date `main`:
 
    ```bash
-   # Press F5 in VS Code to run the extension in a new window
-   npm run compile
+   git checkout main && git pull
+   pnpm install --frozen-lockfile && pnpm --dir webview install --frozen-lockfile
+   pnpm test
+   pnpm exec vsce login ncsala   # paste the token
+   pnpm run publish              # builds (vscode:prepublish) and publishes the package.json version
+   git tag vx.y.z && git push origin vx.y.z
    ```
+
+The new version shows up in the Marketplace after a few minutes of verification.
 
 ## Code Style
 
@@ -99,9 +137,9 @@ When submitting code, please include the copyright header:
  */
 ```
 
-## Report bugs using GitHub's [issue tracker](https://github.com/your-username/code2context/issues)
+## Report bugs using GitHub's [issue tracker](https://github.com/ncsala/Code2ContextExtension/issues)
 
-We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/your-username/code2context/issues/new).
+We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/ncsala/Code2ContextExtension/issues/new).
 
 **Great Bug Reports** tend to have:
 

@@ -52,12 +52,18 @@ Configure which files to exclude:
 
 - **Directory Mode**: Include entire directory structure
 - **Files Mode**: Select specific files using the file explorer
-  - Use the Git commit icon button in the **File Selection** view to select only your staged files, or the `...` menu to select every uncommitted change. Deleted files and files matching your ignore patterns are skipped
+  - Use the Git commit icon button in the **File Selection** view to select only your staged files, or the `...` menu to select every uncommitted change. Files matching your ignore patterns are skipped
+  - Deleted (and renamed-away) files are listed in an `@Deleted:` section of the context file and shown in the panel under **Files to delete**
+
+### Recreating a Project with Deletions
+
+When a context file contains an `@Deleted:` section, **Recreate Project from Context File** asks for confirmation (listing every file) before deleting them from the target folder. You can also keep them and only write files. Deletions are restricted to regular files inside the target folder (symlinks pointing outside are refused), and folders left empty are removed. Older context files without that section behave exactly as before.
 
 ### Output Options
 
 - **Include Tree Structure**: Shows project hierarchy
 - **Truncate Large Folders**: Collapses oversized folders in the tree (enabled by default). Disable it to get the full tree, including the content of every file inside those folders
+- **Escape Non-ASCII Characters** (disabled by default): writes accents, emojis and symbols as `[[U+XXXX]]` codes so the context survives copy-paste between machines (e.g. Windows → Linux over RDP, which turns them into `\Uffffffff` and swallows nearby characters). **Recreate Project from Context File** restores them exactly. Leave it off when the file is only meant for an AI
 - **Minify Content**: Reduces file size
 - **Prompt Presets**: Professional prompts for various AI tasks
   - Deep Context V1

@@ -18,6 +18,8 @@ const createSelectionServiceMock = (): jest.Mocked<SelectionPort> => ({
   removeSelectedFile: jest.fn(),
   removeListener: jest.fn(),
   setSelectedFiles: jest.fn(),
+  setDeletedFiles: jest.fn(),
+  getDeletedFiles: jest.fn().mockReturnValue([]),
   toggleFileSelection: jest.fn(),
   unregisterWebviewProvider: jest.fn(),
 });

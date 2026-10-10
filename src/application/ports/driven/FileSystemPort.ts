@@ -2,6 +2,14 @@ import ignore from "ignore";
 import { FileEntry } from "../../../domain/model/FileEntry";
 import { FileTree } from "../../../domain/model/FileTree";
 
+/**
+ * Resultado de borrar un archivo:
+ * - `deleted`: se borró
+ * - `missing`: no existía
+ * - `skipped`: no es un archivo, o su ubicación real queda fuera del directorio permitido
+ */
+export type DeleteFileOutcome = "deleted" | "missing" | "skipped";
+
 export interface PortDirectoryEntry {
   name: string;
   isFile(): boolean;
@@ -43,4 +51,13 @@ export interface FileSystemPort {
    * @returns Un array de PortDirectoryEntry o un array vacío en caso de error.
    */
   listDirectoryEntries(dirPath: string): Promise<PortDirectoryEntry[]>;
+
+  /**
+   * Borra un archivo que esté (físicamente, resolviendo symlinks) dentro de `rootDir`
+   * y elimina los directorios que queden vacíos, sin pasar de `rootDir`.
+   * Nunca borra directorios con contenido.
+   * @param rootDir Directorio que acota el borrado
+   * @param filePath Ruta absoluta del archivo a borrar
+   */
+  deleteFileWithin(rootDir: string, filePath: string): Promise<DeleteFileOutcome>;
 }

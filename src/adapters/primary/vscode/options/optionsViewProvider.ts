@@ -21,6 +21,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   private _includeTree: boolean = true;
   private _minifyContent: boolean = true;
   private _truncateLargeDirectories: boolean = true;
+  private _escapeNonAsciiCharacters: boolean = false;
   private _selectionMode: "directory" | "files" = "directory";
   private _specificFiles: string[] = [];
 
@@ -71,6 +72,8 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
         this._minifyContent = message.minifyContent ?? this._minifyContent;
         this._truncateLargeDirectories =
           message.truncateLargeDirectories ?? this._truncateLargeDirectories;
+        this._escapeNonAsciiCharacters =
+          message.escapeNonAsciiCharacters ?? this._escapeNonAsciiCharacters;
         this._outputPath = message.outputPath || this._outputPath;
 
         // Notificar los cambios al manejador principal
@@ -83,6 +86,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
           includeTree: this._includeTree,
           minifyContent: this._minifyContent,
           truncateLargeDirectories: this._truncateLargeDirectories,
+          escapeNonAsciiCharacters: this._escapeNonAsciiCharacters,
           selectionMode: this._selectionMode,
           specificFiles: this._specificFiles,
         };
@@ -126,6 +130,9 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
       if (options.truncateLargeDirectories !== undefined) {
         this._truncateLargeDirectories = options.truncateLargeDirectories;
       }
+      if (options.escapeNonAsciiCharacters !== undefined) {
+        this._escapeNonAsciiCharacters = options.escapeNonAsciiCharacters;
+      }
       if (options.selectionMode !== undefined) {
         this._selectionMode = options.selectionMode;
       }
@@ -145,6 +152,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
           includeTree: this._includeTree,
           minifyContent: this._minifyContent,
           truncateLargeDirectories: this._truncateLargeDirectories,
+          escapeNonAsciiCharacters: this._escapeNonAsciiCharacters,
           includeDefaultPatterns: this._includeDefaultPatterns,
           selectionMode: this._selectionMode,
         },
@@ -161,6 +169,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
         includeTree: this._includeTree,
         minifyContent: this._minifyContent,
         truncateLargeDirectories: this._truncateLargeDirectories,
+        escapeNonAsciiCharacters: this._escapeNonAsciiCharacters,
         selectionMode: this._selectionMode,
         specificFiles: this._specificFiles,
       };
@@ -182,6 +191,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
       includeTree: this._includeTree,
       minifyContent: this._minifyContent,
       truncateLargeDirectories: this._truncateLargeDirectories,
+      escapeNonAsciiCharacters: this._escapeNonAsciiCharacters,
       selectionMode: this._selectionMode,
       specificFiles: this._specificFiles,
     };
@@ -382,6 +392,19 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
 
             <div class="checkbox-group">
               <div class="checkbox-label">
+                <input type="checkbox" id="escapeNonAsciiCharacters"
+                       ${this._escapeNonAsciiCharacters ? "checked" : ""}/>
+                <label for="escapeNonAsciiCharacters">
+                  Escape non-ASCII characters (safe copy-paste)
+                </label>
+              </div>
+              <div class="note">
+                Use it when copying the context between machines (e.g. Windows → Linux over RDP). Accents, emojis and symbols are written as [[U+XXXX]] codes and "Recreate Project from Context File" restores them exactly.
+              </div>
+            </div>
+
+            <div class="checkbox-group">
+              <div class="checkbox-label">
                 <input type="checkbox" id="includeDefaultPatterns"
                        ${this._includeDefaultPatterns ? "checked" : ""}/>
                 <label for="includeDefaultPatterns">
@@ -410,6 +433,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
             const includeTreeCheckbox = document.getElementById('includeTree');
             const minifyContentCheckbox = document.getElementById('minifyContent');
             const truncateLargeDirectoriesCheckbox = document.getElementById('truncateLargeDirectories');
+            const escapeNonAsciiCharactersCheckbox = document.getElementById('escapeNonAsciiCharacters');
             const applyBtn = document.getElementById('applyBtn');
             
             // Botón para aplicar la configuración
@@ -426,6 +450,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                 const includeTree = includeTreeCheckbox.checked;
                 const minifyContent = minifyContentCheckbox.checked;
                 const truncateLargeDirectories = truncateLargeDirectoriesCheckbox.checked;
+                const escapeNonAsciiCharacters = escapeNonAsciiCharactersCheckbox.checked;
 
                 vscode.postMessage({
                     command: 'optionsChanged',
@@ -436,7 +461,8 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                     includeGitIgnore,
                     includeTree,
                     minifyContent,
-                    truncateLargeDirectories
+                    truncateLargeDirectories,
+                    escapeNonAsciiCharacters
                 });
             });
             
@@ -476,6 +502,10 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
 
                     if (options.truncateLargeDirectories !== undefined) {
                         truncateLargeDirectoriesCheckbox.checked = options.truncateLargeDirectories;
+                    }
+
+                    if (options.escapeNonAsciiCharacters !== undefined) {
+                        escapeNonAsciiCharactersCheckbox.checked = options.escapeNonAsciiCharacters;
                     }
                 }
             });

@@ -19,6 +19,15 @@ export interface GitPort {
   getChangedFiles(rootPath: string, scope: GitChangeScope): Promise<string[]>;
 
   /**
+   * Lista los archivos eliminados en Git. Un renombrado aporta su ruta vieja.
+   * @param rootPath Ruta raíz del proyecto (puede ser una subcarpeta del repo)
+   * @param scope Alcance de los cambios a consultar
+   * @returns Rutas relativas a rootPath en formato POSIX
+   * @throws Error si rootPath no está dentro de un repositorio o Git no está disponible
+   */
+  getDeletedFiles(rootPath: string, scope: GitChangeScope): Promise<string[]>;
+
+  /**
    * Verifica si una ruta está siendo ignorada por Git
    * @param rootPath Ruta raíz del proyecto
    * @param filePath Ruta relativa del archivo a verificar

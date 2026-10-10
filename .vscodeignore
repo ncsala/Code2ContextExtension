@@ -12,7 +12,9 @@ out/**
 # Archivos y carpetas de pruebas
 tests/**
 test/**
-tsconfig.test.json   # Configuración de TypeScript específica para pruebas (si existe)
+# Configuración de TypeScript específica para pruebas
+# (ojo: este archivo no admite comentarios al final de una línea con patrón)
+tsconfig.test.json
 
 # Módulos de Node.js (dependencias de desarrollo y las que Webpack empaqueta)
 # Tanto en la raíz del proyecto como las específicas del webview (cubiertas por webview/**)
@@ -23,18 +25,20 @@ node_modules/**
 tsconfig.json
 webpack.config.js
 tsconfig.node.json
-vite.config.ts 
+vite.config.ts
 
 # Archivos de bloqueo de dependencias
 package-lock.json
+pnpm-lock.yaml
 
 # Archivos de Git
 .gitignore
 
 # Archivos de configuración de formato de código y linting
 .prettierrc
-.eslintrc            # O .eslintrc.js, .eslintrc.json
-eslint.config.mjs    # Si usas la configuración plana de ESLint
+# ESLint (formato clásico y configuración plana)
+.eslintrc*
+eslint.config.mjs
 
 # Archivos de configuración de runners de tests
 jest.config.js

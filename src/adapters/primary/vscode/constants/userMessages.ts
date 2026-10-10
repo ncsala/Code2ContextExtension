@@ -32,9 +32,30 @@ export const USER_MESSAGES = {
       `File saved at ${path} (${size} MB).`,
     OPENING_DOCUMENT: "Context generated successfully. Opening document...",
     ALL_FILES_SELECTED: "All files selected",
-    GIT_FILES_SELECTED: (label: string, selected: number, skipped: number) =>
-      `Selected ${selected} ${label} files` +
+    GIT_FILES_SELECTED: (
+      label: string,
+      selected: number,
+      skipped: number,
+      deleted: number = 0
+    ) =>
+      "Selected " +
+      [
+        selected > 0 || deleted === 0 ? `${selected} ${label} files` : "",
+        deleted > 0 ? `${deleted} deleted files` : "",
+      ]
+        .filter((part) => part !== "")
+        .join(" and ") +
       (skipped > 0 ? ` (${skipped} skipped: ignored or not a file)` : ""),
+    DELETIONS_APPLIED: (deleted: number, skipped: number) =>
+      `Deleted ${deleted} files` +
+      (skipped > 0 ? ` (${skipped} not found, not a file or rewritten).` : "."),
+  },
+  DELETIONS: {
+    CONFIRM: (count: number, target: string) =>
+      `The context file lists ${count} deleted files. Delete them from "${target}"? This cannot be undone.`,
+    DELETE_BUTTON: (count: number) => `Delete ${count} files`,
+    KEEP_BUTTON: "Keep them (only write files)",
+    MORE: (count: number) => `… and ${count} more`,
   },
   WARNINGS: {
     NOT_INITIALIZED: "The extension has not finished initializing, waiting...",

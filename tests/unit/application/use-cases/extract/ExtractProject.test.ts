@@ -16,6 +16,7 @@ describe("ExtractProject Use Case", () => {
       exists: jest.fn(),
       stat: jest.fn(),
       listDirectoryEntries: jest.fn(),
+      deleteFileWithin: jest.fn(),
     };
     mockLogger = {
       startOperation: jest.fn(),
@@ -128,6 +129,142 @@ describe("ExtractProject Use Case", () => {
     ].join("\n");
 
     mockFileSystem.readFile.mockResolvedValue(contextContent);
+
+    const result = await extractProject.execute({
+      sourceFilePath: "/path/to/proyect.txt",
+      targetDirectoryPath: "/target",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("Security Error: Path traversal detected");
+    expect(mockFileSystem.writeFile).not.toHaveBeenCalled();
+  });
+
+  describe("@Deleted: section", () => {
+    const contextWithDeletions = [
+      "@Index:",
+      "1|src/kept.ts",
+      "",
+      "@Deleted:",
+      "src/old.ts",
+      "src/kept.ts",
+      "",
+      "@F:|1|src/kept.ts|new content",
+    ].join("\n");
+
+    beforeEach(() => {
+      mockFileSystem.exists.mockResolvedValue(true);
+      mockFileSystem.readFile.mockResolvedValue(contextWithDeletions);
+      mockFileSystem.writeFile.mockResolvedValue(true);
+      mockFileSystem.deleteFileWithin.mockResolvedValue("deleted");
+    });
+
+    test("preview lists deletions without touching the disk", async () => {
+      const preview = await extractProject.preview("/path/to/proyect.txt");
+
+      expect(preview).toEqual({
+        ok: true,
+        fileCount: 1,
+        deletedPaths: ["src/old.ts", "src/kept.ts"],
+      });
+      expect(mockFileSystem.writeFile).not.toHaveBeenCalled();
+      expect(mockFileSystem.deleteFileWithin).not.toHaveBeenCalled();
+    });
+
+    test("does not delete anything unless applyDeletions is true", async () => {
+      const result = await extractProject.execute({
+        sourceFilePath: "/path/to/proyect.txt",
+        targetDirectoryPath: "/target",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(mockFileSystem.deleteFileWithin).not.toHaveBeenCalled();
+      expect(mockFileSystem.writeFile).toHaveBeenCalledTimes(1);
+    });
+
+    test("deletes listed files before writing, skipping rewritten ones", async () => {
+      const callOrder: string[] = [];
+      mockFileSystem.deleteFileWithin.mockImplementation(async (_root, file) => {
+        callOrder.push(`delete ${file}`);
+        return "deleted";
+      });
+      mockFileSystem.writeFile.mockImplementation(async (file) => {
+        callOrder.push(`write ${file}`);
+        return true;
+      });
+
+      const result = await extractProject.execute({
+        sourceFilePath: "/path/to/proyect.txt",
+        targetDirectoryPath: "/target",
+        applyDeletions: true,
+      });
+
+      expect(result).toMatchObject({
+        ok: true,
+        fileCount: 1,
+        deletedCount: 1,
+        skippedDeletionCount: 1,
+      });
+      expect(mockFileSystem.deleteFileWithin).toHaveBeenCalledWith(
+        "/target",
+        "/target/src/old.ts"
+      );
+      expect(callOrder).toEqual([
+        "delete /target/src/old.ts",
+        "write /target/src/kept.ts",
+      ]);
+    });
+
+    test("counts missing files as skipped deletions", async () => {
+      mockFileSystem.deleteFileWithin.mockResolvedValue("missing");
+
+      const result = await extractProject.execute({
+        sourceFilePath: "/path/to/proyect.txt",
+        targetDirectoryPath: "/target",
+        applyDeletions: true,
+      });
+
+      expect(result).toMatchObject({ deletedCount: 0, skippedDeletionCount: 2 });
+    });
+
+    test("aborts without touching the disk if a deletion escapes the target", async () => {
+      mockFileSystem.readFile.mockResolvedValue(
+        "@Deleted:\n../outside.ts\n\n@F:|1|src/a.ts|x"
+      );
+
+      const result = await extractProject.execute({
+        sourceFilePath: "/path/to/proyect.txt",
+        targetDirectoryPath: "/target",
+        applyDeletions: true,
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain("Security Error: Path traversal detected");
+      expect(mockFileSystem.deleteFileWithin).not.toHaveBeenCalled();
+      expect(mockFileSystem.writeFile).not.toHaveBeenCalled();
+    });
+  });
+
+  test("should not write any file when a later entry escapes the target", async () => {
+    mockFileSystem.exists.mockResolvedValue(true);
+    mockFileSystem.readFile.mockResolvedValue(
+      ["@F:|1|src/ok.ts|fine", "@F:|2|../../escape.ts|bad"].join("\n")
+    );
+
+    const result = await extractProject.execute({
+      sourceFilePath: "/path/to/proyect.txt",
+      targetDirectoryPath: "/target",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(mockFileSystem.writeFile).not.toHaveBeenCalled();
+  });
+
+  test("should block a sibling directory that shares the target prefix", async () => {
+    mockFileSystem.exists.mockResolvedValue(true);
+    mockFileSystem.readFile.mockResolvedValue(
+      "@F:|1|../target-evil/payload.js|malicious content"
+    );
 
     const result = await extractProject.execute({
       sourceFilePath: "/path/to/proyect.txt",

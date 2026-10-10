@@ -36,6 +36,7 @@ export function createContainer(verboseLogging: boolean = false): Container {
     includeTree: true,
     minifyContent: true,
     truncateLargeDirectories: true,
+    escapeNonAsciiCharacters: false,
     promptPreset: "none",
     selectionMode: "directory",
     verboseLogging: verboseLogging,

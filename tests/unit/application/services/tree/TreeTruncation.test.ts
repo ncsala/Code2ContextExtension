@@ -65,6 +65,7 @@ function createInMemoryFs(
     getFiles: jest.fn(),
     exists: jest.fn(),
     stat: jest.fn(),
+    deleteFileWithin: jest.fn(),
   };
 }
 

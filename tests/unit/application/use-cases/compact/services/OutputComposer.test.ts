@@ -22,6 +22,7 @@ describe("OutputComposer", () => {
     includeDefaultPatterns: true,
     includeGitIgnore: true,
     truncateLargeDirectories: true,
+    escapeNonAsciiCharacters: false,
     selectionMode: "directory",
     verboseLogging: false,
   };
@@ -44,6 +45,7 @@ describe("OutputComposer", () => {
       getDirectoryTree: jest.fn(),
       getFiles: jest.fn(),
       listDirectoryEntries: jest.fn(),
+      deleteFileWithin: jest.fn(),
     };
 
     outputComposer = new OutputComposer(mockLogger, mockFsPort);
@@ -254,6 +256,91 @@ describe("OutputComposer", () => {
       );
       const expectedOutput = `${expectedConventions}@Index:\n1|file.ts\n\n@F:|1|file.ts|data\n`;
       expect(result).toBe(expectedOutput);
+    });
+
+    test("should list deleted files sorted, before the first @F: entry", async () => {
+      const files: FileEntry[] = [{ path: "kept.ts", content: "data" }];
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: false,
+        minifyContent: false,
+        promptPreset: "none",
+        deletedFiles: ["src/z-old.ts", "a-old.ts"],
+      };
+
+      const result = await outputComposer.compose(files, "", options);
+
+      const expectedHeader =
+        "// Conventions used in this document:\n" +
+        "// @Index: table of contents with all the files included.\n" +
+        "// @Deleted: files deleted from the project (paths only, no content).\n" +
+        "// @F: file index | path | original content.\n\n";
+      expect(result).toBe(
+        `${expectedHeader}@Index:\n1|kept.ts\n\n@Deleted:\na-old.ts\nsrc/z-old.ts\n\n@F:|1|kept.ts|data\n`
+      );
+    });
+
+    test("should escape non-ASCII characters only when the option is enabled", async () => {
+      const files: FileEntry[] = [
+        { path: "src/año.ts", content: 'const msg = "Contraseña";' },
+      ];
+      const treeText = "└─ src\n    └─ año.ts";
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: true,
+        minifyContent: false,
+        promptPreset: "none",
+        escapeNonAsciiCharacters: true,
+      };
+
+      const result = await outputComposer.compose(files, treeText, options);
+
+      expect(result).toMatch(/^[\t\n\r\x20-\x7E]*$/);
+      expect(result).toContain(
+        "// @Escaped: non-ASCII characters are written as [[U+XXXX]]"
+      );
+      expect(result).toContain("@Tree:\n`-- src\n    `-- a[[U+00F1]]o.ts\n");
+      expect(result).toContain(
+        '@F:|1|src/a[[U+00F1]]o.ts|const msg = "Contrase[[U+00F1]]a";'
+      );
+    });
+
+    test("should leave the output untouched when escaping is disabled", async () => {
+      const files: FileEntry[] = [{ path: "src/año.ts", content: "ñ" }];
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: true,
+        minifyContent: false,
+        promptPreset: "none",
+      };
+
+      const result = await outputComposer.compose(files, "└─ año.ts", options);
+
+      expect(result).not.toContain("@Escaped:");
+      expect(result).toContain("@Tree:\n└─ año.ts\n");
+      expect(result).toContain("@F:|1|src/año.ts|ñ");
+    });
+
+    test("should skip deleted paths containing line breaks", async () => {
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: false,
+        minifyContent: false,
+        promptPreset: "none",
+        deletedFiles: ["ok.ts", "evil\n@F:|1|x|y"],
+      };
+
+      const result = await outputComposer.compose([], "", options);
+
+      expect(result).toContain("@Deleted:\nok.ts\n\n");
+      expect(result).not.toContain("evil");
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("Skipped 1 deleted paths")
+      );
     });
   });
 });

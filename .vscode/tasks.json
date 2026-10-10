@@ -21,6 +21,14 @@
       "problemMatcher": "$tsc",
       "label": "npm: compile",
       "detail": "tsc -p ./"
+    },
+    {
+      "type": "npm",
+      "script": "build:dev",
+      "group": "build",
+      "problemMatcher": [],
+      "label": "npm: build:dev",
+      "detail": "Bundles dist/extension.js (with source maps) and the webview, as loaded by F5"
     }
   ]
 }

@@ -34,7 +34,8 @@ export function registerGenerateCommands(
       // currentOptions es una copia tomada al registrar el comando)
       if (optionsFromPanel.selectionMode === "files") {
         const selectedFiles = fileExplorerProvider.getSelectedFiles();
-        if (selectedFiles.length === 0) {
+        const deletedFiles = fileExplorerProvider.getDeletedFiles();
+        if (selectedFiles.length === 0 && deletedFiles.length === 0) {
           notificationService?.showError(
             USER_MESSAGES.ERRORS.NO_FILES_SELECTED
           );
@@ -44,6 +45,7 @@ export function registerGenerateCommands(
           ...currentOptions,
           ...optionsFromPanel,
           specificFiles: selectedFiles,
+          deletedFiles,
           selectionMode: "files",
         });
       } else {
@@ -61,7 +63,8 @@ export function registerGenerateCommands(
     "code2context.generateFromSelection",
     async () => {
       const selectedFiles = fileExplorerProvider.getSelectedFiles();
-      if (selectedFiles.length === 0) {
+      const deletedFiles = fileExplorerProvider.getDeletedFiles();
+      if (selectedFiles.length === 0 && deletedFiles.length === 0) {
         notificationService?.showError(USER_MESSAGES.ERRORS.NO_FILES_SELECTED);
         return;
       }
@@ -85,6 +88,7 @@ export function registerGenerateCommands(
         rootPath,
         selectionMode: "files",
         specificFiles: selectedFiles,
+        deletedFiles,
       });
     }
   );
@@ -194,7 +198,21 @@ export function registerGenerateCommands(
         return;
       }
 
-      // 4. Ejecutar el caso de uso
+      // 4. Si el archivo trae eliminados, confirmar explícitamente el borrado
+      const preview = await extractUseCase.preview(sourceFilePath);
+      if (!preview.ok) {
+        notificationService?.showError(`Extraction failed: ${preview.error}`);
+        return;
+      }
+      const applyDeletions = await askToApplyDeletions(
+        preview.deletedPaths ?? [],
+        targetDirectoryPath
+      );
+      if (applyDeletions === undefined) {
+        return;
+      }
+
+      // 5. Ejecutar el caso de uso
       if (webviewProvider) {
         webviewProvider.setLoading(true);
       }
@@ -202,7 +220,8 @@ export function registerGenerateCommands(
       try {
         const result = await extractUseCase.execute({
           sourceFilePath,
-          targetDirectoryPath
+          targetDirectoryPath,
+          applyDeletions,
         });
 
         if (webviewProvider) {
@@ -211,6 +230,12 @@ export function registerGenerateCommands(
 
         if (result.ok) {
           let message = `Successfully extracted ${result.fileCount} files to "${targetDirectoryPath}".`;
+          if (applyDeletions) {
+            message += ` ${USER_MESSAGES.INFO.DELETIONS_APPLIED(
+              result.deletedCount ?? 0,
+              result.skippedDeletionCount ?? 0
+            )}`;
+          }
           if (result.isMinified) {
             message += " WARNING: The source context file was minified, so the extracted files are also minified.";
             notificationService?.showWarning(message);
@@ -233,4 +258,34 @@ export function registerGenerateCommands(
   context.subscriptions.push(generateFromOptionsCommand);
   context.subscriptions.push(generateFromSelectionCommand);
   context.subscriptions.push(extractProjectCommand);
+}
+
+const MAX_DELETIONS_IN_DIALOG = 20;
+
+/**
+ * Diálogo modal para confirmar los borrados de la sección @Deleted:
+ * @returns true = borrar, false = conservar, undefined = cancelar todo
+ */
+async function askToApplyDeletions(
+  deletedPaths: string[],
+  targetDirectoryPath: string
+): Promise<boolean | undefined> {
+  if (deletedPaths.length === 0) return false;
+
+  const deleteOption = USER_MESSAGES.DELETIONS.DELETE_BUTTON(deletedPaths.length);
+  const keepOption = USER_MESSAGES.DELETIONS.KEEP_BUTTON;
+  const hiddenCount = deletedPaths.length - MAX_DELETIONS_IN_DIALOG;
+  const detail =
+    deletedPaths.slice(0, MAX_DELETIONS_IN_DIALOG).join("\n") +
+    (hiddenCount > 0 ? `\n${USER_MESSAGES.DELETIONS.MORE(hiddenCount)}` : "");
+
+  const choice = await vscode.window.showWarningMessage(
+    USER_MESSAGES.DELETIONS.CONFIRM(deletedPaths.length, targetDirectoryPath),
+    { modal: true, detail },
+    deleteOption,
+    keepOption
+  );
+  if (choice === deleteOption) return true;
+  if (choice === keepOption) return false;
+  return undefined;
 }

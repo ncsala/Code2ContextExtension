@@ -2,7 +2,7 @@
   "name": "code2context",
   "displayName": "Code2Context",
   "description": "Generate compact code context for AI",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "engines": {
     "vscode": "^1.99.0"
   },
@@ -39,25 +39,34 @@
   "preview": false,
   "qna": "marketplace",
   "main": "dist/extension.js",
+  "packageManager": "pnpm@10.28.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@vscode/vsce-sign",
+      "keytar"
+    ]
+  },
   "scripts": {
     "build": "webpack --config webpack.config.js",
-    "vscode:prepublish": "npm run build && npm run build-webview",
+    "build:dev": "webpack --config webpack.config.js --mode development --devtool source-map && pnpm run build-webview",
+    "vscode:prepublish": "pnpm run build && pnpm run build-webview",
     "clean": "rimraf ./out ./dist",
     "compile": "tsc --build --clean && tsc -p ./",
-    "compile:clean": "npm run clean && npm run compile",
+    "compile:clean": "pnpm run clean && pnpm run compile",
     "watch": "tsc -watch -p ./",
-    "build-webview": "cd webview && npm run build",
-    "build-all": "npm run compile && npm run build-webview",
-    "build-all:clean": "rimraf ./out ./dist ./webview-dist && npm run build-all",
-    "pretest": "npm run compile:clean && npm run lint",
+    "build-webview": "pnpm --dir webview run build",
+    "build-all": "pnpm run compile && pnpm run build-webview",
+    "build-all:clean": "rimraf ./out ./dist ./webview-dist && pnpm run build-all",
+    "pretest": "pnpm run compile:clean && pnpm run lint",
     "lint": "eslint src",
     "vscode:test": "vscode-test",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand",
-    "package": "npm run compile:clean && vsce package",
-    "publish": "npm run compile:clean && vsce publish"
+    "test:debug": "node --inspect-brk node_modules/jest/bin/jest.js --runInBand",
+    "package": "pnpm run compile:clean && vsce package --no-dependencies",
+    "package:vsix": "pnpm install --frozen-lockfile && pnpm --dir webview install --frozen-lockfile && vsce package --no-dependencies",
+    "publish": "pnpm run compile:clean && vsce publish --no-dependencies"
   },
   "contributes": {
     "commands": [
@@ -202,25 +211,25 @@
     "onCommand:code2context.openPanel"
   ],
   "dependencies": {
-    "ignore": "7.0.4",
+    "ignore": "7.0.12",
     "p-limit": "3.1.0"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
-    "@types/node": "22.15.17",
+    "@types/node": "22.20.5",
     "@types/vscode": "1.99.1",
-    "@typescript-eslint/eslint-plugin": "8.32.0",
-    "@typescript-eslint/parser": "8.32.0",
-    "@vscode/test-cli": "0.0.10",
+    "@typescript-eslint/eslint-plugin": "8.71.1",
+    "@typescript-eslint/parser": "8.71.1",
+    "@vscode/test-cli": "0.0.15",
     "@vscode/test-electron": "2.5.2",
-    "eslint": "9.26.0",
+    "@vscode/vsce": "3.9.2",
+    "eslint": "9.39.5",
     "jest": "29.7.0",
-    "rimraf": "6.0.1",
-    "ts-jest": "29.3.2",
-    "ts-loader": "9.5.2",
-    "typescript": "5.8.3",
-    "vsce": "2.15.0",
-    "webpack": "5.99.8",
+    "rimraf": "6.1.3",
+    "ts-jest": "29.4.14",
+    "ts-loader": "9.6.2",
+    "typescript": "5.9.3",
+    "webpack": "5.111.1",
     "webpack-cli": "6.0.1"
   }
 }

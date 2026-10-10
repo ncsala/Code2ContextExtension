@@ -5,6 +5,12 @@ export interface CompactOptions {
   /** Archivos específicos a incluir (usado solo en modo 'files') */
   specificFiles?: string[];
 
+  /**
+   * Archivos eliminados (según Git) a listar en la sección `@Deleted:`.
+   * Rutas relativas al root; usado solo en modo 'files'.
+   */
+  deletedFiles?: string[];
+
   /** Patrones de ignorado personalizados */
   customIgnorePatterns: string[];
 
@@ -30,6 +36,12 @@ export interface CompactOptions {
    * En `false` se genera el árbol completo con todos sus archivos.
    */
   truncateLargeDirectories: boolean;
+
+  /**
+   * Escribe los caracteres no ASCII como `[[U+XXXX]]` para que el archivo sobreviva
+   * a portapapeles que solo transportan ASCII (p. ej. RDP). El Recreate los restaura.
+   */
+  escapeNonAsciiCharacters: boolean;
 
   /** Ruta de salida donde se generará el archivo compactado */
   outputPath: string;
