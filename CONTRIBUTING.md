@@ -28,7 +28,7 @@ We use GitHub to host code, to track issues and feature requests, as well as acc
    cd Code2ContextExtension
    ```
 
-2. Install dependencies with [pnpm](https://pnpm.io) (the version is pinned in `packageManager`; `corepack enable` sets it up, or `npm install -g pnpm`). The extension and the React webview have separate `package.json` files:
+2. Install dependencies with [pnpm](https://pnpm.io) on Node.js 20+ (the version is pinned in `packageManager`; `corepack enable` sets it up, or `npm install -g pnpm`). The extension and the React webview have separate `package.json` files:
 
    ```bash
    pnpm install
