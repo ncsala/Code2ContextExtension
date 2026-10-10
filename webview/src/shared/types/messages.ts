@@ -8,6 +8,7 @@ export interface CompactOptions {
   includeGitIgnore: boolean;
   includeTree: boolean;
   minifyContent: boolean;
+  truncateLargeDirectories: boolean;
   selectionMode: "directory" | "files";
 }
 

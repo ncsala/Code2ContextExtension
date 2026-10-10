@@ -5,6 +5,9 @@ module.exports = {
   rootDir: ".",
   testMatch: ["<rootDir>/tests/**/*.test.ts"],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
+  moduleNameMapper: {
+    "^vscode$": "<rootDir>/tests/mocks/vscode.ts",
+  },
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",

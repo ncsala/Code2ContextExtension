@@ -122,6 +122,9 @@ export class WebviewActionHandler {
       minifyContent: payloadFromWebview.minifyContent === true,
       includeTree: payloadFromWebview.includeTree === true,
       includeGitIgnore: payloadFromWebview.includeGitIgnore === true,
+      truncateLargeDirectories:
+        payloadFromWebview.truncateLargeDirectories ??
+        this.optionsViewProvider.getOptions().truncateLargeDirectories,
       rootPath:
         payloadFromWebview.rootPath ||
         this.optionsViewProvider.getOptions().rootPath ||

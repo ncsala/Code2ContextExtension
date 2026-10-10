@@ -1,7 +1,23 @@
 /**
+ * Alcance de los cambios a consultar:
+ * - `staged`: solo lo que está en el index (lo que entraría en el próximo commit)
+ * - `all`: staged + modificados sin stagear + archivos nuevos sin trackear
+ */
+export type GitChangeScope = "staged" | "all";
+
+/**
  * Puerto secundario para interactuar con Git
  */
 export interface GitPort {
+  /**
+   * Lista los archivos con cambios en Git (excluye los eliminados)
+   * @param rootPath Ruta raíz del proyecto (puede ser una subcarpeta del repo)
+   * @param scope Alcance de los cambios a consultar
+   * @returns Rutas relativas a rootPath en formato POSIX
+   * @throws Error si rootPath no está dentro de un repositorio o Git no está disponible
+   */
+  getChangedFiles(rootPath: string, scope: GitChangeScope): Promise<string[]>;
+
   /**
    * Verifica si una ruta está siendo ignorada por Git
    * @param rootPath Ruta raíz del proyecto

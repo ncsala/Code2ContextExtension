@@ -17,6 +17,7 @@ const initialOptions: CompactOptions = {
   includeGitIgnore: true,
   includeTree: true,
   minifyContent: true,
+  truncateLargeDirectories: true,
   selectionMode: "directory",
 };
 

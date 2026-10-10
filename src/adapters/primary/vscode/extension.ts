@@ -64,7 +64,8 @@ export function activate(context: vscode.ExtensionContext) {
       container.compactUseCase,
       container.extractUseCase,
       logger,
-      notificationService
+      notificationService,
+      container.gitAdapter
     );
 
     // Marcar inicialización como completa

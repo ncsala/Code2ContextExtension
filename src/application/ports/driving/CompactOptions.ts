@@ -25,6 +25,12 @@ export interface CompactOptions {
   /** Minificar el contenido de los archivos (remueve espacios innecesarios) */
   minifyContent: boolean;
 
+  /**
+   * Trunca las carpetas demasiado grandes en el árbol (y omite su contenido).
+   * En `false` se genera el árbol completo con todos sus archivos.
+   */
+  truncateLargeDirectories: boolean;
+
   /** Ruta de salida donde se generará el archivo compactado */
   outputPath: string;
 

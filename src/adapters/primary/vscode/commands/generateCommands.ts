@@ -30,8 +30,9 @@ export function registerGenerateCommands(
       // Obtener opciones actuales del panel de opciones
       const optionsFromPanel = optionsViewProvider.getOptions();
 
-      // Determinar modo de selección
-      if (currentOptions.selectionMode === "files") {
+      // Determinar modo de selección (el panel tiene el valor vigente;
+      // currentOptions es una copia tomada al registrar el comando)
+      if (optionsFromPanel.selectionMode === "files") {
         const selectedFiles = fileExplorerProvider.getSelectedFiles();
         if (selectedFiles.length === 0) {
           notificationService?.showError(

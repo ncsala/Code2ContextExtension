@@ -3,6 +3,8 @@ import { toPosix } from "../../../../shared/utils/pathUtils";
 import { FileTree } from "../../../../domain/model/FileTree";
 import { fileListFromTree } from "../../../services/tree/utils/fileListFromTree";
 import { TreeGeneratorFactory } from "../../../services/tree/TreeGeneratorFactory";
+import { TreeGenerator } from "../../../services/tree/TreeGenerator";
+import { UNLIMITED_TREE_LIMITS } from "../../../services/tree/common";
 import { ProgressReporter } from "../../../ports/driven/ProgressReporter";
 
 interface TreeProcessingResult {
@@ -23,6 +25,7 @@ export class TreeService {
       rootPath: string;
       selectionMode: "directory" | "files";
       specificFiles?: string[];
+      truncateLargeDirectories?: boolean;
     },
     ignoreHandler: Ignore
   ): Promise<TreeProcessingResult> {
@@ -33,7 +36,10 @@ export class TreeService {
         ? (options.specificFiles ?? []).map(toPosix)
         : [];
 
-    const treeGenerator = this.treeGeneratorFactory.make(options.selectionMode);
+    const treeGenerator = this.createTreeGenerator(
+      options.selectionMode,
+      options.truncateLargeDirectories !== false
+    );
 
     const { treeText, fileTree, truncatedPaths } =
       await treeGenerator.generatePrunedTreeText(
@@ -54,5 +60,18 @@ export class TreeService {
     );
 
     return { treeText, fileTree, truncatedPaths, validFilePaths };
+  }
+
+  private createTreeGenerator(
+    selectionMode: "directory" | "files",
+    truncateLargeDirectories: boolean
+  ): TreeGenerator {
+    if (truncateLargeDirectories) {
+      return this.treeGeneratorFactory.make(selectionMode);
+    }
+    this.logger.info(
+      "TreeService: Truncation disabled, generating the full tree."
+    );
+    return this.treeGeneratorFactory.make(selectionMode, UNLIMITED_TREE_LIMITS);
   }
 }

@@ -10,6 +10,8 @@ import { FileExplorerProvider } from "../providers/fileExplorer/FileExplorerProv
 import { OptionsViewProvider } from "../options/optionsViewProvider";
 import { registerFileCommands } from "../commands/fileCommands";
 import { registerGenerateCommands } from "../commands/generateCommands";
+import { registerGitSelectionCommands } from "../commands/gitSelectionCommands";
+import { GitPort } from "../../../../application/ports/driven/GitPort";
 
 // --- Función principal registerCommands ---
 export function registerCommands(
@@ -23,7 +25,8 @@ export function registerCommands(
   compactUseCase: CompactUseCase,
   extractUseCase: ExtractUseCase,
   logger: ProgressReporter,
-  notificationService: NotificationPort
+  notificationService: NotificationPort,
+  gitPort: GitPort
 ): void {
   // Comando para abrir panel (ahora más modularizado)
   const openPanelCommand = vscode.commands.registerCommand(
@@ -63,6 +66,12 @@ export function registerCommands(
     appState.currentOptions,
     notificationService
   );
+  registerGitSelectionCommands(context, {
+    gitPort,
+    fileExplorerProvider,
+    optionsViewProvider,
+    notificationService,
+  });
   registerGenerateCommands(
     context,
     compactUseCase,
