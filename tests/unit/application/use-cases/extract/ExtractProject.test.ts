@@ -138,4 +138,20 @@ describe("ExtractProject Use Case", () => {
     expect(result.error).toContain("Security Error: Path traversal detected");
     expect(mockFileSystem.writeFile).not.toHaveBeenCalled();
   });
+
+  test("should block a sibling directory that shares the target prefix", async () => {
+    mockFileSystem.exists.mockResolvedValue(true);
+    mockFileSystem.readFile.mockResolvedValue(
+      "@F:|1|../target-evil/payload.js|malicious content"
+    );
+
+    const result = await extractProject.execute({
+      sourceFilePath: "/path/to/proyect.txt",
+      targetDirectoryPath: "/target",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("Security Error: Path traversal detected");
+    expect(mockFileSystem.writeFile).not.toHaveBeenCalled();
+  });
 });

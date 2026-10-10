@@ -4,6 +4,7 @@ import { ExtractResult } from "../../ports/driving/ExtractResult";
 import { FileSystemPort } from "../../ports/driven/FileSystemPort";
 import { ProgressReporter } from "../../ports/driven/ProgressReporter";
 import * as path from "path";
+import { isPathInside } from "../../../shared/utils/pathUtils";
 
 /**
  * Caso de uso para recrear un proyecto (extraer archivos) desde un archivo de contexto de origen
@@ -64,7 +65,7 @@ export class ExtractProject implements ExtractUseCase {
             const resolvedPath = path.resolve(options.targetDirectoryPath, relativePath);
 
             // Security check: prevent directory traversal
-            if (!resolvedPath.startsWith(options.targetDirectoryPath)) {
+            if (!isPathInside(options.targetDirectoryPath, resolvedPath)) {
               const errorMsg = `Security Error: Path traversal detected: ${origPath}`;
               this.logger.error(errorMsg);
               this.logger.endOperation("ExtractProject.execute");
