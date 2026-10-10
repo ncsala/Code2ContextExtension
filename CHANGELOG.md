@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New **"Select All Git Changes"** command (view `...` menu and Command Palette): includes staged, unstaged and untracked files.
   - Both switch the generator to "Specific Files" mode, skip deleted files, submodules and ignored files, and work when the project root is a subfolder of the repository.
   - Git is invoked without a shell and with NUL-separated output, so paths with spaces or special characters are handled safely.
+- **Deleted files sync (Git → context → recreate)**:
+  - Git selection now also collects deleted files (renames contribute their old path) and lists them in a new `@Deleted:` section, shown in the panel as **Files to delete**. Change sets made only of deletions are supported.
+  - **Recreate Project from Context File** previews the file and asks for explicit confirmation (modal, listing the paths) before deleting; "Keep them" writes files only.
+  - Deletions only affect regular files physically inside the target folder (symlinks are resolved), never directories with content, and prune folders left empty. Paths that are also written are never deleted.
+  - The section is written before the first `@F:` entry, so older versions of the extension simply ignore it.
+
+### 🔒 Security
+
+- **Recreate Project path traversal**: the target check used a string prefix comparison, so `../target-evil/x` was accepted for a `/target` folder. It now compares resolved paths, and every path is validated before anything is written or deleted (previously, files before an invalid entry were already written).
 
 ## [0.2.4] - 2026-06-07
 

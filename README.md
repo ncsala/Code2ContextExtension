@@ -52,7 +52,12 @@ Configure which files to exclude:
 
 - **Directory Mode**: Include entire directory structure
 - **Files Mode**: Select specific files using the file explorer
-  - Use the Git commit icon button in the **File Selection** view to select only your staged files, or the `...` menu to select every uncommitted change. Deleted files and files matching your ignore patterns are skipped
+  - Use the Git commit icon button in the **File Selection** view to select only your staged files, or the `...` menu to select every uncommitted change. Files matching your ignore patterns are skipped
+  - Deleted (and renamed-away) files are listed in an `@Deleted:` section of the context file and shown in the panel under **Files to delete**
+
+### Recreating a Project with Deletions
+
+When a context file contains an `@Deleted:` section, **Recreate Project from Context File** asks for confirmation (listing every file) before deleting them from the target folder. You can also keep them and only write files. Deletions are restricted to regular files inside the target folder (symlinks pointing outside are refused), and folders left empty are removed. Older context files without that section behave exactly as before.
 
 ### Output Options
 

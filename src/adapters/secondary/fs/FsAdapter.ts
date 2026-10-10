@@ -3,10 +3,11 @@ import * as nodePath from "path";
 import { FileEntry } from "../../../domain/model/FileEntry";
 import { FileTree } from "../../../domain/model/FileTree";
 import {
+  DeleteFileOutcome,
   FileSystemPort,
   PortDirectoryEntry,
 } from "../../../application/ports/driven/FileSystemPort";
-import { toPosix } from "../../../shared/utils/pathUtils";
+import { isPathInside, toPosix } from "../../../shared/utils/pathUtils";
 import { compareFileTrees } from "../../../shared/utils/sortUtils";
 import pLimit from "p-limit";
 import ignoreAdapterImport from "ignore";
@@ -188,6 +189,54 @@ export class FsAdapter implements FileSystemPort {
       };
     } catch (error) {
       return null;
+    }
+  }
+
+  async deleteFileWithin(
+    rootDir: string,
+    filePath: string
+  ): Promise<DeleteFileOutcome> {
+    const stats = await fs.promises.lstat(filePath).catch(() => null);
+    if (!stats) return "missing";
+    if (!stats.isFile() && !stats.isSymbolicLink()) return "skipped";
+
+    const parentDir = nodePath.dirname(filePath);
+    if (!(await this.isPhysicallyWithin(rootDir, parentDir))) return "skipped";
+
+    await fs.promises.unlink(filePath);
+    await this.removeEmptyDirectoriesUpTo(rootDir, parentDir);
+    return "deleted";
+  }
+
+  /** Resuelve symlinks: una carpeta enlazada fuera de rootDir no cuenta como "dentro" */
+  private async isPhysicallyWithin(
+    rootDir: string,
+    dirPath: string
+  ): Promise<boolean> {
+    try {
+      const [realRoot, realDir] = await Promise.all([
+        fs.promises.realpath(rootDir),
+        fs.promises.realpath(dirPath),
+      ]);
+      return realDir === realRoot || isPathInside(realRoot, realDir);
+    } catch {
+      return false;
+    }
+  }
+
+  /** rmdir no recursivo: se detiene en el primer directorio con contenido */
+  private async removeEmptyDirectoriesUpTo(
+    rootDir: string,
+    startDir: string
+  ): Promise<void> {
+    let currentDir = startDir;
+    while (isPathInside(rootDir, currentDir)) {
+      try {
+        await fs.promises.rmdir(currentDir);
+      } catch {
+        return;
+      }
+      currentDir = nodePath.dirname(currentDir);
     }
   }
 

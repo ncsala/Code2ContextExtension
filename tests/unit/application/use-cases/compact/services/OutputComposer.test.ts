@@ -44,6 +44,7 @@ describe("OutputComposer", () => {
       getDirectoryTree: jest.fn(),
       getFiles: jest.fn(),
       listDirectoryEntries: jest.fn(),
+      deleteFileWithin: jest.fn(),
     };
 
     outputComposer = new OutputComposer(mockLogger, mockFsPort);

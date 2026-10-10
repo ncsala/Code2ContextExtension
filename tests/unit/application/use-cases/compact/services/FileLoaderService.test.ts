@@ -17,6 +17,7 @@ describe("FileLoaderService", () => {
       getFiles: jest.fn(),
       stat: jest.fn(),
       listDirectoryEntries: jest.fn(),
+      deleteFileWithin: jest.fn(),
     };
 
     mockLogger = {

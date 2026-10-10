@@ -53,6 +53,7 @@ describe("CompactProject Use Case", () => {
       exists: jest.fn(),
       stat: jest.fn(),
       listDirectoryEntries: jest.fn(),
+      deleteFileWithin: jest.fn(),
     };
     mockGit = {
       isIgnored: jest.fn(),
