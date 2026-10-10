@@ -29,6 +29,7 @@ vite.config.ts
 
 # Archivos de bloqueo de dependencias
 package-lock.json
+pnpm-lock.yaml
 
 # Archivos de Git
 .gitignore

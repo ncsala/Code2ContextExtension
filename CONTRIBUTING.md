@@ -28,26 +28,25 @@ We use GitHub to host code, to track issues and feature requests, as well as acc
    cd Code2ContextExtension
    ```
 
-2. Install dependencies (the extension and the React webview have separate `package.json` files)
+2. Install dependencies with [pnpm](https://pnpm.io) (the version is pinned in `packageManager`; `corepack enable` sets it up, or `npm install -g pnpm`). The extension and the React webview have separate `package.json` files:
 
    ```bash
-   npm ci
-   cd webview && npm ci && cd ..
+   pnpm install
+   pnpm --dir webview install
    ```
 
 3. Run the extension: open the folder in VS Code and press **F5** ("Run Extension").
 
-   F5 runs `npm run build:dev` first, which bundles `dist/extension.js` (the file VS Code loads, see `main` in `package.json`) with source maps and builds the webview into `webview-dist/`. A new **[Extension Development Host]** window opens with your local version of the extension.
+   F5 runs `pnpm run build:dev` first, which bundles `dist/extension.js` (the file VS Code loads, see `main` in `package.json`) with source maps and builds the webview into `webview-dist/`. A new **[Extension Development Host]** window opens with your local version of the extension.
 
    To try a change, stop the session (`Shift+F5`) and press **F5** again so the bundle is rebuilt.
 
-   > ⚠️ `npm run compile` / `npm run watch` only type-check into `out/`; VS Code never loads that folder, so they are not enough to see your changes.
+   > ⚠️ `pnpm run compile` / `pnpm run watch` only type-check into `out/`; VS Code never loads that folder, so they are not enough to see your changes.
 
-4. Run the checks before opening a pull request
+4. Run the checks before opening a pull request (`pnpm test` also compiles and lints first)
 
    ```bash
-   npm run lint
-   npm test
+   pnpm test
    ```
 
 ## Testing the packaged extension (VSIX)
@@ -56,11 +55,11 @@ This installs the extension exactly as users get it from the Marketplace, in you
 
 ```bash
 git checkout <branch-to-test> && git pull
-npm run package:vsix            # clean install (extension + webview) and creates code2context-<version>.vsix
+pnpm run package:vsix           # clean install (extension + webview) and creates code2context-<version>.vsix
 code --install-extension code2context-<version>.vsix --force
 ```
 
-`package:vsix` runs `npm ci` in both the root and `webview/` (packaging also builds the webview) and then `vsce package`, so it works on a fresh clone. Then reload VS Code (`Ctrl+Shift+P` → **Developer: Reload Window**).
+`package:vsix` runs `pnpm install --frozen-lockfile` in both the root and `webview/` (packaging also builds the webview) and then `vsce package`, so it works on a fresh clone. Then reload VS Code (`Ctrl+Shift+P` → **Developer: Reload Window**).
 
 - `--force` is needed when the same version is already installed (e.g. from the Marketplace).
 - If the `code` command is not found, use `Ctrl+Shift+P` → **Shell Command: Install 'code' command in PATH** (macOS), or install it from the Extensions view: `...` → **Install from VSIX…**.
@@ -76,10 +75,10 @@ One-time setup: a [Personal Access Token](https://dev.azure.com) with the **Mark
 
    ```bash
    git checkout main && git pull
-   npm ci && (cd webview && npm ci)
-   npm test
-   npx vsce login ncsala     # paste the token
-   npx vsce publish          # builds (vscode:prepublish) and publishes the package.json version
+   pnpm install --frozen-lockfile && pnpm --dir webview install --frozen-lockfile
+   pnpm test
+   pnpm exec vsce login ncsala   # paste the token
+   pnpm run publish              # builds (vscode:prepublish) and publishes the package.json version
    git tag vx.y.z && git push origin vx.y.z
    ```
 
