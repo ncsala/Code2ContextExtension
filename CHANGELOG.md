@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The copy-paste "sanitization" added in 0.2.4 on **Recreate Project**: it silently deleted `U+FFFD`, `U+FEFF` and `U+0000` characters, which changed file contents and even file names (`configuraci�n.json` → `configuracin.json`) while not detecting the real RDP corruption (`\Uffffffff`). Context files are now recreated verbatim; use the escape option to transport them safely.
 
+### 🔧 Maintenance
+
+- Development now uses **pnpm** (`packageManager` is pinned; see `CONTRIBUTING.md`).
+- Dependencies updated within their current major versions, and the deprecated `vsce` package replaced by its official successor `@vscode/vsce`. This resolves 75 of the 80 known advisories, all of them in development tooling (nothing shipped in the extension was affected).
+
 ### 🐛 Fixed
 
 - **Generate Context from Current Options** (⚡ button in the Options view) ignored "Specific Files" mode and always generated the whole directory: it read the selection mode from a snapshot taken at startup.
