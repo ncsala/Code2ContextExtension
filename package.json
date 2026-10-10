@@ -41,6 +41,7 @@
   "main": "dist/extension.js",
   "scripts": {
     "build": "webpack --config webpack.config.js",
+    "build:dev": "webpack --config webpack.config.js --mode development --devtool source-map && npm run build-webview",
     "vscode:prepublish": "npm run build && npm run build-webview",
     "clean": "rimraf ./out ./dist",
     "compile": "tsc --build --clean && tsc -p ./",
