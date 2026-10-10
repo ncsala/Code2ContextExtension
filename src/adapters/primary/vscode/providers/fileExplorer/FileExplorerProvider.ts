@@ -152,6 +152,18 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     );
   }
 
+  /**
+   * Reemplaza la selección por una lista de archivos (rutas relativas al root)
+   * @returns Cantidad de archivos efectivamente seleccionados
+   */
+  public async replaceSelection(relativePaths: string[]): Promise<number> {
+    const selectedCount = await this.selectionManager.replaceSelection(
+      relativePaths
+    );
+    this._onDidChangeTreeData.fire();
+    return selectedCount;
+  }
+
   getTreeItem(element: FileItem): vscode.TreeItem {
     return element;
   }

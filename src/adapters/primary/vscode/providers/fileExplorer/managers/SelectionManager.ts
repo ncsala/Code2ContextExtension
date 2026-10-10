@@ -118,6 +118,59 @@ export class SelectionManager {
   }
 
   /**
+   * Reemplaza la selección actual por los archivos indicados.
+   * Omite los ignorados, los inexistentes y los que no son archivos.
+   * Si ninguno es seleccionable, la selección actual se mantiene.
+   * @param relativePaths Rutas relativas al root (POSIX o nativas)
+   * @returns Cantidad de archivos seleccionados
+   */
+  public async replaceSelection(relativePaths: string[]): Promise<number> {
+    if (!this._rootPath) return 0;
+    const rootPath = this._rootPath;
+
+    const candidatePaths = relativePaths.map((p) => path.join(rootPath, p));
+    const selectablePaths = await this.filterSelectableFiles(candidatePaths);
+    if (selectablePaths.length === 0) return 0;
+
+    this.cache.clearSelection();
+    for (const absolutePath of selectablePaths) {
+      this.cache.getOrCreate(
+        absolutePath,
+        vscode.Uri.file(absolutePath),
+        false,
+        true
+      );
+    }
+
+    const selectedFiles = this.getSelectedFiles();
+    this.selectionService.setSelectedFiles(selectedFiles);
+    return selectedFiles.length;
+  }
+
+  private async filterSelectableFiles(
+    absolutePaths: string[]
+  ): Promise<string[]> {
+    const checks = await Promise.all(
+      absolutePaths.map(async (absolutePath) => ({
+        absolutePath,
+        selectable: await this.isSelectableFile(absolutePath),
+      }))
+    );
+    return checks
+      .filter((check) => check.selectable)
+      .map((check) => check.absolutePath);
+  }
+
+  private async isSelectableFile(absolutePath: string): Promise<boolean> {
+    if (this.ignoreManager.shouldIgnore(absolutePath)) return false;
+    try {
+      return (await fs.promises.stat(absolutePath)).isFile();
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Propaga la selección a todos los hijos de un directorio
    */
   private async propagateSelectionToChildren(

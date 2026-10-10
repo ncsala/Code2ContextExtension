@@ -1,15 +1,46 @@
 import * as fs from "fs";
 import * as path from "path";
-import { GitPort } from "../../../application/ports/driven/GitPort";
+import {
+  GitChangeScope,
+  GitPort,
+} from "../../../application/ports/driven/GitPort";
 import * as vscode from "vscode";
 import * as cp from "child_process";
 import { promisify } from "util";
+
+/** Archivos existentes en disco: Added, Copied, Modified, Renamed, Type, Unmerged */
+const EXISTING_FILES_FILTER = "--diff-filter=ACMRTU";
+
+const STAGED_FILES_ARGS = [
+  "diff",
+  "--cached",
+  "--name-only",
+  "--relative",
+  EXISTING_FILES_FILTER,
+  "-z",
+];
+const UNSTAGED_FILES_ARGS = [
+  "diff",
+  "--name-only",
+  "--relative",
+  EXISTING_FILES_FILTER,
+  "-z",
+];
+const UNTRACKED_FILES_ARGS = ["ls-files", "--others", "--exclude-standard", "-z"];
+
+const CHANGED_FILES_QUERIES: Readonly<Record<GitChangeScope, string[][]>> = {
+  staged: [STAGED_FILES_ARGS],
+  all: [STAGED_FILES_ARGS, UNSTAGED_FILES_ARGS, UNTRACKED_FILES_ARGS],
+};
+
+const GIT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
 /**
  * Adaptador para Git
  */
 export class GitAdapter implements GitPort {
   private readonly exec = promisify(cp.exec);
+  private readonly execFile = promisify(cp.execFile);
   private static readonly ignoreCache = new Map<
     string,
     { mtime: number; patterns: string[] }
@@ -167,6 +198,61 @@ export class GitAdapter implements GitPort {
     } catch (error) {
       return false;
     }
+  }
+
+  /**
+   * Lista los archivos con cambios en Git (excluye los eliminados)
+   * @param rootPath Ruta raíz del proyecto (puede ser una subcarpeta del repo)
+   * @param scope Alcance de los cambios a consultar
+   * @returns Rutas relativas a rootPath en formato POSIX
+   */
+  async getChangedFiles(
+    rootPath: string,
+    scope: GitChangeScope
+  ): Promise<string[]> {
+    const gitPath = await this.getGitExecutablePath();
+    if (gitPath === null) {
+      throw new Error("Git executable not found.");
+    }
+    await this.assertInsideWorkTree(gitPath, rootPath);
+
+    const results = await Promise.all(
+      CHANGED_FILES_QUERIES[scope].map((args) =>
+        this.runGitPathListCommand(gitPath, rootPath, args)
+      )
+    );
+    return [...new Set(results.flat())];
+  }
+
+  private async assertInsideWorkTree(
+    gitPath: string,
+    rootPath: string
+  ): Promise<void> {
+    // Dentro de .git o en un repo bare responde "false" con exit code 0
+    const isInsideWorkTree = await this.execFile(
+      gitPath,
+      ["rev-parse", "--is-inside-work-tree"],
+      { cwd: rootPath }
+    ).then(
+      ({ stdout }) => stdout.trim() === "true",
+      () => false
+    );
+    if (!isInsideWorkTree) {
+      throw new Error(`Not inside a Git repository: ${rootPath}`);
+    }
+  }
+
+  /** Ejecuta un comando git con salida `-z` (rutas separadas por NUL) */
+  private async runGitPathListCommand(
+    gitPath: string,
+    cwd: string,
+    args: string[]
+  ): Promise<string[]> {
+    const { stdout } = await this.execFile(gitPath, args, {
+      cwd,
+      maxBuffer: GIT_MAX_BUFFER_BYTES,
+    });
+    return stdout.split("\0").filter((filePath) => filePath.length > 0);
   }
 
   /**

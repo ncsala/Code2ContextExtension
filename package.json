@@ -97,6 +97,18 @@
         "icon": "$(folder-active)"
       },
       {
+        "command": "code2context.selectGitStaged",
+        "title": "Select Git Staged Files",
+        "category": "Code2Context",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "code2context.selectGitChanges",
+        "title": "Select All Git Changes (staged, unstaged, untracked)",
+        "category": "Code2Context",
+        "icon": "$(diff)"
+      },
+      {
         "command": "code2context.extractProject",
         "title": "Code2Context: Recreate Project from Context File",
         "icon": "$(file-zip)"
@@ -143,6 +155,21 @@
           "command": "code2context.deselectAll",
           "when": "view == code2contextFiles",
           "group": "navigation"
+        },
+        {
+          "command": "code2context.selectGitStaged",
+          "when": "view == code2contextFiles",
+          "group": "navigation"
+        },
+        {
+          "command": "code2context.selectGitStaged",
+          "when": "view == code2contextFiles",
+          "group": "1_git@1"
+        },
+        {
+          "command": "code2context.selectGitChanges",
+          "when": "view == code2contextFiles",
+          "group": "1_git@2"
         },
         {
           "command": "code2context.generateFromSelection",

@@ -7,6 +7,7 @@ Code2Context is a Visual Studio Code extension that helps you quickly create com
 ## ✨ Features
 
 - **Smart File Selection**: Choose specific files or entire directories
+- **Git-Aware Selection**: Select only your staged files (or every uncommitted change) in one click
 - **Tree Structure Generation**: Includes project directory structure
 - **Content Minification**: Reduces file size while maintaining readability
 - **Customizable Ignores**: Support for .gitignore patterns and custom exclusions
@@ -31,6 +32,8 @@ Code2Context is a Visual Studio Code extension that helps you quickly create com
 | `Code2Context: Open Generator Panel` | Opens the main generation interface |
 | `Code2Context: Select All Files` | Selects all files in the explorer |
 | `Code2Context: Deselect All Files` | Clears current selection |
+| `Code2Context: Select Git Staged Files` | Replaces the selection with the files staged in Git and switches to Files mode |
+| `Code2Context: Select All Git Changes` | Same, but includes staged, unstaged and untracked files |
 | `Code2Context: Generate from Selection` | Creates context from selected files |
 | `Code2Context: Generate from Options` | Uses options panel configuration |
 | `Code2Context: Recreate Project from Context File` | Reconstructs directories and files from a context file |
@@ -49,6 +52,7 @@ Configure which files to exclude:
 
 - **Directory Mode**: Include entire directory structure
 - **Files Mode**: Select specific files using the file explorer
+  - Use the Git commit icon button in the **File Selection** view to select only your staged files, or the `...` menu to select every uncommitted change. Deleted files and files matching your ignore patterns are skipped
 
 ### Output Options
 

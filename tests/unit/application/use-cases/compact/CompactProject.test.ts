@@ -58,6 +58,7 @@ describe("CompactProject Use Case", () => {
       isIgnored: jest.fn(),
       getIgnorePatterns: jest.fn(),
       isGitRepository: jest.fn(),
+      getChangedFiles: jest.fn(),
     };
     mockLogger = {
       startOperation: jest.fn(),

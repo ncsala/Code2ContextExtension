@@ -17,6 +17,8 @@ export const USER_MESSAGES = {
       `Unexpected error during context generation: ${error}`,
     DOCUMENT_OPEN_FAILED: (error: string) =>
       `Generated context, but failed to open document: ${error}`,
+    GIT_CHANGES_FAILED: (error: string) =>
+      `Could not read Git changes: ${error}`,
   },
   INFO: {
     ACTIVATION_SUCCESS: "Code2Context extension activated successfully!",
@@ -30,6 +32,9 @@ export const USER_MESSAGES = {
       `File saved at ${path} (${size} MB).`,
     OPENING_DOCUMENT: "Context generated successfully. Opening document...",
     ALL_FILES_SELECTED: "All files selected",
+    GIT_FILES_SELECTED: (label: string, selected: number, skipped: number) =>
+      `Selected ${selected} ${label} files` +
+      (skipped > 0 ? ` (${skipped} skipped: ignored or not a file)` : ""),
   },
   WARNINGS: {
     NOT_INITIALIZED: "The extension has not finished initializing, waiting...",
@@ -38,5 +43,8 @@ export const USER_MESSAGES = {
     FILE_SAVE_CANCELLED: "Generation completed, but file saving was canceled.",
     STILL_INITIALIZING_TRY_AGAIN:
       "The extension is still initializing. Please try again in a few moments.",
+    NO_GIT_CHANGES: (label: string) => `No ${label} files found in Git.`,
+    NO_SELECTABLE_GIT_CHANGES: (label: string, total: number) =>
+      `Found ${total} ${label} files, but all are ignored or not files. Selection unchanged.`,
   },
 } as const;
