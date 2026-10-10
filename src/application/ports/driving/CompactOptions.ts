@@ -5,6 +5,12 @@ export interface CompactOptions {
   /** Archivos específicos a incluir (usado solo en modo 'files') */
   specificFiles?: string[];
 
+  /**
+   * Archivos eliminados (según Git) a listar en la sección `@Deleted:`.
+   * Rutas relativas al root; usado solo en modo 'files'.
+   */
+  deletedFiles?: string[];
+
   /** Patrones de ignorado personalizados */
   customIgnorePatterns: string[];
 

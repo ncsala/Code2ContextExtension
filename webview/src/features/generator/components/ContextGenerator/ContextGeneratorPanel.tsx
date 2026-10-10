@@ -10,6 +10,7 @@ interface GeneratorPanelProps {
   loading: boolean;
   error: string | null;
   selectedFiles?: string[];
+  deletedFiles?: string[];
   onSelectionModeChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   onSelectDirectory: () => void;
   onGenerate: () => void;
@@ -23,6 +24,7 @@ const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
   loading,
   error,
   selectedFiles = [],
+  deletedFiles = [],
   onSelectionModeChange,
   onSelectDirectory,
   onGenerate,
@@ -105,6 +107,26 @@ const ContextGeneratorPanel: React.FC<GeneratorPanelProps> = ({
                 {ERROR_MESSAGES.FILE_OPERATIONS.NO_FILES_MESSAGE}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Deleted Files Display - Solo si la selección por Git trajo eliminados */}
+      {options.selectionMode === "files" && deletedFiles.length > 0 && (
+        <div className={styles.formGroup}>
+          <label className={styles.label}>
+            {UI_MESSAGES.LABELS.DELETED_FILES} {deletedFiles.length}
+          </label>
+          <div
+            className={`${styles.fileListContainer} ${styles.deletedListContainer}`}
+          >
+            <ul className={styles.fileList}>
+              {deletedFiles.map((file) => (
+                <li key={file} className={`${styles.fileItem} ${styles.deletedItem}`}>
+                  {file}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       )}

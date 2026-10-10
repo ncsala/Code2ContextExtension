@@ -73,6 +73,7 @@ interface DebugMessage extends VSCodeToWebviewMessage {
 interface SelectedFilesMessage extends VSCodeToWebviewMessage {
   command: "selectedFiles";
   files: string[];
+  deletedFiles?: string[];
 }
 interface SetLoadingMessage extends VSCodeToWebviewMessage {
   command: "setLoading";

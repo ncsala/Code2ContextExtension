@@ -32,6 +32,7 @@ describeIfGit("GitAdapter.getChangedFiles (real repository)", () => {
     write("committed.ts");
     write("src/deleted.ts");
     write("src/modified.ts", "v1");
+    write("src/old-name.ts", "rename me");
     git("add", ".");
     git("commit", "-q", "-m", "init");
 
@@ -72,6 +73,27 @@ describeIfGit("GitAdapter.getChangedFiles (real repository)", () => {
     );
 
     expect(files.sort()).toEqual(["modified.ts", "staged new.ts"]);
+  });
+
+  test("deleted files include staged deletions and the old path of renames", async () => {
+    git("mv", "src/old-name.ts", "src/new-name.ts");
+
+    const deleted = await adapter.getDeletedFiles(repoPath, "staged");
+    const changed = await adapter.getChangedFiles(repoPath, "staged");
+
+    expect(deleted.sort()).toEqual(["src/deleted.ts", "src/old-name.ts"]);
+    expect(changed).toContain("src/new-name.ts");
+    expect(changed).not.toContain("src/old-name.ts");
+  });
+
+  test("all scope also reports deletions not yet staged", async () => {
+    fs.rmSync(path.join(repoPath, "committed.ts"));
+
+    const staged = await adapter.getDeletedFiles(repoPath, "staged");
+    const all = await adapter.getDeletedFiles(repoPath, "all");
+
+    expect(staged).toEqual(["src/deleted.ts"]);
+    expect(all.sort()).toEqual(["committed.ts", "src/deleted.ts"]);
   });
 
   test("lists staged files in a repository without commits", async () => {

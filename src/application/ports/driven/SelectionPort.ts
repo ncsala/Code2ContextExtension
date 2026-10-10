@@ -69,6 +69,19 @@ export interface SelectionPort {
   setSelectedFiles(files: string[]): void;
 
   /**
+   * Establece los archivos eliminados (según Git) que acompañan a la selección.
+   * Se listan en la sección `@Deleted:` del contexto. `clearSelection` también los limpia.
+   * @param files Rutas relativas al root en formato POSIX.
+   */
+  setDeletedFiles(files: string[]): void;
+
+  /**
+   * Retorna los archivos eliminados que acompañan a la selección.
+   * @returns Rutas relativas al root en formato POSIX.
+   */
+  getDeletedFiles(): string[];
+
+  /**
    * Alterna la selección de un archivo:
    * Si está seleccionado, lo deselecciona, y viceversa.
    * @param file Ruta del archivo a alternar.

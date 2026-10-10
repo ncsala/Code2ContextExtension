@@ -20,6 +20,7 @@ const App: React.FC = () => {
     loading,
     error,
     selectedFiles,
+    deletedFiles,
     directDebugMessage,
     setDirectDebugMessage,
     handleSelectionModeChange,
@@ -54,6 +55,7 @@ const App: React.FC = () => {
         loading={loading}
         error={error}
         selectedFiles={selectedFiles}
+        deletedFiles={deletedFiles}
         onSelectionModeChange={handleSelectionModeChange}
         onSelectDirectory={handleSelectDirectory}
         onGenerate={handleGenerateContext}

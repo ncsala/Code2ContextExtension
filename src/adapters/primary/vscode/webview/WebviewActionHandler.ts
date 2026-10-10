@@ -163,7 +163,8 @@ export class WebviewActionHandler {
 
     if (options.selectionMode === "files") {
       const currentSelectedFiles = this.selectionService.getSelectedFiles();
-      if (currentSelectedFiles.length === 0) {
+      const deletedFiles = this.selectionService.getDeletedFiles();
+      if (currentSelectedFiles.length === 0 && deletedFiles.length === 0) {
         vscode.window.showWarningMessage(
           USER_MESSAGES.WARNINGS.NO_FILES_SELECTED_MODE
         );
@@ -174,8 +175,10 @@ export class WebviewActionHandler {
         return;
       }
       options.specificFiles = currentSelectedFiles;
+      options.deletedFiles = deletedFiles;
     } else {
       options.specificFiles = [];
+      options.deletedFiles = [];
     }
 
     if (options.selectionMode === "files") {
@@ -249,10 +252,10 @@ export class WebviewActionHandler {
   }
 
   private handleGetSelectedFiles(): void {
-    const files = this.selectionService.getSelectedFiles();
     this.messageBridge.postMessage({
       command: "selectedFiles",
-      files: files,
+      files: this.selectionService.getSelectedFiles(),
+      deletedFiles: this.selectionService.getDeletedFiles(),
     });
   }
 

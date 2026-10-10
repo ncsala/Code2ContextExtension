@@ -10,7 +10,9 @@ import {
   PROMPT_PRESETS,
 } from "../../../../shared/prompts/proPromptPresets";
 
-const { TREE_MARKER, INDEX_MARKER, FILE_MARKER } = ContentFormatter;
+const { TREE_MARKER, INDEX_MARKER, FILE_MARKER, DELETED_MARKER } =
+  ContentFormatter;
+const LINE_BREAK_PATTERN = /[\r\n]/;
 const FILE_PROCESSING_CONCURRENCY = 8;
 
 export class OutputComposer {
@@ -30,10 +32,12 @@ export class OutputComposer {
   ): Promise<string> {
     this.logger.startOperation("OutputComposer.compose");
 
-    const headerPart = this.composeHeader(options);
+    const deletedPaths = this.getPrintableDeletedPaths(options);
+    const headerPart = this.composeHeader(options, deletedPaths.length > 0);
     const promptPart = this.composePrompt(options);
     const treePart = this.composeTreeSection(treeText, options);
     const indexPart = this.composeIndexSection(files);
+    const deletedPart = this.composeDeletedSection(deletedPaths);
 
     const fileContentChunks = await this.composeFileContentChunks(
       files,
@@ -44,7 +48,12 @@ export class OutputComposer {
       fileContentChunks.length > 0 ? fileContentChunks.join("\n") + "\n" : "";
 
     const fullCombinedContent =
-      promptPart + headerPart + treePart + indexPart + filesSection;
+      promptPart +
+      headerPart +
+      treePart +
+      indexPart +
+      deletedPart +
+      filesSection;
 
     if (options.outputPath) {
       this.logger.info(
@@ -76,14 +85,39 @@ export class OutputComposer {
     return "";
   }
 
-  private composeHeader(options: CompactOptions): string {
+  private composeHeader(
+    options: CompactOptions,
+    includeDeleted: boolean
+  ): string {
     return this.formatter.generateHeader(
       TREE_MARKER,
       INDEX_MARKER,
       FILE_MARKER,
       options.minifyContent ?? false,
-      options.includeTree
+      options.includeTree,
+      includeDeleted
     );
+  }
+
+  /** El formato es por líneas: una ruta con saltos de línea lo rompería */
+  private getPrintableDeletedPaths(options: CompactOptions): string[] {
+    const deletedPaths = options.deletedFiles ?? [];
+    const printablePaths = deletedPaths.filter(
+      (p) => !LINE_BREAK_PATTERN.test(p)
+    );
+    if (printablePaths.length < deletedPaths.length) {
+      this.logger.warn(
+        `OutputComposer: Skipped ${
+          deletedPaths.length - printablePaths.length
+        } deleted paths containing line breaks.`
+      );
+    }
+    return printablePaths.sort();
+  }
+
+  private composeDeletedSection(deletedPaths: string[]): string {
+    if (deletedPaths.length === 0) return "";
+    return `${DELETED_MARKER}\n${deletedPaths.join("\n")}\n\n`;
   }
 
   private composeTreeSection(

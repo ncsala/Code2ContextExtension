@@ -11,6 +11,7 @@ export const UI_MESSAGES = {
     OUTPUT_FILE: "Output File:",
     IGNORE_PATTERNS: "Ignore Patterns (one per line):",
     SELECTED_FILES: "Selected Files:",
+    DELETED_FILES: "Files to delete (listed in @Deleted:):",
     PROMPT_PRESET: "Prompt preset:",
   },
   PLACEHOLDERS: {

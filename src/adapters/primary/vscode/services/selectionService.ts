@@ -11,6 +11,7 @@ import { USER_MESSAGES } from "../constants";
 export class VSCodeSelectionService implements SelectionPort {
   private readonly listeners: SelectionChangeListener[] = [];
   private selectedFiles: string[] = [];
+  private deletedFiles: string[] = [];
   private webviewProvider: SelectionChangeListener | null = null;
 
   constructor(private readonly notificationService: NotificationPort) {}
@@ -28,16 +29,38 @@ export class VSCodeSelectionService implements SelectionPort {
   }
 
   /**
+   * Establece los archivos eliminados que acompañan a la selección
+   * @param files Rutas relativas de los archivos eliminados
+   */
+  setDeletedFiles(files: string[]): void {
+    if (this.hasListChanged(this.deletedFiles, files)) {
+      this.deletedFiles = [...files];
+      this.notifyListeners();
+    }
+  }
+
+  /**
+   * Obtiene los archivos eliminados que acompañan a la selección
+   */
+  getDeletedFiles(): string[] {
+    return [...this.deletedFiles];
+  }
+
+  /**
    * Verifica si la nueva selección es diferente de la actual
    */
   private hasSelectionChanged(newFiles: string[]): boolean {
-    if (this.selectedFiles.length !== newFiles.length) {
+    return this.hasListChanged(this.selectedFiles, newFiles);
+  }
+
+  private hasListChanged(currentFiles: string[], newFiles: string[]): boolean {
+    if (currentFiles.length !== newFiles.length) {
       return true;
     }
     // Verificar si hay diferencias en los archivos
     return (
-      newFiles.some((file) => !this.selectedFiles.includes(file)) ||
-      this.selectedFiles.some((file) => !newFiles.includes(file))
+      newFiles.some((file) => !currentFiles.includes(file)) ||
+      currentFiles.some((file) => !newFiles.includes(file))
     );
   }
 
@@ -111,8 +134,9 @@ export class VSCodeSelectionService implements SelectionPort {
    * Limpia la selección
    */
   clearSelection(): void {
-    if (this.selectedFiles.length > 0) {
+    if (this.selectedFiles.length > 0 || this.deletedFiles.length > 0) {
       this.selectedFiles = [];
+      this.deletedFiles = [];
       this.notifyListeners();
       this.notificationService.showInformation(
         USER_MESSAGES.INFO.SELECTION_CLEARED
@@ -169,6 +193,7 @@ export class VSCodeSelectionService implements SelectionPort {
 
     // Limpiar selección
     this.selectedFiles = [];
+    this.deletedFiles = [];
   }
 
   /** Des-registra cualquier WebviewProvider previamente asignado */

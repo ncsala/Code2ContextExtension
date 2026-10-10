@@ -41,15 +41,20 @@ export function registerGitSelectionCommands(
   }
 }
 
+interface GitChangeSet {
+  changed: string[];
+  deleted: string[];
+}
+
 /**
- * Reemplaza la selección por los archivos con cambios en Git
- * y pasa a modo "files" para que la generación use esa selección.
+ * Reemplaza la selección por los archivos con cambios en Git, registra los
+ * eliminados y pasa a modo "files" para que la generación use esa selección.
  */
 async function selectGitChanges(
   scope: GitChangeScope,
   deps: GitSelectionDependencies
 ): Promise<void> {
-  const { gitPort, fileExplorerProvider, notificationService } = deps;
+  const { fileExplorerProvider, notificationService } = deps;
   const label = SCOPE_LABELS[scope];
 
   const rootPath = fileExplorerProvider.getRootPath();
@@ -58,41 +63,76 @@ async function selectGitChanges(
     return;
   }
 
-  let changedFiles: string[];
-  try {
-    changedFiles = await gitPort.getChangedFiles(rootPath, scope);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    notificationService.showError(
-      USER_MESSAGES.ERRORS.GIT_CHANGES_FAILED(message)
-    );
-    return;
-  }
+  const changes = await readGitChanges(rootPath, scope, deps);
+  if (!changes) return;
 
-  if (changedFiles.length === 0) {
+  if (changes.changed.length === 0 && changes.deleted.length === 0) {
     notificationService.showWarning(USER_MESSAGES.WARNINGS.NO_GIT_CHANGES(label));
     return;
   }
 
-  const selectedCount = await fileExplorerProvider.replaceSelection(
-    changedFiles
-  );
-  if (selectedCount === 0) {
+  const selectedCount = await selectChangedFiles(changes, deps);
+  if (selectedCount === 0 && changes.deleted.length === 0) {
     notificationService.showWarning(
       USER_MESSAGES.WARNINGS.NO_SELECTABLE_GIT_CHANGES(
         label,
-        changedFiles.length
+        changes.changed.length
       )
     );
     return;
   }
+
+  // Lo que se va a escribir no se borra
+  const selectedFiles = new Set(fileExplorerProvider.getSelectedFiles());
+  const deletions = changes.deleted.filter((p) => !selectedFiles.has(p));
+  fileExplorerProvider.setDeletedFiles(deletions);
 
   deps.optionsViewProvider.updateOptions({ selectionMode: "files" });
   notificationService.showInformation(
     USER_MESSAGES.INFO.GIT_FILES_SELECTED(
       label,
       selectedCount,
-      changedFiles.length - selectedCount
+      changes.changed.length - selectedCount,
+      deletions.length
     )
   );
+}
+
+async function readGitChanges(
+  rootPath: string,
+  scope: GitChangeScope,
+  { gitPort, notificationService }: GitSelectionDependencies
+): Promise<GitChangeSet | null> {
+  try {
+    const [changed, deleted] = await Promise.all([
+      gitPort.getChangedFiles(rootPath, scope),
+      gitPort.getDeletedFiles(rootPath, scope),
+    ]);
+    return { changed, deleted };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    notificationService.showError(
+      USER_MESSAGES.ERRORS.GIT_CHANGES_FAILED(message)
+    );
+    return null;
+  }
+}
+
+/**
+ * Selecciona los archivos existentes. Si ninguno es seleccionable pero hay
+ * eliminados, limpia la selección previa para no arrastrar archivos viejos.
+ * @returns Cantidad de archivos seleccionados
+ */
+async function selectChangedFiles(
+  changes: GitChangeSet,
+  { fileExplorerProvider }: GitSelectionDependencies
+): Promise<number> {
+  const selectedCount =
+    changes.changed.length > 0
+      ? await fileExplorerProvider.replaceSelection(changes.changed)
+      : 0;
+  if (selectedCount === 0 && changes.deleted.length > 0) {
+    fileExplorerProvider.clearSelection();
+  }
+  return selectedCount;
 }

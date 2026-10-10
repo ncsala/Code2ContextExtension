@@ -51,6 +51,7 @@ export class WebviewStateSynchronizer implements SelectionChangeListener {
     this.messageBridge.postMessage({
       command: "selectedFiles",
       files: selectedFiles,
+      deletedFiles: this.selectionService.getDeletedFiles(),
     });
   }
 

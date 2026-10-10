@@ -32,8 +32,19 @@ export const USER_MESSAGES = {
       `File saved at ${path} (${size} MB).`,
     OPENING_DOCUMENT: "Context generated successfully. Opening document...",
     ALL_FILES_SELECTED: "All files selected",
-    GIT_FILES_SELECTED: (label: string, selected: number, skipped: number) =>
-      `Selected ${selected} ${label} files` +
+    GIT_FILES_SELECTED: (
+      label: string,
+      selected: number,
+      skipped: number,
+      deleted: number = 0
+    ) =>
+      "Selected " +
+      [
+        selected > 0 || deleted === 0 ? `${selected} ${label} files` : "",
+        deleted > 0 ? `${deleted} deleted files` : "",
+      ]
+        .filter((part) => part !== "")
+        .join(" and ") +
       (skipped > 0 ? ` (${skipped} skipped: ignored or not a file)` : ""),
   },
   WARNINGS: {

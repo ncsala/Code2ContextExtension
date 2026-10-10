@@ -98,6 +98,15 @@
   margin-bottom: 2px;
 }
 
+.deletedListContainer {
+  border-left: 3px solid #ef4444;
+}
+
+.deletedItem {
+  text-decoration: line-through;
+  opacity: 0.85;
+}
+
 .noFilesMessage {
   font-style: italic;
   color: var(--vscode-input-placeholderForeground, #888);

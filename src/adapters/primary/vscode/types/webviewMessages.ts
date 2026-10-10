@@ -31,6 +31,7 @@ export interface DebugMessage extends WebviewMessage {
 export interface SelectedFilesMessage extends WebviewMessage {
   command: "selectedFiles";
   files: string[];
+  deletedFiles: string[];
 }
 
 export interface SetLoadingMessage extends WebviewMessage {

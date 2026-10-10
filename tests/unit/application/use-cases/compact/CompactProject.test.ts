@@ -59,6 +59,7 @@ describe("CompactProject Use Case", () => {
       getIgnorePatterns: jest.fn(),
       isGitRepository: jest.fn(),
       getChangedFiles: jest.fn(),
+      getDeletedFiles: jest.fn(),
     };
     mockLogger = {
       startOperation: jest.fn(),
@@ -151,6 +152,27 @@ describe("CompactProject Use Case", () => {
           ignores: expect.any(Function),
           add: expect.any(Function),
         })
+      );
+    });
+
+    test("should not build a tree in files mode when only deletions are selected", async () => {
+      const options: CompactOptions = {
+        ...basicOptions,
+        selectionMode: "files",
+        specificFiles: [],
+        deletedFiles: ["old.ts"],
+      };
+      mockOutputComposerInstance.compose.mockResolvedValue("deletions only");
+
+      const result = await compactProject.execute(options);
+
+      expect(result).toEqual({ ok: true, content: "deletions only" });
+      expect(mockTreeServiceInstance.buildTree).not.toHaveBeenCalled();
+      expect(mockFileLoaderServiceInstance.load).not.toHaveBeenCalled();
+      expect(mockOutputComposerInstance.compose).toHaveBeenCalledWith(
+        [],
+        "",
+        options
       );
     });
 

@@ -33,6 +33,30 @@ const CHANGED_FILES_QUERIES: Readonly<Record<GitChangeScope, string[][]>> = {
   all: [STAGED_FILES_ARGS, UNSTAGED_FILES_ARGS, UNTRACKED_FILES_ARGS],
 };
 
+/** --no-renames: un renombrado aparece como "D ruta-vieja" + "A ruta-nueva" */
+const STAGED_DELETIONS_ARGS = [
+  "diff",
+  "--cached",
+  "--name-only",
+  "--relative",
+  "--no-renames",
+  "--diff-filter=D",
+  "-z",
+];
+const UNSTAGED_DELETIONS_ARGS = [
+  "diff",
+  "--name-only",
+  "--relative",
+  "--no-renames",
+  "--diff-filter=D",
+  "-z",
+];
+
+const DELETED_FILES_QUERIES: Readonly<Record<GitChangeScope, string[][]>> = {
+  staged: [STAGED_DELETIONS_ARGS],
+  all: [STAGED_DELETIONS_ARGS, UNSTAGED_DELETIONS_ARGS],
+};
+
 const GIT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
 /**
@@ -210,6 +234,27 @@ export class GitAdapter implements GitPort {
     rootPath: string,
     scope: GitChangeScope
   ): Promise<string[]> {
+    return this.collectPaths(rootPath, CHANGED_FILES_QUERIES[scope]);
+  }
+
+  /**
+   * Lista los archivos eliminados en Git (un renombrado aporta su ruta vieja)
+   * @param rootPath Ruta raíz del proyecto (puede ser una subcarpeta del repo)
+   * @param scope Alcance de los cambios a consultar
+   * @returns Rutas relativas a rootPath en formato POSIX
+   */
+  async getDeletedFiles(
+    rootPath: string,
+    scope: GitChangeScope
+  ): Promise<string[]> {
+    return this.collectPaths(rootPath, DELETED_FILES_QUERIES[scope]);
+  }
+
+  /** Ejecuta las consultas y une sus rutas sin duplicados */
+  private async collectPaths(
+    rootPath: string,
+    queries: string[][]
+  ): Promise<string[]> {
     const gitPath = await this.getGitExecutablePath();
     if (gitPath === null) {
       throw new Error("Git executable not found.");
@@ -217,9 +262,7 @@ export class GitAdapter implements GitPort {
     await this.assertInsideWorkTree(gitPath, rootPath);
 
     const results = await Promise.all(
-      CHANGED_FILES_QUERIES[scope].map((args) =>
-        this.runGitPathListCommand(gitPath, rootPath, args)
-      )
+      queries.map((args) => this.runGitPathListCommand(gitPath, rootPath, args))
     );
     return [...new Set(results.flat())];
   }

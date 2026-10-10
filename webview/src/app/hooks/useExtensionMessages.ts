@@ -26,6 +26,7 @@ export const useExtensionMessages = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [deletedFiles, setDeletedFiles] = useState<string[]>([]);
   const [directDebugMessage, setDirectDebugMessage] = useState<string | null>(
     null
   );
@@ -64,6 +65,7 @@ export const useExtensionMessages = () => {
           break;
         case "selectedFiles":
           setSelectedFiles(message.files || []);
+          setDeletedFiles(message.deletedFiles || []);
           break;
         case "directorySelected":
           setOptions((prev) => ({ ...prev, rootPath: message.path }));
@@ -118,7 +120,11 @@ export const useExtensionMessages = () => {
       setError(ERROR_MESSAGES.VALIDATION.SELECT_ROOT_DIRECTORY);
       return false;
     }
-    if (options.selectionMode === "files" && selectedFiles.length === 0) {
+    if (
+      options.selectionMode === "files" &&
+      selectedFiles.length === 0 &&
+      deletedFiles.length === 0
+    ) {
       setError(ERROR_MESSAGES.VALIDATION.NO_FILES_SELECTED);
       return false;
     }
@@ -127,7 +133,7 @@ export const useExtensionMessages = () => {
     setError(null);
     sendCompact({ ...options });
     return true;
-  }, [options, selectedFiles]);
+  }, [options, selectedFiles, deletedFiles]);
 
   const handleSelectDirectory = useCallback(() => {
     sendSelectDirectory(options.rootPath);
@@ -138,6 +144,7 @@ export const useExtensionMessages = () => {
     loading,
     error,
     selectedFiles,
+    deletedFiles,
     directDebugMessage,
     setDirectDebugMessage,
     handleSelectionModeChange,

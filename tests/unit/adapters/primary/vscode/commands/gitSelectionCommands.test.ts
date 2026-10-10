@@ -11,7 +11,10 @@ describe("Git selection commands", () => {
   let gitPort: jest.Mocked<GitPort>;
   let notificationService: jest.Mocked<NotificationPort>;
   let replaceSelection: jest.Mock<Promise<number>, [string[]]>;
+  let setDeletedFiles: jest.Mock<void, [string[]]>;
+  let clearSelection: jest.Mock<void, []>;
   let updateOptions: jest.Mock;
+  let selectedAfterReplace: string[];
 
   beforeEach(() => {
     gitPort = {
@@ -19,6 +22,7 @@ describe("Git selection commands", () => {
       getIgnorePatterns: jest.fn(),
       isGitRepository: jest.fn(),
       getChangedFiles: jest.fn(),
+      getDeletedFiles: jest.fn().mockResolvedValue([]),
     };
     notificationService = {
       showError: jest.fn(),
@@ -27,11 +31,17 @@ describe("Git selection commands", () => {
       showFolderSelectDialog: jest.fn(),
     };
     replaceSelection = jest.fn();
+    setDeletedFiles = jest.fn();
+    clearSelection = jest.fn();
     updateOptions = jest.fn();
+    selectedAfterReplace = [];
 
     const fileExplorerProvider = {
       getRootPath: () => ROOT,
       replaceSelection,
+      getSelectedFiles: () => selectedAfterReplace,
+      setDeletedFiles,
+      clearSelection,
     } as unknown as FileExplorerProvider;
     const optionsViewProvider = {
       updateOptions,
@@ -95,6 +105,46 @@ describe("Git selection commands", () => {
       "No staged files found in Git."
     );
     expect(replaceSelection).not.toHaveBeenCalled();
+  });
+
+  test("registers deletions that are not being written", async () => {
+    gitPort.getChangedFiles.mockResolvedValue(["a.ts"]);
+    gitPort.getDeletedFiles.mockResolvedValue(["old.ts", "a.ts"]);
+    replaceSelection.mockResolvedValue(1);
+    selectedAfterReplace = ["a.ts"];
+
+    await vscode.commands.executeCommand("code2context.selectGitStaged");
+
+    expect(gitPort.getDeletedFiles).toHaveBeenCalledWith(ROOT, "staged");
+    expect(setDeletedFiles).toHaveBeenCalledWith(["old.ts"]);
+    expect(notificationService.showInformation).toHaveBeenCalledWith(
+      "Selected 1 staged files and 1 deleted files"
+    );
+  });
+
+  test("supports a change set made only of deletions", async () => {
+    gitPort.getChangedFiles.mockResolvedValue([]);
+    gitPort.getDeletedFiles.mockResolvedValue(["old.ts", "legacy/util.ts"]);
+
+    await vscode.commands.executeCommand("code2context.selectGitStaged");
+
+    expect(replaceSelection).not.toHaveBeenCalled();
+    expect(clearSelection).toHaveBeenCalled();
+    expect(setDeletedFiles).toHaveBeenCalledWith(["old.ts", "legacy/util.ts"]);
+    expect(updateOptions).toHaveBeenCalledWith({ selectionMode: "files" });
+    expect(notificationService.showInformation).toHaveBeenCalledWith(
+      "Selected 2 deleted files"
+    );
+  });
+
+  test("clears stale deletions when the new change set has none", async () => {
+    gitPort.getChangedFiles.mockResolvedValue(["a.ts"]);
+    replaceSelection.mockResolvedValue(1);
+    selectedAfterReplace = ["a.ts"];
+
+    await vscode.commands.executeCommand("code2context.selectGitStaged");
+
+    expect(setDeletedFiles).toHaveBeenCalledWith([]);
   });
 
   test("does not switch mode when no changed file is selectable", async () => {

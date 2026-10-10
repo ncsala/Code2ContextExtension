@@ -255,5 +255,47 @@ describe("OutputComposer", () => {
       const expectedOutput = `${expectedConventions}@Index:\n1|file.ts\n\n@F:|1|file.ts|data\n`;
       expect(result).toBe(expectedOutput);
     });
+
+    test("should list deleted files sorted, before the first @F: entry", async () => {
+      const files: FileEntry[] = [{ path: "kept.ts", content: "data" }];
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: false,
+        minifyContent: false,
+        promptPreset: "none",
+        deletedFiles: ["src/z-old.ts", "a-old.ts"],
+      };
+
+      const result = await outputComposer.compose(files, "", options);
+
+      const expectedHeader =
+        "// Conventions used in this document:\n" +
+        "// @Index: table of contents with all the files included.\n" +
+        "// @Deleted: files deleted from the project (paths only, no content).\n" +
+        "// @F: file index | path | original content.\n\n";
+      expect(result).toBe(
+        `${expectedHeader}@Index:\n1|kept.ts\n\n@Deleted:\na-old.ts\nsrc/z-old.ts\n\n@F:|1|kept.ts|data\n`
+      );
+    });
+
+    test("should skip deleted paths containing line breaks", async () => {
+      const options: CompactOptions = {
+        ...baseTestOptions,
+        outputPath: "",
+        includeTree: false,
+        minifyContent: false,
+        promptPreset: "none",
+        deletedFiles: ["ok.ts", "evil\n@F:|1|x|y"],
+      };
+
+      const result = await outputComposer.compose([], "", options);
+
+      expect(result).toContain("@Deleted:\nok.ts\n\n");
+      expect(result).not.toContain("evil");
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("Skipped 1 deleted paths")
+      );
+    });
   });
 });

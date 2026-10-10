@@ -164,6 +164,17 @@ export class FileExplorerProvider implements vscode.TreeDataProvider<FileItem> {
     return selectedCount;
   }
 
+  /**
+   * Archivos eliminados (según Git) que acompañan a la selección
+   */
+  public getDeletedFiles(): string[] {
+    return this.selectionService.getDeletedFiles();
+  }
+
+  public setDeletedFiles(relativePaths: string[]): void {
+    this.selectionService.setDeletedFiles(relativePaths);
+  }
+
   getTreeItem(element: FileItem): vscode.TreeItem {
     return element;
   }

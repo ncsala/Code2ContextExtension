@@ -34,7 +34,8 @@ export function registerGenerateCommands(
       // currentOptions es una copia tomada al registrar el comando)
       if (optionsFromPanel.selectionMode === "files") {
         const selectedFiles = fileExplorerProvider.getSelectedFiles();
-        if (selectedFiles.length === 0) {
+        const deletedFiles = fileExplorerProvider.getDeletedFiles();
+        if (selectedFiles.length === 0 && deletedFiles.length === 0) {
           notificationService?.showError(
             USER_MESSAGES.ERRORS.NO_FILES_SELECTED
           );
@@ -44,6 +45,7 @@ export function registerGenerateCommands(
           ...currentOptions,
           ...optionsFromPanel,
           specificFiles: selectedFiles,
+          deletedFiles,
           selectionMode: "files",
         });
       } else {
@@ -61,7 +63,8 @@ export function registerGenerateCommands(
     "code2context.generateFromSelection",
     async () => {
       const selectedFiles = fileExplorerProvider.getSelectedFiles();
-      if (selectedFiles.length === 0) {
+      const deletedFiles = fileExplorerProvider.getDeletedFiles();
+      if (selectedFiles.length === 0 && deletedFiles.length === 0) {
         notificationService?.showError(USER_MESSAGES.ERRORS.NO_FILES_SELECTED);
         return;
       }
@@ -85,6 +88,7 @@ export function registerGenerateCommands(
         rootPath,
         selectionMode: "files",
         specificFiles: selectedFiles,
+        deletedFiles,
       });
     }
   );
