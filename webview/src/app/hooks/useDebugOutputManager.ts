@@ -23,6 +23,9 @@ export const useDebugOutputManager = (
       `${DEBUG_LABELS.MINIFY_CONTENT} ${
         options.minifyContent ? DEBUG_LABELS.YES : DEBUG_LABELS.NO
       }`,
+      `${DEBUG_LABELS.TRUNCATE_LARGE_DIRECTORIES} ${
+        options.truncateLargeDirectories ? DEBUG_LABELS.YES : DEBUG_LABELS.NO
+      }`,
       `${DEBUG_LABELS.INCLUDE_GITIGNORE} ${
         options.includeGitIgnore ? DEBUG_LABELS.YES : DEBUG_LABELS.NO
       }`,

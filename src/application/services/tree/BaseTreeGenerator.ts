@@ -4,7 +4,7 @@ import * as path from "path";
 import { FileTree } from "../../../domain/model/FileTree";
 import { toPosix } from "../../../shared/utils/pathUtils";
 import { PrefixSet } from "../../../shared/utils/PrefixSet";
-import { TreeLimits, placeholder } from "./common";
+import { TreeLimits, isTruncationDisabled, placeholder } from "./common";
 import {
   FileSystemPort,
   PortDirectoryEntry,
@@ -103,19 +103,22 @@ export abstract class BaseTreeGenerator {
     ignoreHandler: Ignore,
     rootFsPath: string
   ): Promise<MeasuredEntry[]> {
+    // Sin límites el conteo no decide nada: evitamos recorrer cada subárbol
+    const shouldCountDescendants = !isTruncationDisabled(this.limits);
     const measuredEntries = await Promise.all(
       dirEntries.map(async (entry) =>
         this.ioLimiter(async () => {
           const absolutePath = path.join(parentDirFsPath, entry.name);
           const relativePath = toPosix(path.relative(rootFsPath, absolutePath));
-          const descendantCount = entry.isDirectory()
-            ? await this.recursivelyCountDescendants(
-                absolutePath,
-                ignoreHandler,
-                rootFsPath,
-                this.limits.maxTotal + 1
-              )
-            : 1;
+          const descendantCount =
+            entry.isDirectory() && shouldCountDescendants
+              ? await this.recursivelyCountDescendants(
+                  absolutePath,
+                  ignoreHandler,
+                  rootFsPath,
+                  this.limits.maxTotal + 1
+                )
+              : 1;
           return {
             entry,
             abs: absolutePath,

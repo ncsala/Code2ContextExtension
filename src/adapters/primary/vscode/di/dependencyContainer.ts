@@ -35,6 +35,7 @@ export function createContainer(verboseLogging: boolean = false): Container {
     includeGitIgnore: true,
     includeTree: true,
     minifyContent: true,
+    truncateLargeDirectories: true,
     promptPreset: "none",
     selectionMode: "directory",
     verboseLogging: verboseLogging,

@@ -21,6 +21,7 @@ describe("OutputComposer", () => {
     customIgnorePatterns: [],
     includeDefaultPatterns: true,
     includeGitIgnore: true,
+    truncateLargeDirectories: true,
     selectionMode: "directory",
     verboseLogging: false,
   };

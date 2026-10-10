@@ -53,6 +53,7 @@ Configure which files to exclude:
 ### Output Options
 
 - **Include Tree Structure**: Shows project hierarchy
+- **Truncate Large Folders**: Collapses oversized folders in the tree (enabled by default). Disable it to get the full tree, including the content of every file inside those folders
 - **Minify Content**: Reduces file size
 - **Prompt Presets**: Professional prompts for various AI tasks
   - Deep Context V1

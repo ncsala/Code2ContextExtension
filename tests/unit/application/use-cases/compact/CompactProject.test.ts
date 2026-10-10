@@ -38,6 +38,7 @@ describe("CompactProject Use Case", () => {
     includeGitIgnore: true,
     includeTree: true,
     minifyContent: false,
+    truncateLargeDirectories: true,
     promptPreset: "none",
     selectionMode: "directory",
     verboseLogging: false,
@@ -149,6 +150,18 @@ describe("CompactProject Use Case", () => {
           ignores: expect.any(Function),
           add: expect.any(Function),
         })
+      );
+    });
+
+    test("should forward truncateLargeDirectories to TreeService", async () => {
+      await compactProject.execute({
+        ...basicOptions,
+        truncateLargeDirectories: false,
+      });
+
+      expect(mockTreeServiceInstance.buildTree).toHaveBeenCalledWith(
+        expect.objectContaining({ truncateLargeDirectories: false }),
+        expect.objectContaining({ ignores: expect.any(Function) })
       );
     });
 

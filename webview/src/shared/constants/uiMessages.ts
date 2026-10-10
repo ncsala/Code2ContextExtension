@@ -37,5 +37,6 @@ export const UI_MESSAGES = {
     INCLUDE_GITIGNORE: "Include .gitignore patterns",
     INCLUDE_TREE: "Include directory tree structure",
     MINIFY_CONTENT: "Minify content",
+    TRUNCATE_LARGE_DIRECTORIES: "Truncate large folders in tree",
   },
 } as const;

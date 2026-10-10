@@ -20,6 +20,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
   private _includeGitIgnore: boolean = true;
   private _includeTree: boolean = true;
   private _minifyContent: boolean = true;
+  private _truncateLargeDirectories: boolean = true;
   private _selectionMode: "directory" | "files" = "directory";
   private _specificFiles: string[] = [];
 
@@ -68,6 +69,8 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
           message.includeGitIgnore ?? this._includeGitIgnore;
         this._includeTree = message.includeTree ?? this._includeTree;
         this._minifyContent = message.minifyContent ?? this._minifyContent;
+        this._truncateLargeDirectories =
+          message.truncateLargeDirectories ?? this._truncateLargeDirectories;
         this._outputPath = message.outputPath || this._outputPath;
 
         // Notificar los cambios al manejador principal
@@ -79,6 +82,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
           includeGitIgnore: this._includeGitIgnore,
           includeTree: this._includeTree,
           minifyContent: this._minifyContent,
+          truncateLargeDirectories: this._truncateLargeDirectories,
           selectionMode: this._selectionMode,
           specificFiles: this._specificFiles,
         };
@@ -119,6 +123,9 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
       if (options.minifyContent !== undefined) {
         this._minifyContent = options.minifyContent;
       }
+      if (options.truncateLargeDirectories !== undefined) {
+        this._truncateLargeDirectories = options.truncateLargeDirectories;
+      }
       if (options.selectionMode !== undefined) {
         this._selectionMode = options.selectionMode;
       }
@@ -137,6 +144,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
           includeGitIgnore: this._includeGitIgnore,
           includeTree: this._includeTree,
           minifyContent: this._minifyContent,
+          truncateLargeDirectories: this._truncateLargeDirectories,
           includeDefaultPatterns: this._includeDefaultPatterns,
           selectionMode: this._selectionMode,
         },
@@ -152,6 +160,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
         includeGitIgnore: this._includeGitIgnore,
         includeTree: this._includeTree,
         minifyContent: this._minifyContent,
+        truncateLargeDirectories: this._truncateLargeDirectories,
         selectionMode: this._selectionMode,
         specificFiles: this._specificFiles,
       };
@@ -172,6 +181,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
       includeGitIgnore: this._includeGitIgnore,
       includeTree: this._includeTree,
       minifyContent: this._minifyContent,
+      truncateLargeDirectories: this._truncateLargeDirectories,
       selectionMode: this._selectionMode,
       specificFiles: this._specificFiles,
     };
@@ -359,6 +369,19 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
 
             <div class="checkbox-group">
               <div class="checkbox-label">
+                <input type="checkbox" id="truncateLargeDirectories"
+                       ${this._truncateLargeDirectories ? "checked" : ""}/>
+                <label for="truncateLargeDirectories">
+                  Truncate large folders in tree
+                </label>
+              </div>
+              <div class="note">
+                ⚠️ If you disable this, the full tree is generated and the content of every file inside large folders is included. The output may be very large.
+              </div>
+            </div>
+
+            <div class="checkbox-group">
+              <div class="checkbox-label">
                 <input type="checkbox" id="includeDefaultPatterns"
                        ${this._includeDefaultPatterns ? "checked" : ""}/>
                 <label for="includeDefaultPatterns">
@@ -386,6 +409,7 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
             const includeGitIgnoreCheckbox = document.getElementById('includeGitIgnore');
             const includeTreeCheckbox = document.getElementById('includeTree');
             const minifyContentCheckbox = document.getElementById('minifyContent');
+            const truncateLargeDirectoriesCheckbox = document.getElementById('truncateLargeDirectories');
             const applyBtn = document.getElementById('applyBtn');
             
             // Botón para aplicar la configuración
@@ -401,7 +425,8 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                 const includeGitIgnore = includeGitIgnoreCheckbox.checked;
                 const includeTree = includeTreeCheckbox.checked;
                 const minifyContent = minifyContentCheckbox.checked;
-                
+                const truncateLargeDirectories = truncateLargeDirectoriesCheckbox.checked;
+
                 vscode.postMessage({
                     command: 'optionsChanged',
                     promptPreset: selectedPreset,
@@ -410,7 +435,8 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                     ignorePatterns,
                     includeGitIgnore,
                     includeTree,
-                    minifyContent
+                    minifyContent,
+                    truncateLargeDirectories
                 });
             });
             
@@ -446,6 +472,10 @@ export class OptionsViewProvider implements vscode.WebviewViewProvider {
                     
                     if (options.minifyContent !== undefined) {
                         minifyContentCheckbox.checked = options.minifyContent;
+                    }
+
+                    if (options.truncateLargeDirectories !== undefined) {
+                        truncateLargeDirectoriesCheckbox.checked = options.truncateLargeDirectories;
                     }
                 }
             });

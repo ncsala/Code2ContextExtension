@@ -5,6 +5,15 @@ All notable changes to the **Code2Context** extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### ✨ Added
+
+- **"Truncate large folders in tree" option**:
+  - New checkbox in the Options panel (enabled by default, keeping the current behavior).
+  - When disabled, the generated context includes the full directory tree with no collapsed branches, plus the content of every file inside those folders.
+  - Skips the descendant counting pass when truncation is off, avoiding redundant traversal on large projects.
+
 ## [0.2.4] - 2026-06-07
 
 ### ✨ Added

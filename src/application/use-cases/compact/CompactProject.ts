@@ -53,6 +53,7 @@ export class CompactProject implements CompactUseCase {
           rootPath: options.rootPath,
           selectionMode: options.selectionMode,
           specificFiles: options.specificFiles,
+          truncateLargeDirectories: options.truncateLargeDirectories,
         },
         ignoreHandler
       );

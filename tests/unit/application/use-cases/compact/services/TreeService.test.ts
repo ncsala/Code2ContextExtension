@@ -3,6 +3,7 @@ import { ProgressReporter } from "../../../../../../src/application/ports/driven
 import { TreeGeneratorFactory } from "../../../../../../src/application/services/tree/TreeGeneratorFactory";
 import { TreeGenerator } from "../../../../../../src/application/services/tree/TreeGenerator";
 import { FileTree } from "../../../../../../src/domain/model/FileTree";
+import { UNLIMITED_TREE_LIMITS } from "../../../../../../src/application/services/tree/common";
 import ignore = require("ignore");
 type IgnoreHandler = ignore.Ignore;
 
@@ -178,6 +179,44 @@ describe("TreeService", () => {
         "file1.ts",
         "dir_not_truncated/file_in_dir.ts",
       ]);
+    });
+
+    test("should request unlimited limits when truncation is disabled", async () => {
+      const options = {
+        rootPath: "C:\\test\\project",
+        selectionMode: "directory" as const,
+        truncateLargeDirectories: false,
+      };
+      mockGenerator.generatePrunedTreeText.mockResolvedValue({
+        treeText: "",
+        fileTree: { path: "", name: "project", isDirectory: true, children: [] },
+        truncatedPaths: new Set(),
+      });
+
+      await treeService.buildTree(options, ignore());
+
+      expect(mockFactory.make).toHaveBeenCalledWith(
+        "directory",
+        UNLIMITED_TREE_LIMITS
+      );
+    });
+
+    test("should keep default limits when truncation is enabled", async () => {
+      const options = {
+        rootPath: "C:\\test\\project",
+        selectionMode: "files" as const,
+        specificFiles: ["src/file1.ts"],
+        truncateLargeDirectories: true,
+      };
+      mockGenerator.generatePrunedTreeText.mockResolvedValue({
+        treeText: "",
+        fileTree: { path: "", name: "project", isDirectory: true, children: [] },
+        truncatedPaths: new Set(),
+      });
+
+      await treeService.buildTree(options, ignore());
+
+      expect(mockFactory.make).toHaveBeenCalledWith("files");
     });
 
     test("should handle empty tree", async () => {

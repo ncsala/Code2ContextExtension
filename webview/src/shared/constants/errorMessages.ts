@@ -26,6 +26,7 @@ export const DEBUG_LABELS = {
   SELECTION_MODE: "Selection Mode:",
   INCLUDE_TREE: "Include Tree:",
   MINIFY_CONTENT: "Minify Content:",
+  TRUNCATE_LARGE_DIRECTORIES: "Truncate Large Folders:",
   INCLUDE_GITIGNORE: "Include GitIgnore:",
   INCLUDE_DEFAULT_PATTERNS: "Include Default Patterns:",
   PROMPT_PRESET: "Prompt Preset:",
