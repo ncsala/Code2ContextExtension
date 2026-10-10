@@ -5,7 +5,7 @@ All notable changes to the **Code2Context** extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-10-10
 
 ### ✨ Added
 
@@ -16,13 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Git-aware file selection**:
   - New **"Select Git Staged Files"** button in the File Selection view toolbar: replaces the selection with the files currently staged in Git.
   - New **"Select All Git Changes"** command (view `...` menu and Command Palette): includes staged, unstaged and untracked files.
-  - Both switch the generator to "Specific Files" mode, skip deleted files, submodules and ignored files, and work when the project root is a subfolder of the repository.
+  - Both switch the generator to "Specific Files" mode, skip submodules and ignored files (deleted files are tracked separately, see below), and work when the project root is a subfolder of the repository.
   - Git is invoked without a shell and with NUL-separated output, so paths with spaces or special characters are handled safely.
 - **Deleted files sync (Git → context → recreate)**:
   - Git selection now also collects deleted files (renames contribute their old path) and lists them in a new `@Deleted:` section, shown in the panel as **Files to delete**. Change sets made only of deletions are supported.
   - **Recreate Project from Context File** previews the file and asks for explicit confirmation (modal, listing the paths) before deleting; "Keep them" writes files only.
   - Deletions only affect regular files physically inside the target folder (symlinks are resolved), never directories with content, and prune folders left empty. Paths that are also written are never deleted.
   - The section is written before the first `@F:` entry, so older versions of the extension simply ignore it.
+
+### 🐛 Fixed
+
+- **Generate Context from Current Options** (⚡ button in the Options view) ignored "Specific Files" mode and always generated the whole directory: it read the selection mode from a snapshot taken at startup.
 
 ### 🔒 Security
 
