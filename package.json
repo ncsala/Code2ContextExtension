@@ -58,6 +58,7 @@
     "test:coverage": "jest --coverage",
     "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand",
     "package": "npm run compile:clean && vsce package",
+    "package:vsix": "npm ci && npm ci --prefix webview && vsce package",
     "publish": "npm run compile:clean && vsce publish"
   },
   "contributes": {

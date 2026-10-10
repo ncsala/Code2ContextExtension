@@ -55,14 +55,12 @@ We use GitHub to host code, to track issues and feature requests, as well as acc
 This installs the extension exactly as users get it from the Marketplace, in your regular VS Code:
 
 ```bash
-git checkout <branch-to-test>
-npm ci
-cd webview && npm ci && cd ..   # required: packaging also builds the webview
-npx vsce package                # creates code2context-<version>.vsix
+git checkout <branch-to-test> && git pull
+npm run package:vsix            # clean install (extension + webview) and creates code2context-<version>.vsix
 code --install-extension code2context-<version>.vsix --force
 ```
 
-Then reload VS Code (`Ctrl+Shift+P` → **Developer: Reload Window**).
+`package:vsix` runs `npm ci` in both the root and `webview/` (packaging also builds the webview) and then `vsce package`, so it works on a fresh clone. Then reload VS Code (`Ctrl+Shift+P` → **Developer: Reload Window**).
 
 - `--force` is needed when the same version is already installed (e.g. from the Marketplace).
 - If the `code` command is not found, use `Ctrl+Shift+P` → **Shell Command: Install 'code' command in PATH** (macOS), or install it from the Extensions view: `...` → **Install from VSIX…**.
